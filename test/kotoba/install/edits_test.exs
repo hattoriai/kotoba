@@ -172,6 +172,23 @@ defmodule Kotoba.Install.EditsTest do
       assert {:changed, new} = Edits.app_css("body { margin: 0 }\n")
       assert String.starts_with?(new, ~s(@import "../../deps/kotoba/priv/static/kotoba.css";\n))
     end
+
+    test "points the imports at the package directory it is given" do
+      assert {:changed, new} = Edits.app_css(fixture("app.css"), "../../../kotoba")
+      assert new =~ ~s(@import "../../../kotoba/priv/static/kotoba.css";\n)
+      assert new =~ ~s(/* @import "../../../kotoba/priv/static/kotoba-sumi.css"; */\n)
+      refute new =~ "deps/kotoba"
+      assert Edits.app_css(new, "../../../kotoba") == :unchanged
+
+      assert Edits.app_css_manual("../../../editor") =~
+               ~s(@import "../../../editor/priv/static/kotoba.css";)
+    end
+  end
+
+  test "relative/2 goes up where it must" do
+    assert Edits.relative("/code/app/deps/kotoba", "/code/app/assets/css") == "../../deps/kotoba"
+    assert Edits.relative("/code/kotoba", "/code/app/assets/css") == "../../../kotoba"
+    assert Edits.relative("/code", "/code/app/config") == "../.."
   end
 
   describe "config/2" do
@@ -229,6 +246,16 @@ defmodule Kotoba.Install.EditsTest do
   test "node_path?/1" do
     assert Edits.node_path?(fixture("config.exs"))
     refute Edits.node_path?("config :esbuild, version: \"0.25.4\"\n")
+  end
+
+  test "node_path?/2 looks for the directory of a path dependency" do
+    refute Edits.node_path?(fixture("config.exs"), "../..")
+
+    source =
+      ~S|env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Path.expand("../..", __DIR__)]}|
+
+    assert Edits.node_path?(source, "../..")
+    refute Edits.node_path?(source, "../../..")
   end
 
   test "diff/3 shows the changed lines with some context" do

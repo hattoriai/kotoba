@@ -102,6 +102,28 @@ config :esbuild,
 
 The installer prints this note when the profile has no `NODE_PATH`.
 
+### A path dependency
+
+Mix does not copy a path dependency (`{:kotoba, path: "../kotoba"}`) into
+`deps/`. The installer then points the `@import` lines of `app.css` at the
+dependency's directory (for example `../../../kotoba/priv/static/kotoba.css`),
+and prints the `NODE_PATH` entry that esbuild needs: the directory that
+holds the dependency, relative to `config/`:
+
+```elixir
+env: %{
+  "NODE_PATH" => [
+    Path.expand("../deps", __DIR__),
+    Path.expand("../..", __DIR__),
+    Mix.Project.build_path()
+  ]
+}
+```
+
+A checkout of Kotoba has no built bundle until `mix kotoba.build` runs in
+it, so run that task in the Kotoba directory before the app's
+`mix assets.build`.
+
 ## 4. Give the uploads a directory
 
 The local storage adapter needs a configured root directory. For

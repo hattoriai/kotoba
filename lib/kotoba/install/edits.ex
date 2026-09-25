@@ -11,8 +11,9 @@ defmodule Kotoba.Install.Edits do
   @type result :: {:changed, String.t()} | :unchanged | {:manual, String.t()}
 
   @js_import ~s(import { Kotoba } from "kotoba")
-  @css_import ~s(@import "../../deps/kotoba/priv/static/kotoba.css";)
-  @sumi_import ~s(/* @import "../../deps/kotoba/priv/static/kotoba-sumi.css"; */)
+
+  # The path from assets/css/ to the Kotoba package, when it is in deps/.
+  @package_dir "../../deps/kotoba"
 
   ## assets/js/app.js
 
@@ -293,19 +294,19 @@ defmodule Kotoba.Install.Edits do
   ## assets/css/app.css
 
   @doc false
-  @spec app_css(String.t()) :: result()
-  def app_css(source) when is_binary(source) do
+  @spec app_css(String.t(), String.t()) :: result()
+  def app_css(source, dir \\ @package_dir) when is_binary(source) and is_binary(dir) do
     # The Sumi line comes only with the kotoba.css import, so a person who
     # removed it does not get it back.
-    if Regex.match?(~r/kotoba\/priv\/static\/kotoba\.css/, source) do
+    if Regex.match?(~r/priv\/static\/kotoba\.css/, source) do
       :unchanged
     else
       lines = String.split(source, "\n")
 
       added =
         if String.contains?(source, "kotoba-sumi.css"),
-          do: [@css_import],
-          else: [@css_import, @sumi_import]
+          do: [css_import(dir)],
+          else: [css_import(dir), sumi_import(dir)]
 
       {head, tail} = Enum.split(lines, css_insert_at(lines))
       {:changed, Enum.join(head ++ added ++ tail, "\n")}
@@ -313,15 +314,27 @@ defmodule Kotoba.Install.Edits do
   end
 
   @doc false
-  @spec app_css_manual() :: String.t()
-  def app_css_manual do
+  @spec app_css_manual(String.t()) :: String.t()
+  def app_css_manual(dir \\ @package_dir) do
     """
     Add the editor style sheet to assets/css/app.css, and the Sumi theme if you want it:
 
-        #{@css_import}
-        #{@sumi_import}
+        #{css_import(dir)}
+        #{sumi_import(dir)}
     """
   end
+
+  defp css_import(dir), do: ~s(@import "#{dir}/priv/static/kotoba.css";)
+  defp sumi_import(dir), do: ~s(/* @import "#{dir}/priv/static/kotoba-sumi.css"; */)
+
+  @doc """
+  The path from the directory `from` to `path`, both absolute, with `..`
+  where it must go up: the form an `@import` or a `Path.expand/2` in the
+  app's files needs.
+  """
+  @spec relative(Path.t(), Path.t()) :: String.t()
+  def relative(path, from),
+    do: Path.relative_to(Path.expand(path), Path.expand(from), force: true)
 
   # After the last top-level @import, else after a @charset, else at the top.
   defp css_insert_at(lines) do
@@ -405,6 +418,18 @@ defmodule Kotoba.Install.Edits do
   @spec node_path?(String.t()) :: boolean()
   def node_path?(config_source) do
     Regex.match?(~r/"NODE_PATH"\s*=>[^\n]*deps/, config_source)
+  end
+
+  @doc """
+  Whether a `NODE_PATH` of the config has `Path.expand(dir, __DIR__)`, for
+  a Kotoba package outside deps/ (a path dependency).
+  """
+  @spec node_path?(String.t(), String.t()) :: boolean()
+  def node_path?(config_source, dir) do
+    Regex.match?(
+      ~r/"NODE_PATH"\s*=>[^\n]*Path\.expand\(\s*"#{Regex.escape(dir)}"\s*,\s*__DIR__\s*\)/,
+      config_source
+    )
   end
 
   ## Diffs

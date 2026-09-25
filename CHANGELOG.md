@@ -55,7 +55,10 @@ The first release.
 - `Kotoba.Storage` (a behaviour), `Kotoba.Storage.Local` and
   `Kotoba.Storage.Local.Plug` (serves the files with safe headers).
 - `mix kotoba.install`, `mix kotoba.gen.node`, and, for work on Kotoba
-  itself, `mix kotoba.build` and `mix kotoba.release_check`.
+  itself, `mix kotoba.build` and `mix kotoba.release_check`. The installer
+  also sets up an app that has Kotoba as a path dependency: its `app.css`
+  imports point at the dependency's directory, and it prints the
+  `NODE_PATH` entry that esbuild needs for it.
 - `.formatter.exs` exports `field/2` and `field/3` for `import_deps`.
 - Guides: quickstart, forms, uploads, prompts, custom nodes, theming,
   security, accessibility and known limits.

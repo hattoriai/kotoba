@@ -109,6 +109,58 @@ defmodule Mix.Tasks.Kotoba.InstallTest do
              ~S|env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}|
   end
 
+  # Mix does not copy a path dependency into deps/, so the imports and the
+  # NODE_PATH note must point at the dependency's own directory.
+  test "points at the directory of a path dependency", %{root: root} do
+    app = Path.join(root, "app")
+    File.mkdir_p!(app)
+    for dir <- ~w(assets config), do: File.rename!(Path.join(root, dir), Path.join(app, dir))
+
+    install_beside(app)
+    output = messages([])
+
+    assert read(app, "assets/css/app.css") =~
+             ~s(@import "../../../kotoba/priv/static/kotoba.css";)
+
+    assert read(app, "assets/css/app.css") =~
+             ~s(/* @import "../../../kotoba/priv/static/kotoba-sumi.css"; */)
+
+    refute read(app, "assets/css/app.css") =~ "deps/kotoba"
+    refute output =~ "Your esbuild config sets NODE_PATH to deps/"
+    assert output =~ "Kotoba is a path dependency (../kotoba), so it is not in deps/."
+    assert output =~ ~S|Path.expand("../..", __DIR__),|
+
+    # Once NODE_PATH has the directory, the note says the import resolves.
+    config = read(app, "config/config.exs")
+
+    File.write!(
+      Path.join(app, "config/config.exs"),
+      String.replace(
+        config,
+        ~S|Path.expand("../deps", __DIR__),|,
+        ~S|Path.expand("../deps", __DIR__), Path.expand("../..", __DIR__),|
+      )
+    )
+
+    File.write!(Path.join(app, "assets/css/app.css"), File.read!(Path.join(@fixtures, "app.css")))
+    install_beside(app)
+    assert messages([]) =~ "has the directory of the Kotoba path dependency in NODE_PATH"
+  end
+
+  # The package beside the app, as Mix gives a path dependency: expanded
+  # from the working directory (the temporary directory can be a symbolic
+  # link, as on macOS).
+  defp install_beside(app) do
+    File.cd!(app, fn -> Install.install([], Path.expand("../kotoba")) end)
+  end
+
+  test "package_path/1 reads the path of the dependency", %{root: root} do
+    File.cd!(root, fn ->
+      assert Install.package_path(%{}) == Path.join(File.cwd!(), "deps/kotoba")
+      assert Install.package_path(%{kotoba: "../kotoba"}) == Path.expand("../kotoba")
+    end)
+  end
+
   test "says what to add for a file that is not there", %{root: root} do
     File.rm!(Path.join(root, "assets/css/app.css"))
     output = run(root)
