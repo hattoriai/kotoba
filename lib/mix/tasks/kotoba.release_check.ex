@@ -23,9 +23,13 @@ defmodule Mix.Tasks.Kotoba.ReleaseCheck do
 
   @impl Mix.Task
   def run(_args) do
-    case check(@static, "package.json", Mix.Project.config()[:version]) do
+    version = Mix.Project.config()[:version]
+
+    case check(@static, "package.json", version) do
       :ok ->
-        Mix.shell().info("#{@static} holds the four bundle files, and nothing else")
+        Mix.shell().info(
+          "#{@static} holds the four bundle files, and nothing else, and package.json has version #{version}"
+        )
 
       {:error, problems} ->
         Mix.raise("""
@@ -33,7 +37,8 @@ defmodule Mix.Tasks.Kotoba.ReleaseCheck do
 
         #{Enum.map_join(problems, "\n", &("  * " <> &1))}
 
-        Run `mix kotoba.build` (it empties #{@static} first).\
+        Build with `mix kotoba.build` (it empties #{@static} first); keep the \
+        version of package.json equal to the version of mix.exs.\
         """)
     end
   end

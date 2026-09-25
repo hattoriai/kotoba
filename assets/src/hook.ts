@@ -14,13 +14,16 @@
 //   * `data-nodes` - comma-separated URLs of app node modules.
 //   * `data-prompts` - JSON: trigger character → prompt name.
 //   * `data-upload` - the id of the LiveView file input.
+//   * `data-change` - "true" to push `kotoba:change`; any other value (or
+//     none) pushes nothing. A LiveView patch can change it.
 //   * `data-debounce` - milliseconds between `kotoba:change` pushes (300).
 //   * `data-link-schemes` - comma-separated allowed link schemes
 //     ("http,https,mailto"); the same list as the server's sanitizer.
 //
 // The hook pushes (every message has `v: 1` and the hook element's `id`):
 //
-//   * `kotoba:change` `{v, id, doc}` - the document envelope, debounced.
+//   * `kotoba:change` `{v, id, doc}` - the document envelope, debounced,
+//     only when `data-change` is "true".
 //   * `kotoba:prompt` `{v, id, prompt, query}` - a prompt query.
 //
 // It handles these server events (a payload with an `id` other than the
@@ -37,7 +40,7 @@
 //   * `kotoba:prompt_results` `{prompt, query?, items: [{id, label, hint?}]}`
 //
 // A change of `data-readonly` in a LiveView patch also sets the read-only
-// state.
+// state, and a change of `data-change` turns the pushes on or off.
 //
 // The hidden input holds the current document: the hook writes it on every
 // change and again after each LiveView patch, and puts it in the form data
@@ -97,6 +100,7 @@ export interface Config {
   nodes: string[];
   prompts: Map<string, string>;
   upload: HTMLInputElement | null;
+  change: boolean;
   debounce: number;
   linkSchemes: string[];
 }
@@ -116,6 +120,7 @@ export function readConfig(el: HTMLElement): Config {
       .filter((url) => url !== ""),
     prompts: parseTriggers(data.prompts),
     upload: inputById(data.upload),
+    change: data.change === "true",
     debounce: Number.isFinite(debounce) && debounce >= 0 ? debounce : 300,
     linkSchemes: parseLinkSchemes(data.linkSchemes),
   };
@@ -180,6 +185,7 @@ class Instance {
   private destroyed = false;
   private loaded = false;
   private readonlyAttribute: string | undefined;
+  private change: boolean;
   private readonly ready: Promise<void>;
 
   constructor(hook: KotobaHook) {
@@ -187,6 +193,7 @@ class Instance {
     this.el = hook.el;
     this.config = readConfig(hook.el);
     this.readonlyAttribute = hook.el.dataset.readonly;
+    this.change = this.config.change;
     instances += 1;
     this.id = hook.el.id || `kotoba-${instances}`;
 
@@ -403,8 +410,10 @@ class Instance {
 
   // LiveView patches the data attributes of a `phx-update="ignore"` element
   // and then calls `updated()`. A new `data-readonly` value sets the state; the
-  // same value again does not undo a `set_readonly` push.
+  // same value again does not undo a `set_readonly` push. `data-change` turns
+  // the `kotoba:change` pushes on or off.
   syncAttributes(): void {
+    this.setChange(this.el.dataset.change === "true");
     const value = this.el.dataset.readonly;
     if (value === this.readonlyAttribute) return;
     this.readonlyAttribute = value;
@@ -427,7 +436,17 @@ class Instance {
     placeholder.hidden = !empty || this.config.placeholder === "";
   }
 
+  private setChange(change: boolean): void {
+    if (change === this.change) return;
+    this.change = change;
+    if (!change) {
+      clearTimeout(this.timer);
+      this.timer = undefined;
+    }
+  }
+
   private schedulePush(): void {
+    if (!this.change) return;
     clearTimeout(this.timer);
     this.timer = setTimeout(() => this.flush(), this.config.debounce);
   }
@@ -435,7 +454,7 @@ class Instance {
   private flush(): void {
     clearTimeout(this.timer);
     this.timer = undefined;
-    if (this.destroyed || this.json === "" || this.json === this.pushed) return;
+    if (!this.change || this.destroyed || this.json === "" || this.json === this.pushed) return;
     this.pushed = this.json;
     this.push("kotoba:change", {
       v: PROTOCOL_VERSION,

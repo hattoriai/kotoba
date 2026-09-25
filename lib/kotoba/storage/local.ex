@@ -6,13 +6,20 @@ defmodule Kotoba.Storage.Local do
       # config/config.exs
       config :kotoba, storage: Kotoba.Storage.Local
 
-      # config/runtime.exs
-      config :kotoba, Kotoba.Storage.Local,
-        root: System.get_env("KOTOBA_UPLOADS", "/var/lib/my_app/uploads"),
-        url_prefix: "/uploads/kotoba"
+      # config/runtime.exs, in the :prod block
+      if config_env() == :prod do
+        config :kotoba, Kotoba.Storage.Local,
+          root: System.get_env("KOTOBA_UPLOADS", "/var/lib/my_app/uploads"),
+          url_prefix: "/uploads/kotoba"
+      end
 
-    * `:root` - the directory for the files (required). Give an absolute
-      path outside the release, from `config/runtime.exs`: a relative path
+      # config/dev.exs
+      config :kotoba, Kotoba.Storage.Local, root: Path.expand("../tmp/uploads", __DIR__)
+
+    * `:root` - the directory for the files (required). In production,
+      give an absolute path outside the release, from the `:prod` block of
+      `config/runtime.exs` (`runtime.exs` runs in every environment, so
+      outside that block it replaces the development root). A relative path
       is relative to the current working directory, and in a release the
       files would go into the release directory and be lost on the next
       deploy.
@@ -89,7 +96,7 @@ defmodule Kotoba.Storage.Local do
         raise ArgumentError, """
         Kotoba.Storage.Local needs a root directory:
 
-            config :kotoba, Kotoba.Storage.Local, root: "priv/uploads/kotoba"
+            config :kotoba, Kotoba.Storage.Local, root: "tmp/uploads"
         """
     end
   end

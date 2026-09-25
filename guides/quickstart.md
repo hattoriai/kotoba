@@ -40,50 +40,7 @@ It does not add what a file already has, so you can run it again. When it
 cannot edit a file safely, it changes nothing in that file and prints the
 lines to add. See "The limits of the installer" below.
 
-## 3. Let esbuild find `kotoba` in `deps/`
-
-The import `from "kotoba"` resolves through `NODE_PATH`. The Phoenix
-generators already give the esbuild profile a `NODE_PATH` with `deps/`.
-If your profile has no `NODE_PATH`, add it in `config/config.exs`:
-
-```elixir
-config :esbuild,
-  my_app: [
-    args: ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js),
-    cd: Path.expand("../assets", __DIR__),
-    env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
-  ]
-```
-
-The installer prints this note when the profile has no `NODE_PATH`.
-
-## 4. Give the uploads a directory
-
-The local storage adapter needs a directory before the first upload. In
-`config/runtime.exs`, give an absolute path outside the release:
-
-```elixir
-config :kotoba, Kotoba.Storage.Local,
-  root: System.get_env("KOTOBA_UPLOADS", "/var/lib/my_app/uploads"),
-  url_prefix: "/uploads/kotoba"
-```
-
-and in `config/dev.exs`:
-
-```elixir
-config :kotoba, Kotoba.Storage.Local, root: Path.expand("../priv/uploads/kotoba", __DIR__)
-```
-
-Serve the files with `Kotoba.Storage.Local.Plug`, in the endpoint before
-the router:
-
-```elixir
-plug Kotoba.Storage.Local.Plug
-```
-
-Uploads are optional. The [Uploads](uploads.md) guide has the full setup.
-
-## The manual steps
+## 2b. Or make the changes by hand
 
 To make the installer's changes by hand:
 
@@ -97,6 +54,9 @@ const liveSocket = new LiveSocket("/live", Socket, {
   hooks: {...colocatedHooks, Kotoba},
 })
 ```
+
+Put the CSS lines below the other `@import` lines of `app.css` (the
+installer puts them there):
 
 ```css
 /* assets/css/app.css */
@@ -125,6 +85,58 @@ these cases correctly:
 In these cases the installer does not write to the file. It prints the
 import and the hook line, and you add them by hand as shown above.
 
+## 3. Let esbuild find `kotoba` in `deps/`
+
+The import `from "kotoba"` resolves through `NODE_PATH`. The Phoenix
+generators already give the esbuild profile a `NODE_PATH` with `deps/`.
+If your profile has no `NODE_PATH`, add it in `config/config.exs`:
+
+```elixir
+config :esbuild,
+  my_app: [
+    args: ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js),
+    cd: Path.expand("../assets", __DIR__),
+    env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
+  ]
+```
+
+The installer prints this note when the profile has no `NODE_PATH`.
+
+## 4. Give the uploads a directory
+
+The local storage adapter needs a configured root directory. For
+production, give an absolute path outside the release, in the `:prod`
+block of `config/runtime.exs`:
+
+```elixir
+# config/runtime.exs
+if config_env() == :prod do
+  config :kotoba, Kotoba.Storage.Local,
+    root: System.get_env("KOTOBA_UPLOADS", "/var/lib/my_app/uploads"),
+    url_prefix: "/uploads/kotoba"
+end
+```
+
+For development, in `config/dev.exs`:
+
+```elixir
+# config/dev.exs
+config :kotoba, Kotoba.Storage.Local, root: Path.expand("../tmp/uploads", __DIR__)
+```
+
+`config/runtime.exs` runs in every environment, after `config/dev.exs`.
+Outside the `:prod` block, its root would also replace the development
+root, and uploads in development would fail.
+
+Serve the files with `Kotoba.Storage.Local.Plug`, in the endpoint before
+the router:
+
+```elixir
+plug Kotoba.Storage.Local.Plug
+```
+
+Uploads are optional. The [Uploads](uploads.md) guide has the full setup.
+
 ## 5. Add the field to a schema
 
 `Kotoba.Content` is an Ecto type over a `:map` column (`jsonb` in
@@ -152,10 +164,14 @@ defmodule MyApp.Blog.Post do
   def changeset(post, attrs) do
     post
     |> cast(attrs, [:title, :body])
-    |> validate_required([:title, :body])
+    |> validate_required([:title])
   end
 end
 ```
+
+An empty editor posts an empty document, not `nil`, so
+`validate_required/2` does not catch it. See `validate_body/1` in the
+[Forms](forms.md) guide.
 
 The stored value has the document, its HTML and its plain text. Kotoba
 renders the HTML and the text when it casts the value, so every row has a
@@ -181,13 +197,11 @@ Then, in the LiveView:
 </.form>
 ```
 
-```elixir
-def handle_event("kotoba:change", _params, socket), do: {:noreply, socket}
-```
-
-The editor pushes `kotoba:change` with the document when it changes. The
-LiveView must handle this event, also when it does nothing with it. The
-[Forms](forms.md) guide explains the event and the form data.
+The editor posts the document with the form, so the form's own
+`phx-change` and `phx-submit` events have it. The LiveView needs no other
+event for the editor. The [Forms](forms.md) guide explains the form data,
+and the `change` attribute for a LiveView that wants each change as an
+event.
 
 The editor is a LiveView hook, so it works only in a LiveView (or a
 LiveComponent), not on a page that a controller renders.

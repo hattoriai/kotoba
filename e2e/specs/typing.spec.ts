@@ -5,8 +5,8 @@ import { MOD, expectNodes, nodesOfType, openEditor, selectBack } from "./support
 const BOLD = 1;
 const ITALIC = 2;
 
-test("typed text goes to the hidden input and to the server", async ({ page }) => {
-  const editable = await openEditor(page);
+test("typed text goes to the hidden input and, with change, to the server", async ({ page }) => {
+  const editable = await openEditor(page, "/?change=1");
   await editable.click();
   await page.keyboard.type("Hello, Kotoba");
 

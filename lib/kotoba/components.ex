@@ -12,7 +12,7 @@ defmodule Kotoba.Components do
       <.kotoba_content content={@post.body} />
 
   The editor needs the `Kotoba` hook in the LiveSocket and the Kotoba CSS
-  (see the README).
+  (see the README). It pushes `kotoba:change` only with `change={true}`.
   """
 
   use Phoenix.Component
@@ -79,7 +79,12 @@ defmodule Kotoba.Components do
   on the editor element. In a LiveComponent, give `phx-target={@myself}`,
   so that the editor's events go to the component.
 
-  A change of `readonly` in a later render reaches the editor. To change
+  The form posts the document, so a LiveView needs no editor event for a
+  form. With `change`, the editor also pushes `kotoba:change` with
+  `%{"id", "doc", "v"}` on each change (debounced), for example to save a
+  draft; the LiveView must then handle it.
+
+  A change of `readonly` or `change` in a later render reaches the editor. To change
   the document after the first render, use `Kotoba.Live.push_content/3`:
   the editor reads the hidden input only when it mounts.
   """
@@ -113,6 +118,12 @@ defmodule Kotoba.Components do
 
   attr :upload_label, :string, default: "Attach files", doc: "the label of the file input"
   attr :readonly, :boolean, default: false
+
+  attr :change, :boolean,
+    default: false,
+    doc:
+      "when `true`, the editor pushes `kotoba:change` with the document on each change, and the LiveView (or the `phx-target` component) must handle it"
+
   attr :debounce, :integer, default: nil, doc: "milliseconds between `kotoba:change` pushes"
   attr :class, :any, default: nil, doc: "classes for the wrapper element"
   attr :rest, :global, doc: "attributes for the editor element"
@@ -147,6 +158,7 @@ defmodule Kotoba.Components do
         phx-update="ignore"
         data-input={@input_id}
         data-readonly={to_string(@readonly)}
+        data-change={to_string(@change)}
         data-placeholder={@placeholder}
         data-nodes={@node_urls}
         data-prompts={@triggers}

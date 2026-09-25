@@ -8,6 +8,9 @@ defmodule Kotoba.Live do
   so that only that editor acts on it when a page has more than one
   editor.
 
+  The editor pushes `kotoba:change` only when the component has `change`
+  (see `Kotoba.Components.kotoba/1`); a form gets the document without it.
+
   ## Prompts
 
       def handle_event("kotoba:prompt", params, socket) do

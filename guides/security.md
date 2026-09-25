@@ -115,4 +115,5 @@ sees it.
   the browser only. Check on the server that the person can save.
 * **Limit the size.** A document has no size limit in Kotoba. Limit the
   size of the form params in your endpoint (`Plug.Parsers` `:length`)
-  and of the WebSocket messages (the socket's `max_frame_size`).
+  and of the WebSocket messages, in the endpoint:
+  `socket "/live", Phoenix.LiveView.Socket, websocket: [max_frame_size: 1_000_000, connect_info: [session: @session_options]]`.

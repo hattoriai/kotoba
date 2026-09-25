@@ -225,7 +225,9 @@ defmodule KotobaDev.EditorLive do
   buttons under the form send each server event. After Submit, the stored
   content renders below.
 
-  Query params: `sample` starts with the sample document; `uploads=reverse`
+  Query params: `sample` starts with the sample document; `change` starts
+  with "Push changes" on (the editor's `change` attribute, so it pushes
+  `kotoba:change`); `uploads=reverse`
   stores the finished uploads in reverse order, so that the attachments
   reach the editor in the opposite order of their markers.
 
@@ -252,6 +254,7 @@ defmodule KotobaDev.EditorLive do
        stored: nil,
        readonly: false,
        changes: 0,
+       push_changes: params["change"] != nil,
        validated: 0,
        validated_text: "",
        reverse: params["uploads"] == "reverse",
@@ -280,6 +283,7 @@ defmodule KotobaDev.EditorLive do
         prompts={[people: &KotobaDev.People.search/1]}
         uploads={@uploads.body}
         readonly={@readonly}
+        change={@push_changes}
         nodes={[{KotobaDev.Nodes.Tag, "/assets/nodes/tag.js"}]}
       />
       <div class="row">
@@ -307,6 +311,17 @@ defmodule KotobaDev.EditorLive do
       <button type="button" id="insert-tag" phx-click="insert_tag">Insert tag</button>
     </div>
 
+    <div class="row" role="group" aria-label="Changes">
+      <label>
+        <input
+          type="checkbox"
+          id="push-changes"
+          phx-click="toggle_changes"
+          checked={@push_changes}
+        /> Push changes
+      </label>
+    </div>
+
     <div class="row" role="group" aria-label="Uploads">
       <label>
         <input type="checkbox" id="hold-uploads" phx-click="toggle_hold" checked={@hold} />
@@ -324,7 +339,7 @@ defmodule KotobaDev.EditorLive do
     </p>
 
     <dl>
-      <dt>Changes</dt>
+      <dt>Pushed changes (kotoba:change)</dt>
       <dd id="change-count">{@changes}</dd>
       <dt>Form changes</dt>
       <dd id="validate-count">{@validated}</dd>
@@ -368,6 +383,9 @@ defmodule KotobaDev.EditorLive do
 
   def handle_event("kotoba:prompt", params, socket),
     do: {:noreply, Kotoba.Live.handle_prompt(socket, params, people: &KotobaDev.People.search/1)}
+
+  def handle_event("toggle_changes", _params, socket),
+    do: {:noreply, update(socket, :push_changes, &(not &1))}
 
   def handle_event("load_sample", _params, socket),
     do: {:noreply, Kotoba.Live.push_content(socket, @editor, KotobaDev.Sample.document())}
@@ -485,6 +503,7 @@ defmodule KotobaDev.PanelComponent do
           id="b_editor"
           label_id="b-label"
           prompts={[people: &KotobaDev.People.search/1]}
+          change
           phx-target={@myself}
         />
       </.form>
@@ -533,7 +552,7 @@ defmodule KotobaDev.TwoEditorsLive do
     <h1>Two editors</h1>
     <.form for={@form} id="a-form" phx-change="validate">
       <label id="a-label" class="label">First editor</label>
-      <.kotoba field={@form[:body]} id="a_editor" label_id="a-label" />
+      <.kotoba field={@form[:body]} id="a_editor" label_id="a-label" change />
     </.form>
     <div class="row">
       <button type="button" id="load-a" phx-click="load">Load the first editor</button>

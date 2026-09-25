@@ -70,22 +70,35 @@ field. See `Kotoba.Content` for `""`, `nil` and `empty_values`.
 `Kotoba.Content` compares two values by their documents only. So a
 changeset does not mark the field as changed when only the cache is new.
 
-## The LiveView events
+## Each change as an event
 
-```elixir
-def handle_event("kotoba:change", %{"id" => "post-body", "doc" => _doc}, socket) do
-  {:noreply, socket}
-end
+The form's own `phx-change` and `phx-submit` events have the document in
+their params, so a form needs no other event for the editor.
+
+For a LiveView that wants each change of the document by itself, for
+example to save a draft, give the editor `change`:
+
+```heex
+<.kotoba field={@form[:body]} id="post-body" change />
 ```
 
-The editor pushes `kotoba:change` with `%{"v" => 1, "id" => id, "doc" =>
-envelope}` when the document changes, at most once in 300 ms (set another
-time with `debounce={500}`). A LiveView with an editor must handle this
-event, also when it does nothing with it. Use it, for example, to save a
-draft.
+The editor then pushes `kotoba:change` with `%{"v" => 1, "id" => id,
+"doc" => envelope}` when the document changes, at most once in 300 ms
+(set another time with `debounce={500}`). A LiveView that sets `change`
+must handle the event:
 
-The form's own `phx-change` event also has the document in its params, so
-many forms need nothing from `kotoba:change`.
+```elixir
+# Act on one editor by its id...
+def handle_event("kotoba:change", %{"id" => "post-body", "doc" => doc}, socket) do
+  {:noreply, save_draft(socket, doc)}
+end
+
+# ...and ignore the others.
+def handle_event("kotoba:change", _params, socket), do: {:noreply, socket}
+```
+
+Without `change`, the editor pushes no `kotoba:change`. A change of
+`change` in a later render turns the pushes on or off.
 
 ## Change the document from the server
 
@@ -131,7 +144,8 @@ the form.
 ## A LiveComponent
 
 In a LiveComponent, give `phx-target={@myself}`. The editor then sends its
-events to the component:
+events (`kotoba:prompt`, and `kotoba:change` when you set `change`) to the
+component, and the component must handle them:
 
 ```heex
 <.kotoba field={@form[:body]} id="note-body" phx-target={@myself} />

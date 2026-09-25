@@ -10,19 +10,23 @@
  *      of the Sumi daisyUI themes (--color-base-100, -200, -300,
  *      --color-base-content, --color-primary-content, --color-info,
  *      --color-success, --color-error, --radius-box);
- *   2. the short --sumi-* names (--sumi-ink, --sumi-paper, --sumi-accent,
- *      --sumi-muted, --sumi-line, --sumi-font, --sumi-mono, --sumi-radius),
- *      for a page that sets them itself;
+ *      Also --font-mono, the monospace font of Tailwind 4's default theme
+ *      (not a Sumi token);
+ *   2. the short --sumi-* names (--sumi-font, --sumi-display, --sumi-mono,
+ *      --sumi-ink, --sumi-paper, --sumi-surface, --sumi-line, --sumi-muted,
+ *      --sumi-accent, --sumi-accent-ink, --sumi-radius), for a page that
+ *      sets them itself;
  *   3. the Sumi palette below, so that the editor looks like Sumi on a page
  *      with no Sumi tokens.
  *
  * Sizes and spaces have no Sumi token; they get the Sumi values here.
  *
- * Dark and light follow the page as Sumi does: the data-theme attribute
- * ("dark" or "light") first, then prefers-color-scheme. On a page with the
- * Sumi themes, the theme colours change with data-theme and the editor
- * follows them. The mapping is resolved again on every element with a
- * data-theme attribute, so a part of the page with its own theme gets it.
+ * Dark and light: on a page with the Sumi themes, the editor follows them
+ * (their colours change with data-theme). Without them, the built-in
+ * palette follows the data-theme attribute ("dark" or "light") first, then
+ * prefers-color-scheme. The mapping is resolved again on every element
+ * with a data-theme attribute, so a part of the page with its own theme
+ * gets it.
  */
 
 /* The Sumi palette, light. */
@@ -63,7 +67,7 @@
     --kotoba-sumi-secondary: oklch(95% 0.012 85 / 0.6);
     --kotoba-sumi-info: oklch(62% 0.15 245);
     --kotoba-sumi-success: oklch(62% 0.14 155);
-      --kotoba-sumi-error: oklch(58% 0.22 25);
+    --kotoba-sumi-error: oklch(58% 0.22 25);
   }
 }
 

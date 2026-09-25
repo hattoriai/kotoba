@@ -83,18 +83,22 @@ without bidirectional format characters.
 config :kotoba, storage: Kotoba.Storage.Local
 
 # config/runtime.exs
-config :kotoba, Kotoba.Storage.Local,
-  root: System.get_env("KOTOBA_UPLOADS", "/var/lib/my_app/uploads"),
-  url_prefix: "/uploads/kotoba"
+if config_env() == :prod do
+  config :kotoba, Kotoba.Storage.Local,
+    root: System.get_env("KOTOBA_UPLOADS", "/var/lib/my_app/uploads"),
+    url_prefix: "/uploads/kotoba"
+end
 
 # config/dev.exs
-config :kotoba, Kotoba.Storage.Local, root: Path.expand("../priv/uploads/kotoba", __DIR__)
+config :kotoba, Kotoba.Storage.Local, root: Path.expand("../tmp/uploads", __DIR__)
 ```
 
-In a release, give an absolute `root` outside the release directory, from
-`config/runtime.exs`. A relative path is relative to the working
-directory, and files in the release directory are lost at the next
-deploy.
+In a release, give an absolute `root` outside the release directory, in
+the `:prod` block of `config/runtime.exs`. A relative path is relative to
+the working directory, and files in the release directory are lost at the
+next deploy. Keep the production root inside the `:prod` block:
+`config/runtime.exs` runs in every environment, after `config/dev.exs`,
+so outside the block it would replace the development root.
 
 Serve the files with `Kotoba.Storage.Local.Plug`, in the endpoint before
 the router:

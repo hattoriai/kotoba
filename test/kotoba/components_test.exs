@@ -76,6 +76,7 @@ defmodule Kotoba.ComponentsTest do
       assert attr(html, editor, "phx-update") == "ignore"
       assert attr(html, editor, "data-input") == "post_body"
       assert attr(html, editor, "data-readonly") == "false"
+      assert attr(html, editor, "data-change") == "false"
       assert attr(html, editor, "data-link-schemes") == "http,https,mailto"
       assert attr(html, editor, "data-placeholder") == nil
       assert attr(html, editor, "data-nodes") == nil
@@ -106,6 +107,7 @@ defmodule Kotoba.ComponentsTest do
           label_id: "body-label",
           placeholder: "Write…",
           readonly: true,
+          change: true,
           debounce: 0,
           nodes: [{Kotoba.Nodes.Mention, "/assets/pointer.js"}, "/assets/card.js"],
           prompts: [people: fn _ -> [] end, work: fn _ -> [] end],
@@ -117,6 +119,7 @@ defmodule Kotoba.ComponentsTest do
       editor = "#body"
       assert attr(html, editor, "phx-hook") == "Kotoba"
       assert attr(html, editor, "data-readonly") == "true"
+      assert attr(html, editor, "data-change") == "true"
       assert attr(html, editor, "data-placeholder") == "Write…"
       assert attr(html, editor, "data-debounce") == "0"
       assert attr(html, editor, "data-nodes") == "/assets/pointer.js,/assets/card.js"

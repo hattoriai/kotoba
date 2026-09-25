@@ -36,6 +36,10 @@ def render(assigns) do
   """
 end
 
+def handle_event("validate", %{"post" => params}, socket) do
+  {:noreply, assign(socket, form: to_form(params, as: :post))}
+end
+
 def handle_event("kotoba:prompt", params, socket) do
   prompts = prompts(socket.assigns.current_scope)
   {:noreply, Kotoba.Live.handle_prompt(socket, params, prompts)}

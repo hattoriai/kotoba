@@ -3,7 +3,8 @@ import { expect, test } from "@playwright/test";
 import { expectNodes, focusEnd, openEditor } from "./support";
 
 test("set_content replaces the document and is not pushed back", async ({ page }) => {
-  const editable = await openEditor(page);
+  // With change on, so that a push back would show in the count.
+  const editable = await openEditor(page, "/?change=1");
   await page.getByRole("button", { name: "Load sample" }).click();
 
   await expect(editable.locator("h2")).toHaveText("Sample");

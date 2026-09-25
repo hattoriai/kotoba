@@ -63,7 +63,7 @@ test("the formdata event puts the current document in a phx-change", async ({ pa
 });
 
 test("the hidden input holds the current document after a server patch of the form", async ({ page }) => {
-  const editable = await openEditor(page);
+  const editable = await openEditor(page, "/?change=1");
   await editable.click();
   await page.keyboard.type("Kept after the patch");
   await expect(page.locator("#change-count")).not.toHaveText("0");

@@ -18,12 +18,18 @@ of your node registry (`config :kotoba, nodes:`) or of
 keep their old HTML until you render them again:
 
 ```elixir
-for post <- Repo.all(Post) do
-  post
-  |> Ecto.Changeset.change()
-  |> Ecto.Changeset.force_change(:body, Kotoba.Content.rerender(post.body))
-  |> Repo.update!()
-end
+import Ecto.Query
+
+Repo.transaction(fn ->
+  from(p in Post, where: not is_nil(p.body))
+  |> Repo.stream()
+  |> Enum.each(fn post ->
+    post
+    |> Ecto.Changeset.change()
+    |> Ecto.Changeset.force_change(:body, Kotoba.Content.rerender(post.body))
+    |> Repo.update!()
+  end)
+end, timeout: :infinity)
 ```
 
 `Kotoba.Content` compares two values by their documents only, so
@@ -57,8 +63,8 @@ less than one frame apart, which a person does not type:
 The editor bundle is about 425 KB, 140 KB with gzip. It has Lexical, its
 plugins and the Prism grammars of `@lexical/code-prism` (more languages
 than the toolbar offers, so a pasted code block in another language keeps
-its highlighting). Load the bundle only on the pages that have an editor,
-if its size is a problem for your other pages.
+its highlighting). The bundle is part of your `app.js`, so every page that
+loads `app.js` pays for its size.
 
 ## `window.Prism`
 

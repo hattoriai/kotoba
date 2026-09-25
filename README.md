@@ -52,7 +52,8 @@ const liveSocket = new LiveSocket("/live", Socket, {
 ```
 
 Import the style sheet in `assets/css/app.css` (and the Sumi theme, if you
-want it):
+want it). Put these lines below the other `@import` lines of `app.css`
+(the installer puts them there):
 
 ```css
 @import "../../deps/kotoba/priv/static/kotoba.css";
@@ -92,15 +93,16 @@ end
 <.kotoba_content content={@post.body} />
 ```
 
+Import the components in the `html_helpers` of your web module:
+
 ```elixir
 import Kotoba.Components
-
-def handle_event("kotoba:change", _params, socket), do: {:noreply, socket}
 ```
 
 The editor posts the document with the form, as a JSON string that
-`Kotoba.Content` casts. `<.kotoba_content>` shows the stored content as
-safe HTML.
+`Kotoba.Content` casts, so the form's own `phx-change` and `phx-submit`
+events have it. `<.kotoba_content>` shows the stored content as safe
+HTML.
 
 ## Guides
 
@@ -167,7 +169,8 @@ port 4099 can keep running.
 
 ### Release
 
-`mix release` builds the bundle, checks that `priv/static` holds only the
+`mix release` (in this repository, an alias that replaces Mix's `release`
+task) builds the bundle, checks that `priv/static` holds only the
 four bundle files (`mix kotoba.release_check`), publishes to Hex, and tags
 and pushes `v<version>`.
 

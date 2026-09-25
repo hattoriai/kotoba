@@ -20,11 +20,14 @@ The first release.
   horizontal rules, attachments, mentions, a toolbar with Lucide icons, the
   prompt menu, the upload bridge to LiveView uploads, and app node modules.
   The host app does not need Node.js.
-- The `Kotoba` LiveView hook. It pushes `kotoba:change` and
-  `kotoba:prompt`, and handles `set_content`, `insert_node`,
-  `remove_marker`, `set_readonly`, `focus` and `kotoba:prompt_results`.
-  Every message carries the editor id. The hidden input and the form data
-  of `phx-change` and `phx-submit` always have the current document.
+- The `Kotoba` LiveView hook. It pushes `kotoba:prompt`, and handles
+  `set_content`, `insert_node`, `remove_marker`, `set_readonly`, `focus`
+  and `kotoba:prompt_results`. Every message carries the editor id. The
+  hidden input and the form data of `phx-change` and `phx-submit` always
+  have the current document.
+- `kotoba:change` is opt-in: the editor pushes it only with the `change`
+  attribute of `<.kotoba>`. A LiveView with an editor needs no
+  `kotoba:change` clause unless it sets `change`.
 - Keyboard operation of every command: a toolbar with one tab stop and
   arrow keys, Tab and Shift+Tab in lists, Tab in code blocks, Escape to
   leave the editor, a prompt menu as a `listbox`, and a polite live region.

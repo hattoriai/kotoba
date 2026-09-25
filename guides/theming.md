@@ -80,8 +80,11 @@ in this order:
    Sumi daisyUI themes (`--color-base-100`, `--color-base-200`,
    `--color-base-300`, `--color-base-content`, `--color-primary-content`,
    `--color-info`, `--color-success`, `--color-error`, `--radius-box`);
-2. the short names `--sumi-ink`, `--sumi-paper`, `--sumi-accent`,
-   `--sumi-muted`, `--sumi-line`, `--sumi-font`, `--sumi-mono` and
+   The monospace font reads `--font-mono` first, the variable of
+   Tailwind 4's default theme (not a Sumi token);
+2. the short names `--sumi-font`, `--sumi-display`, `--sumi-mono`,
+   `--sumi-ink`, `--sumi-paper`, `--sumi-surface`, `--sumi-line`,
+   `--sumi-muted`, `--sumi-accent`, `--sumi-accent-ink` and
    `--sumi-radius`, for a page that sets them itself;
 3. a built-in Sumi palette, so that the editor looks like Sumi on a page
    with no Sumi tokens.
@@ -89,12 +92,17 @@ in this order:
 Sizes and spaces have no Sumi token, so the theme gives them the Sumi
 values.
 
-Dark and light follow the page, as Sumi does. The `data-theme` attribute
-(`"dark"` or `"light"`) wins; without it, `prefers-color-scheme` chooses.
-On a page with the Sumi themes, the theme colours change with
-`data-theme`, and the editor follows them. The theme is resolved again on
-every element with a `data-theme` attribute, so a part of the page with
+Dark and light: on a page with the Sumi themes, the editor follows them,
+because their colours change with `data-theme`. Without them, the
+built-in palette follows the `data-theme` attribute (`"dark"` or
+`"light"`) first, then `prefers-color-scheme`. The theme is resolved again
+on every element with a `data-theme` attribute, so a part of the page with
 its own theme gets it.
+
+In an app with daisyUI (a new Phoenix 1.8 app has it), the theme reads the
+app's own daisyUI colours (`--color-base-*`), with the Sumi accent. Kotoba
+does not load the Sumi fonts (Outfit and Cormorant Garamond); load them
+yourself if you want them.
 
 Import `kotoba-sumi.css` from `app.css`, after `kotoba.css`. Tailwind 4
 then sees the tokens that the theme reads, and puts them in the built CSS.

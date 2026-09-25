@@ -377,12 +377,18 @@ defmodule Kotoba.Install.Edits do
   def config_block(app \\ :my_app) do
     """
     # Kotoba stores the files of the editor's uploads with this adapter.
-    # Give it a directory in config/runtime.exs, an absolute path outside
-    # the release:
+    # Give it a directory in the :prod block of config/runtime.exs, an
+    # absolute path outside the release:
     #
-    #     config :kotoba, Kotoba.Storage.Local,
-    #       root: System.get_env("KOTOBA_UPLOADS", "/var/lib/#{app}/uploads"),
-    #       url_prefix: "/uploads/kotoba"
+    #     if config_env() == :prod do
+    #       config :kotoba, Kotoba.Storage.Local,
+    #         root: System.get_env("KOTOBA_UPLOADS", "/var/lib/#{app}/uploads"),
+    #         url_prefix: "/uploads/kotoba"
+    #     end
+    #
+    # and one for development in config/dev.exs:
+    #
+    #     config :kotoba, Kotoba.Storage.Local, root: Path.expand("../tmp/uploads", __DIR__)
     config :kotoba, storage: Kotoba.Storage.Local
     """
   end

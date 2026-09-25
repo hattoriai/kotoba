@@ -5,10 +5,6 @@ on:
   push:
     branches: [main]
 
-env:
-  ELIXIR_VERSION: "1.20"
-  OTP_VERSION: "29.0.2"
-
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -16,26 +12,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Erlang and Elixir exactly as in .tool-versions.
       - uses: erlef/setup-beam@v1
+        id: beam
         with:
-          elixir-version: ${{ env.ELIXIR_VERSION }}
-          otp-version: ${{ env.OTP_VERSION }}
+          version-file: .tool-versions
+          version-type: strict
 
       - uses: actions/cache@v4
         with:
           path: |
             deps
             _build
-          key: mix-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('mix.lock') }}
+          key: mix-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-${{ hashFiles('mix.lock') }}
           restore-keys: |
-            mix-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-
+            mix-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-
 
       - uses: actions/cache@v4
         with:
           path: priv/plts
-          key: plt-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('mix.lock') }}
+          key: plt-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-${{ hashFiles('mix.lock') }}
           restore-keys: |
-            plt-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-
+            plt-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-
 
       # All environments: credo and the tests run in :test, ex_doc and
       # dialyxir in :dev.
@@ -77,14 +75,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Erlang and Elixir exactly as in .tool-versions.
       - uses: erlef/setup-beam@v1
+        id: beam
         with:
-          elixir-version: ${{ env.ELIXIR_VERSION }}
-          otp-version: ${{ env.OTP_VERSION }}
+          version-file: .tool-versions
+          version-type: strict
 
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          node-version-file: .tool-versions
           cache: npm
           cache-dependency-path: |
             assets/package-lock.json
@@ -95,9 +95,9 @@ jobs:
           path: |
             deps
             _build
-          key: mix-e2e-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('mix.lock') }}
+          key: mix-e2e-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-${{ hashFiles('mix.lock') }}
           restore-keys: |
-            mix-e2e-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-
+            mix-e2e-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-
 
       - run: mix deps.get
 
