@@ -39,6 +39,7 @@ defmodule Kotoba.MixProject do
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
       {:ecto, "~> 3.13"},
+      {:esbuild, "~> 0.10", only: :dev, runtime: false},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.1"},
@@ -71,6 +72,7 @@ defmodule Kotoba.MixProject do
 
   defp aliases do
     [
+      "assets.build": ["kotoba.build"],
       precommit: [
         "compile --warnings-as-errors",
         "deps.unlock --unused",

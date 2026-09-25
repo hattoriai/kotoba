@@ -8,3 +8,4 @@ e2e/node_modules
 demo/_build
 demo/deps
 demo/priv/uploads
+/priv/static/*

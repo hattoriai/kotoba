@@ -23,3 +23,15 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   nesting, string limits), an allow list of link schemes
   (`config :kotoba, allowed_link_schemes:`), and the `:default` and
   `:untrusted` policies.
+- The editor bundle (`priv/static/kotoba.esm.js` and `kotoba.cjs.js`): a
+  Lexical 0.51 editor with rich text, history, lists and check lists, links
+  (paste to link, `Cmd/Ctrl+K`), markdown shortcuts, highlighted code blocks,
+  horizontal rules, the `attachment` and `mention` nodes, a toolbar, the
+  prompt menu, the upload bridge to LiveView uploads, and app node modules.
+- The `Kotoba` LiveView hook, with the `kotoba:change` and `kotoba:prompt`
+  events and the `set_content`, `insert_node`, `set_readonly`, `focus` and
+  `kotoba:prompt_results` server events.
+- `kotoba.css` (structure, themed through `--kotoba-*` properties) and
+  `kotoba-sumi.css` (the Sumi theme).
+- `mix kotoba.build`: builds the bundles and copies the style sheets into
+  `priv/static`.

@@ -1,0 +1,33 @@
+/*
+ * Kotoba in the Sumi theme.
+ *
+ * Load this file after kotoba.css. It maps the --kotoba-* properties to the
+ * Sumi tokens (--sumi-ink, --sumi-paper, --sumi-accent, --sumi-muted,
+ * --sumi-line, --sumi-radius, --sumi-font, --sumi-mono). A page that also
+ * has the Tailwind theme names of Sumi (--color-sumi-*, --font-body) gets
+ * those next; the last value is the Sumi default. Dark and light follow the
+ * theme switch of the page: the mapping is resolved again on every element
+ * with a data-theme attribute.
+ */
+
+:root,
+[data-theme] {
+  --kotoba-font: var(--sumi-font, var(--font-body, "Outfit", system-ui, sans-serif));
+  --kotoba-font-mono: var(--sumi-mono, ui-monospace, "SF Mono", Menlo, Consolas, monospace);
+  --kotoba-text: var(--sumi-ink, var(--color-base-content, #0a0a0b));
+  --kotoba-muted: var(--sumi-muted, var(--sumi-text-muted, #6a655c));
+  --kotoba-background: var(--sumi-paper, var(--color-base-100, #f5f0e8));
+  --kotoba-surface: var(--sumi-surface, var(--color-base-200, #ece5d8));
+  --kotoba-border: var(--sumi-line, var(--color-base-300, #d8cfbf));
+  --kotoba-accent: var(--sumi-accent, var(--color-sumi-blade, #e84a1c));
+  --kotoba-accent-text: var(--sumi-accent-ink, #ffffff);
+  --kotoba-selection: var(--sumi-ghost, var(--color-sumi-ghost, rgba(232, 74, 28, 0.12)));
+  --kotoba-radius: var(--sumi-radius, 4px);
+  --kotoba-heading-font: var(--sumi-display, var(--font-display, "Cormorant Garamond", Georgia, serif));
+  --kotoba-token-keyword: var(--sumi-accent, var(--color-sumi-blade, #e84a1c));
+  --kotoba-token-function: var(--sumi-ink, var(--color-base-content, #0a0a0b));
+  --kotoba-token-comment: var(--sumi-muted, var(--sumi-text-muted, #6a655c));
+  --kotoba-token-punctuation: var(--sumi-muted, var(--sumi-text-muted, #6a655c));
+  --kotoba-token-operator: var(--sumi-muted, var(--sumi-text-muted, #6a655c));
+  --kotoba-token-variable: var(--sumi-ink, var(--color-base-content, #0a0a0b));
+}

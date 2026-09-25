@@ -94,6 +94,13 @@ Render stored content as safe HTML with `<.kotoba_content>`:
 `<.kotoba_content>` renders the content's cached HTML. Kotoba sanitizes all
 rendered output, so raw HTML in the stored content never reaches the page.
 
+## Development
+
+The editor source is TypeScript in `assets/`. `mix kotoba.build` (in the
+`:dev` environment) runs `npm ci` in `assets/` when needed, bundles the
+editor with esbuild and copies the style sheets into `priv/static`. The
+built files are not in the repository; the Hex package includes them.
+
 ## License
 
 Kotoba is released under the Apache License, Version 2.0. See `LICENSE` for
