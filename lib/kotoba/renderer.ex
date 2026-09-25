@@ -203,10 +203,22 @@ defmodule Kotoba.Renderer do
   Escapes the Markdown characters in a plain string, for a
   `c:Kotoba.Node.render_markdown/2` callback.
 
+  It escapes the inline syntax everywhere (`` ` ``, `*`, `_`, `[`, `]`,
+  `~`, `<` and `\\`), and the block syntax at the start of a line: `#`
+  headings, `>` quotes, `-` and `+` bullets, `1.` and `1)` list markers,
+  and `---` or `===` lines. So a node that renders its text at the start
+  of a block cannot make a heading or a list.
+
   ## Examples
 
       iex> Kotoba.Renderer.escape_markdown("*not* [a link]")
       "\\\\*not\\\\* \\\\[a link\\\\]"
+
+      iex> Kotoba.Renderer.escape_markdown("# not a heading")
+      "\\\\# not a heading"
+
+      iex> Kotoba.Renderer.escape_markdown("1. not a list")
+      "1\\\\. not a list"
 
   """
   @spec escape_markdown(String.t()) :: String.t()

@@ -153,10 +153,15 @@ defmodule KotobaDev.Sample do
 end
 
 defmodule KotobaDev.Layouts do
-  @moduledoc "The root layout: the style sheets, the import map and the LiveSocket."
+  @moduledoc """
+  The root layout: the style sheets, the import map and the LiveSocket.
+  `?theme=sumi` also loads kotoba-sumi.css.
+  """
   use Phoenix.Component
 
   def root(assigns) do
+    assigns = assign(assigns, :sumi, assigns.conn.params["theme"] == "sumi")
+
     ~H"""
     <!DOCTYPE html>
     <html lang="en">
@@ -166,8 +171,10 @@ defmodule KotobaDev.Layouts do
         <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
         <title>Kotoba development</title>
         <link rel="stylesheet" href="/assets/kotoba.css" />
+        <link :if={@sumi} rel="stylesheet" href="/assets/kotoba-sumi.css" />
         <style>
           body { font-family: system-ui, sans-serif; margin: 0; background: #fafaf9; color: #1c1917; }
+          body.sumi { background: var(--kotoba-background); color: var(--kotoba-text); }
           main { max-width: 48rem; margin: 0 auto; padding: 2rem 1rem; }
           nav a { margin-right: 1rem; }
           .label { display: block; font-weight: 600; margin: 1rem 0 0.5rem; }
@@ -199,9 +206,11 @@ defmodule KotobaDev.Layouts do
           window.liveSocket = liveSocket
         </script>
       </head>
-      <body>
+      <body class={@sumi && "sumi"}>
         <main>
-          <nav><a href="/">Editor</a><a href="/two">Two editors</a><a href="/nodes">Nodes</a></nav>
+          <nav>
+            <a href="/">Editor</a><a href="/two">Two editors</a><a href="/nodes">Nodes</a><a href="/?theme=sumi">Sumi theme</a>
+          </nav>
           {@inner_content}
         </main>
       </body>

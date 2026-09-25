@@ -1,0 +1,126 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+env:
+  ELIXIR_VERSION: "1.20"
+  OTP_VERSION: "29.0.2"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: mix-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            mix-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-
+
+      - uses: actions/cache@v4
+        with:
+          path: priv/plts
+          key: plt-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            plt-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-
+
+      # All environments: credo and the tests run in :test, ex_doc and
+      # dialyxir in :dev.
+      - run: mix deps.get
+
+      # The bundles are built only for a release. Empty files let the
+      # package compile and the tests run without Node.js; the tests that
+      # need the real bundle are tagged :build, and the e2e job builds.
+      - name: Seed fake assets
+        run: |
+          mkdir -p priv/static
+          touch priv/static/kotoba.esm.js priv/static/kotoba.cjs.js priv/static/kotoba.css priv/static/kotoba-sumi.css
+
+      - run: mix format --check-formatted
+
+      - run: mix compile --warnings-as-errors
+        env:
+          MIX_ENV: test
+
+      - run: mix credo --strict
+        env:
+          MIX_ENV: test
+
+      - run: mix docs
+        env:
+          MIX_ENV: dev
+
+      - run: mix test --exclude build
+        env:
+          MIX_ENV: test
+
+      - run: mix dialyzer
+        env:
+          MIX_ENV: dev
+
+  e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        with:
+          elixir-version: ${{ env.ELIXIR_VERSION }}
+          otp-version: ${{ env.OTP_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: |
+            assets/package-lock.json
+            e2e/package-lock.json
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: mix-e2e-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            mix-e2e-${{ env.ELIXIR_VERSION }}-${{ env.OTP_VERSION }}-
+
+      - run: mix deps.get
+
+      - run: npm ci
+        working-directory: assets
+
+      - run: npm ci
+        working-directory: e2e
+
+      - run: npx playwright install --with-deps chromium
+        working-directory: e2e
+
+      # The Playwright web server runs `mix kotoba.build` (the real bundle),
+      # builds the dev node modules and starts `mix dev` without watchers.
+      - run: mix test.e2e
+        env:
+          CI: "true"
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            e2e/test-results
+            e2e/playwright-report
+          retention-days: 7

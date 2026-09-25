@@ -18,6 +18,7 @@ defmodule Kotoba.MixProject do
       listeners: [Phoenix.CodeReloader],
       dialyzer: [
         plt_add_apps: [:mix, :ex_unit, :esbuild],
+        plt_core_path: "priv/plts",
         plt_file: {:no_warn, "priv/plts/project.plt"}
       ],
       package: package(),
@@ -77,6 +78,7 @@ defmodule Kotoba.MixProject do
         package.json
         mix.exs
         .formatter.exs
+        guides
         README.md
         CHANGELOG.md
         LICENSE
@@ -90,7 +92,45 @@ defmodule Kotoba.MixProject do
       main: "readme",
       source_ref: "v#{@version}",
       source_url: @source_url,
-      extras: ["README.md", "CHANGELOG.md"]
+      extras: [
+        "README.md",
+        "guides/quickstart.md",
+        "guides/forms.md",
+        "guides/uploads.md",
+        "guides/prompts.md",
+        "guides/custom_nodes.md",
+        "guides/theming.md",
+        "guides/security.md",
+        "guides/accessibility.md",
+        "guides/limits.md",
+        "CHANGELOG.md"
+      ],
+      groups_for_extras: [
+        Guides: [
+          "guides/quickstart.md",
+          "guides/forms.md",
+          "guides/uploads.md",
+          "guides/prompts.md",
+          "guides/custom_nodes.md",
+          "guides/theming.md"
+        ],
+        Reference: [
+          "guides/security.md",
+          "guides/accessibility.md",
+          "guides/limits.md"
+        ]
+      ],
+      groups_for_modules: [
+        Editor: [Kotoba.Components, Kotoba.Live, Kotoba.Prompts],
+        Content: [Kotoba.Content, Kotoba.Document, Kotoba.Renderer, Kotoba.Sanitizer],
+        Nodes: [Kotoba.Node, Kotoba.Node.Field, Kotoba.Nodes, ~r/^Kotoba\.Nodes\./],
+        Attachments: [
+          Kotoba.Attachments,
+          Kotoba.Storage,
+          Kotoba.Storage.Local,
+          Kotoba.Storage.Local.Plug
+        ]
+      ]
     ]
   end
 
@@ -106,6 +146,19 @@ defmodule Kotoba.MixProject do
       "assets.build": ["kotoba.build"],
       dev: "run --no-halt dev.exs",
       "test.e2e": [&e2e_deps/1, "cmd --cd e2e npm test"],
+      # The compile and the asset build run in a child VM: once anything
+      # compiles in this VM, Mix no longer finds the tasks of the Hex archive
+      # (Elixir 1.20, Hex 2.5). hex.publish stays in this VM so that it can
+      # read the two-factor code from the terminal. The check refuses a
+      # priv/static with anything but the four bundle files.
+      release: [
+        "cmd mix kotoba.build",
+        "cmd mix kotoba.release_check",
+        "hex.publish --yes",
+        "cmd git tag v#{@version} -f",
+        "cmd git push",
+        "cmd git push --tags"
+      ],
       precommit: [
         "compile --warnings-as-errors",
         "deps.unlock --unused",

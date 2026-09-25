@@ -5,7 +5,10 @@ defmodule Kotoba do
   It ships a prebuilt editor, an Ecto content type, and safe rendering, so a
   Phoenix app gets a rich-text field with no Node.js build step of its own.
 
-  See the `README` for setup and usage.
+  Start with the [Quickstart](quickstart.md). The main modules are
+  `Kotoba.Components` (the editor and the rendered content),
+  `Kotoba.Content` (the Ecto type), `Kotoba.Live` (the LiveView helpers)
+  and `Kotoba.Node` (custom nodes).
   """
 
   @external_resource "mix.exs"

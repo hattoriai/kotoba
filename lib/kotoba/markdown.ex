@@ -2,9 +2,30 @@ defmodule Kotoba.Markdown do
   @moduledoc false
   # Small helpers for the Markdown output of the built-in nodes.
 
-  @doc "Escapes the characters that have a meaning in inline Markdown."
+  # The block syntax at the start of a line (after at most three spaces):
+  # an ATX heading, a quote, a bullet, a thematic break or setext underline
+  # of `-` or `=`, and an ordered list marker. `*`, `_`, `` ` `` and `~`
+  # (bullets, rules and fences too) are escaped everywhere by the inline
+  # rule.
+  @line_start ~r/^([ \t]{0,3})(?:(\d{1,9})([.)])(?=[ \t]|$)|(\#{1,6}(?=[ \t]|$)|>|[-+](?=[ \t]|$)|-(?=[- \t]*$)|=(?=[= \t]*$)))/m
+
+  @doc """
+  Escapes the characters that have a meaning in inline Markdown, and the
+  block syntax at the start of a line, so that the text reads as text.
+  """
   @spec escape(String.t()) :: String.t()
-  def escape(text), do: String.replace(text, ~r/[\\`*_\[\]~<]/, "\\\\\\0")
+  def escape(text) do
+    text
+    |> String.replace(~r/[\\`*_\[\]~<]/, "\\\\\\0")
+    |> then(
+      &Regex.replace(@line_start, &1, fn _all, lead, digits, mark, symbol ->
+        escape_line_start(lead, digits, mark, symbol)
+      end)
+    )
+  end
+
+  defp escape_line_start(lead, "", _mark, symbol), do: lead <> "\\" <> symbol
+  defp escape_line_start(lead, digits, mark, _symbol), do: lead <> digits <> "\\" <> mark
 
   @doc "Returns a code span with a fence that is longer than the backticks in the text."
   @spec code_span(String.t()) :: String.t()

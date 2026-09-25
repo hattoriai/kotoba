@@ -1,6 +1,7 @@
 defmodule Mix.Tasks.Kotoba.BuildTest do
   # Builds the real bundles into priv/static, so it does not run in parallel
-  # with other tests.
+  # with other tests. It needs npm (and the network for the first `npm ci`),
+  # so it runs only with `mix test --include build`.
   use ExUnit.Case, async: false
 
   @root Path.expand("../../..", __DIR__)
@@ -8,6 +9,7 @@ defmodule Mix.Tasks.Kotoba.BuildTest do
   @files ~w(kotoba.esm.js kotoba.cjs.js kotoba.css kotoba-sumi.css)
   @exports ~w(AttachmentNode Kotoba MentionNode)
 
+  @moduletag :build
   @moduletag timeout: 600_000
 
   unless System.find_executable("npm") do
@@ -56,6 +58,53 @@ defmodule Mix.Tasks.Kotoba.BuildTest do
     names = exports |> String.split(",") |> Enum.map(&(&1 |> String.split(" as ") |> List.last()))
 
     for name <- @exports, do: assert(name in names, "kotoba.esm.js does not export #{name}")
+  end
+
+  describe "mix hex.build" do
+    @describetag :tmp_dir
+
+    test "packages the bundles and the guides, and no development files", %{tmp_dir: tmp_dir} do
+      mix = System.find_executable("mix")
+      out = Path.join(tmp_dir, "package")
+
+      {output, status} =
+        System.cmd(mix, ["hex.build", "--unpack", "--output", out],
+          cd: @root,
+          env: [{"MIX_ENV", "dev"}],
+          stderr_to_stdout: true
+        )
+
+      assert status == 0, "mix hex.build failed:\n" <> output
+
+      files =
+        out
+        |> Path.join("**")
+        |> Path.wildcard(match_dot: true)
+        |> Enum.filter(&File.regular?/1)
+        |> Enum.map(&Path.relative_to(&1, out))
+
+      for file <- @files do
+        assert "priv/static/#{file}" in files, "the package has no priv/static/#{file}"
+      end
+
+      assert files |> Enum.filter(&String.starts_with?(&1, "priv/")) |> Enum.sort() ==
+               @files |> Enum.map(&"priv/static/#{&1}") |> Enum.sort()
+
+      guides =
+        @root
+        |> Path.join("guides/*.md")
+        |> Path.wildcard()
+        |> Enum.map(&Path.relative_to(&1, @root))
+
+      assert guides != []
+      for guide <- guides, do: assert(guide in files, "the package has no #{guide}")
+
+      for file <- files, prefix <- ~w(tmp/ dev/ e2e/ test/ assets/ deps/ _build/ doc/) do
+        refute String.starts_with?(file, prefix), "the package has #{file}"
+      end
+
+      refute "dev.exs" in files
+    end
   end
 
   describe "the CJS bundle" do

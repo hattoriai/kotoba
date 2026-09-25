@@ -579,6 +579,58 @@ defmodule Kotoba.RendererTest do
     end
   end
 
+  describe "escape_markdown/1" do
+    test "escapes the block syntax at the start of a line" do
+      cases = [
+        {"# not a heading", "\\# not a heading"},
+        {"### three", "\\### three"},
+        {"> not a quote", "\\> not a quote"},
+        {">x", "\\>x"},
+        {"- not an item", "\\- not an item"},
+        {"+ not an item", "\\+ not an item"},
+        {"* not an item", "\\* not an item"},
+        {"1. not an item", "1\\. not an item"},
+        {"12) not an item", "12\\) not an item"},
+        {"```elixir", "\\`\\`\\`elixir"},
+        {"~~~", "\\~\\~\\~"},
+        {"---", "\\---"},
+        {"===", "\\==="},
+        {"  # indented", "  \\# indented"},
+        {"a\n# b\n1. c", "a\n\\# b\n1\\. c"}
+      ]
+
+      for {text, escaped} <- cases do
+        assert Renderer.escape_markdown(text) == escaped, "escape_markdown(#{inspect(text)})"
+      end
+    end
+
+    test "keeps the same characters inside a line and where they are not syntax" do
+      for text <- [
+            "a # b",
+            "a - b",
+            "a > b",
+            "no. 1",
+            "#hashtag",
+            "-5 degrees",
+            "2024 was",
+            "1.5 m"
+          ] do
+        assert Renderer.escape_markdown(text) == text, "escape_markdown(#{inspect(text)})"
+      end
+    end
+
+    test "block syntax in the text of a paragraph and of a list item stays text" do
+      input = [
+        paragraph([text("# not a heading")]),
+        paragraph([text("1. not a list")]),
+        list("bullet", [item([text("> not a quote")])])
+      ]
+
+      assert input |> doc() |> Renderer.to_markdown() ==
+               "\\# not a heading\n\n1\\. not a list\n\n- \\> not a quote"
+    end
+  end
+
   test "tag/3 escapes a string and keeps safe content" do
     assert Renderer.tag("b", [], {:safe, "<i>x</i>"}) |> Phoenix.HTML.safe_to_string() ==
              "<b><i>x</i></b>"
