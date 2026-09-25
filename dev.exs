@@ -264,6 +264,7 @@ defmodule KotobaDev.EditorLive do
        form: to_form(%{"body" => body}, as: :post),
        stored: nil,
        readonly: false,
+       invalid: false,
        changes: 0,
        push_changes: params["change"] != nil,
        validated: 0,
@@ -295,8 +296,11 @@ defmodule KotobaDev.EditorLive do
         uploads={@uploads.body}
         readonly={@readonly}
         change={@push_changes}
+        aria-invalid={@invalid}
+        aria-describedby={if @invalid, do: "body-error"}
         nodes={[{KotobaDev.Nodes.Tag, "/assets/nodes/tag.js"}]}
       />
+      <p :if={@invalid} id="body-error">Say something</p>
       <div class="row">
         <button type="submit" id="submit">Submit</button>
       </div>
@@ -311,6 +315,14 @@ defmodule KotobaDev.EditorLive do
         aria-pressed={to_string(@readonly)}
       >
         Readonly
+      </button>
+      <button
+        type="button"
+        id="toggle-invalid"
+        phx-click="toggle_invalid"
+        aria-pressed={to_string(@invalid)}
+      >
+        Invalid
       </button>
       <button type="button" id="push-lock" phx-click="set_readonly" phx-value-readonly="true">
         Lock (push)
@@ -403,6 +415,9 @@ defmodule KotobaDev.EditorLive do
 
   def handle_event("toggle_readonly", _params, socket),
     do: {:noreply, update(socket, :readonly, &(not &1))}
+
+  def handle_event("toggle_invalid", _params, socket),
+    do: {:noreply, update(socket, :invalid, &(not &1))}
 
   def handle_event("set_readonly", %{"readonly" => value}, socket),
     do: {:noreply, Kotoba.Live.set_readonly(socket, @editor, value == "true")}

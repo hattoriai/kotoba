@@ -28,6 +28,9 @@ The first release.
 - `kotoba:change` is opt-in: the editor pushes it only with the `change`
   attribute of `<.kotoba>`. A LiveView with an editor needs no
   `kotoba:change` clause unless it sets `change`.
+- The editable area follows the field's `aria-invalid` and
+  `aria-describedby` on every render (LiveView patches only data
+  attributes of the editor element, so the component passes them there).
 - Keyboard operation of every command: a toolbar with one tab stop and
   arrow keys, Tab and Shift+Tab in lists, Tab in code blocks, Escape to
   leave the editor, a prompt menu as a `listbox`, and a polite live region.

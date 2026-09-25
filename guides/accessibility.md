@@ -16,7 +16,17 @@ a visible label, and its id as `label_id`:
 The editor then has `aria-labelledby`. Without `label_id`, it has an
 `aria-label`: the `label` attribute, or the field name in words ("Body").
 The placeholder is also in `aria-placeholder`. Give a description with
-`aria-describedby`, which goes on the editor element.
+`aria-describedby`, and mark a field with an error with `aria-invalid`:
+both go on the editable area, and follow each render, so an error's id
+can come and go with the error:
+
+```heex
+<.kotoba
+  field={@form[:body]}
+  aria-invalid={@form[:body].errors != []}
+  aria-describedby={if @form[:body].errors != [], do: "body-hint body-error", else: "body-hint"}
+/>
+```
 
 ## The toolbar
 

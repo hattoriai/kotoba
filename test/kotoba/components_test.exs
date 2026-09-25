@@ -125,9 +125,20 @@ defmodule Kotoba.ComponentsTest do
       assert attr(html, editor, "data-nodes") == "/assets/pointer.js,/assets/card.js"
       assert JSON.decode!(attr(html, editor, "data-prompts")) == %{"@" => "people", "#" => "work"}
       assert attr(html, editor, "aria-labelledby") == "body-label"
-      assert attr(html, editor, "aria-describedby") == "body-help"
+      assert attr(html, editor, "data-aria-describedby") == "body-help"
+      assert attr(html, editor, "aria-describedby") == nil
       assert attr(html, editor, "phx-target") == "#comments"
       assert attr(html, ".kotoba-field", "class") == "kotoba-field my-field"
+    end
+
+    test "puts the field's aria state in data attributes, which a patch updates" do
+      html = html(field: field(nil), "aria-invalid": true, "aria-describedby": "a b")
+      assert attr(html, "[phx-hook]", "data-aria-invalid") == "true"
+      assert attr(html, "[phx-hook]", "data-aria-describedby") == "a b"
+      assert attr(html, "[phx-hook]", "aria-invalid") == nil
+
+      html = html(field: field(nil), "aria-invalid": false)
+      assert attr(html, "[phx-hook]", "data-aria-invalid") == nil
     end
 
     test "renders explicit prompt triggers" do

@@ -75,8 +75,10 @@ defmodule Kotoba.Components do
   `label_id` (the id of a visible label, the best choice), else
   `aria-label` with `label`, else the field name in words.
 
-  Attributes that are not declared (`phx-target`, `aria-describedby`, …) go
-  on the editor element. In a LiveComponent, give `phx-target={@myself}`,
+  Attributes that are not declared (`phx-target`, …) go on the editor
+  element. `aria-describedby` and `aria-invalid` go on the editable area
+  (the `textbox`), and follow the field: a new value in a later render
+  reaches it, and a value that goes away is removed. In a LiveComponent, give `phx-target={@myself}`,
   so that the editor's events go to the component.
 
   The form posts the document, so a LiveView needs no editor event for a
@@ -146,7 +148,10 @@ defmodule Kotoba.Components do
         triggers: triggers_json(assigns.prompts),
         link_schemes: Enum.join(Sanitizer.allowed_schemes(), ","),
         aria_label: aria_label(assigns, field),
-        upload_id: assigns.uploads && assigns.uploads.ref
+        upload_id: assigns.uploads && assigns.uploads.ref,
+        described_by: assigns.rest[:"aria-describedby"],
+        invalid: aria_state(assigns.rest[:"aria-invalid"]),
+        rest: Map.drop(assigns.rest, [:"aria-describedby", :"aria-invalid"])
       )
 
     ~H"""
@@ -165,6 +170,8 @@ defmodule Kotoba.Components do
         data-upload={@upload_id}
         data-debounce={@debounce}
         data-link-schemes={@link_schemes}
+        data-aria-describedby={@described_by}
+        data-aria-invalid={@invalid}
         aria-labelledby={@label_id}
         aria-label={@aria_label}
         {@rest}
@@ -178,6 +185,12 @@ defmodule Kotoba.Components do
     </div>
     """
   end
+
+  # LiveView patches only the data attributes of a `phx-update="ignore"`
+  # element, so the state of the field goes in data attributes, and the
+  # hook puts it on the editable area at mount and on every update.
+  defp aria_state(value) when value in [nil, false, "false"], do: nil
+  defp aria_state(value), do: to_string(value)
 
   # The editor always has an accessible name: the element of `label_id`, an
   # `aria-label` in the other attributes, `label`, or the field name.

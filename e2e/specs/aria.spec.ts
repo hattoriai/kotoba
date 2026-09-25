@@ -77,3 +77,19 @@ test("a check list item is a checkbox", async ({ page }) => {
   await page.keyboard.type("[] task");
   await expect(page.getByRole("checkbox", { name: "task" })).toHaveAttribute("aria-checked", "false");
 });
+
+test("the textbox follows the field's aria-invalid and aria-describedby", async ({ page }) => {
+  const editable = await openEditor(page);
+  await expect(editable).not.toHaveAttribute("aria-invalid", /.*/);
+  await expect(editable).not.toHaveAttribute("aria-describedby", /.*/);
+
+  await page.locator("#toggle-invalid").click();
+  await expect(page.locator("#body-error")).toBeVisible();
+  await expect(editable).toHaveAttribute("aria-invalid", "true");
+  await expect(editable).toHaveAttribute("aria-describedby", "body-error");
+
+  await page.locator("#toggle-invalid").click();
+  await expect(page.locator("#body-error")).toHaveCount(0);
+  await expect(editable).not.toHaveAttribute("aria-invalid", /.*/);
+  await expect(editable).not.toHaveAttribute("aria-describedby", /.*/);
+});

@@ -258,6 +258,7 @@ class Instance {
     editable.setAttribute("aria-multiline", "true");
     editable.spellcheck = true;
     copyLabel(this.el, editable);
+    syncAria(this.el, editable);
     if (this.config.readonly) editable.setAttribute("aria-readonly", "true");
     if (this.config.placeholder !== "") editable.setAttribute("aria-placeholder", this.config.placeholder);
     this.editable = editable;
@@ -413,6 +414,7 @@ class Instance {
   // same value again does not undo a `set_readonly` push. `data-change` turns
   // the `kotoba:change` pushes on or off.
   syncAttributes(): void {
+    if (this.editable !== null) syncAria(this.el, this.editable);
     this.setChange(this.el.dataset.change === "true");
     const value = this.el.dataset.readonly;
     if (value === this.readonlyAttribute) return;
@@ -535,9 +537,23 @@ class Instance {
   }
 }
 
+// The state of the field, from the data attributes of the hook element
+// (LiveView patches only those on a `phx-update="ignore"` element): the
+// editable element follows it, and loses an attribute that goes away.
+function syncAria(from: HTMLElement, to: HTMLElement): void {
+  for (const [key, name] of [
+    ["ariaDescribedby", "aria-describedby"],
+    ["ariaInvalid", "aria-invalid"],
+  ] as const) {
+    const value = from.dataset[key];
+    if (value === undefined || value === "") to.removeAttribute(name);
+    else if (to.getAttribute(name) !== value) to.setAttribute(name, value);
+  }
+}
+
 // The editable element takes the label of the hook element.
 function copyLabel(from: HTMLElement, to: HTMLElement): void {
-  for (const name of ["aria-label", "aria-labelledby", "aria-describedby"]) {
+  for (const name of ["aria-label", "aria-labelledby"]) {
     const value = from.getAttribute(name);
     if (value !== null && !to.hasAttribute(name)) {
       to.setAttribute(name, value);
