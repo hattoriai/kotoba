@@ -1,6 +1,8 @@
 defmodule Kotoba.PromptsTest do
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureLog
+
   alias Kotoba.Prompts
 
   doctest Kotoba.Prompts
@@ -30,6 +32,7 @@ defmodule Kotoba.PromptsTest do
             {[{"ab", :a, &none/1}], ~r/one character/},
             {[{" ", :a, &none/1}], ~r/one character/},
             {[{"@", nil, &none/1}], ~r/name/},
+            {[{"@", String.duplicate("n", 201), &none/1}], ~r/at most 200 characters/},
             {[{"@", :a, fn -> [] end}], ~r/arity 1 or 2/},
             {[{"@", :a, &none/1}, {"@", :b, &none/1}], ~r/each trigger/},
             {[{"@", :a, &none/1}, {"#", "a", &none/1}], ~r/each name/},
@@ -73,10 +76,58 @@ defmodule Kotoba.PromptsTest do
       assert Prompts.run(prompt, String.duplicate("q", 65)) == []
     end
 
-    test "raises when the callback does not return a list" do
-      assert_raise ArgumentError, ~r/must return a list/, fn ->
-        Prompts.run({"@", "n", fn _ -> {:ok, []} end}, "")
-      end
+    test "removes control characters from the id, the label and the hint" do
+      prompt =
+        {"@", "people",
+         fn _ ->
+           [
+             %{id: "u\u00001", label: "Ada\tLovelace", hint: "Engi\nneering\u0085"},
+             %{id: "u2", label: "\t\n"}
+           ]
+         end}
+
+      assert Prompts.run(prompt, "") == [%{id: "u1", label: "AdaLovelace", hint: "Engineering"}]
+    end
+
+    test "gives no items and logs a warning when the callback raises" do
+      log =
+        capture_log(fn ->
+          assert Prompts.run({"@", "people", fn _ -> raise "db down" end}, "a") == []
+        end)
+
+      assert log =~ "[warning]"
+      assert log =~ ~s(the Kotoba prompt "people" failed)
+      assert log =~ "db down"
+    end
+
+    test "gives no items and logs a warning when the callback exits" do
+      log =
+        capture_log(fn ->
+          assert Prompts.run({"@", "people", fn _ -> exit(:no_database) end}, "a") == []
+        end)
+
+      assert log =~ ~s(the Kotoba prompt "people" failed)
+      assert log =~ "no_database"
+    end
+
+    test "gives no items and logs a warning when the callback throws" do
+      log =
+        capture_log(fn ->
+          assert Prompts.run({"@", "people", fn _ -> throw(:nope) end}, "a") == []
+        end)
+
+      assert log =~ ~s(the Kotoba prompt "people" failed)
+      assert log =~ ":nope"
+    end
+
+    test "gives no items and logs a warning when the callback does not return a list" do
+      log =
+        capture_log(fn ->
+          assert Prompts.run({"@", "people", fn _ -> {:ok, []} end}, "a") == []
+        end)
+
+      assert log =~ "[warning]"
+      assert log =~ ~s(the Kotoba prompt "people" must return a list of items, got: {:ok, []})
     end
   end
 end

@@ -5,7 +5,9 @@ defmodule KotobaTest.EditorLive do
 
   The query param `storage` picks the adapter: `failing` for
   `KotobaTest.FailingStorage`, `unsafe` for `KotobaTest.UnsafeStorage`,
-  `broken` for `KotobaTest.BrokenStorage`.
+  `broken` for `KotobaTest.BrokenStorage`. These three adapters send
+  `{:deleted, key}` to the process registered as `:kotoba_storage_test`
+  when `delete/1` is called.
   """
   use Phoenix.LiveView
 
@@ -14,6 +16,16 @@ defmodule KotobaTest.EditorLive do
   @editor "post_body_editor"
 
   def editor_id, do: @editor
+
+  @doc "Sends `{:deleted, key}` to the `:kotoba_storage_test` process, if there is one."
+  def report_delete(key) do
+    case Process.whereis(:kotoba_storage_test) do
+      nil -> :ok
+      pid -> send(pid, {:deleted, key})
+    end
+
+    :ok
+  end
 
   @impl true
   def mount(params, _session, socket) do
@@ -58,11 +70,13 @@ defmodule KotobaTest.EditorLive do
 
   defp prompts do
     [
-      people: fn query ->
-        [%{id: 1, label: "Ada Lovelace", hint: "Engineering"}, %{id: 2, label: "Grace Hopper"}]
-        |> Enum.filter(&String.contains?(String.downcase(&1.label), String.downcase(query)))
-      end,
-      work: fn query, socket -> [{"w-#{socket.id}", "Work: #{query}"}] end
+      {"@", :people,
+       fn query ->
+         [%{id: 1, label: "Ada Lovelace", hint: "Engineering"}, %{id: 2, label: "Grace Hopper"}]
+         |> Enum.filter(&String.contains?(String.downcase(&1.label), String.downcase(query)))
+       end},
+      {"#", :work, fn query, socket -> [{"w-#{socket.id}", "Work: #{query}"}] end},
+      {"!", :broken, fn _query -> raise "the search is down" end}
     ]
   end
 
@@ -112,7 +126,7 @@ defmodule KotobaTest.FailingStorage do
   def url(key), do: "/failing/" <> key
 
   @impl true
-  def delete(_key), do: :ok
+  def delete(key), do: KotobaTest.EditorLive.report_delete(key)
 end
 
 defmodule KotobaTest.UnsafeStorage do
@@ -126,7 +140,7 @@ defmodule KotobaTest.UnsafeStorage do
   def url(_key), do: "javascript:alert(1)"
 
   @impl true
-  def delete(_key), do: :ok
+  def delete(key), do: KotobaTest.EditorLive.report_delete(key)
 end
 
 defmodule KotobaTest.BrokenStorage do
@@ -140,5 +154,5 @@ defmodule KotobaTest.BrokenStorage do
   def url(key), do: key
 
   @impl true
-  def delete(_key), do: :ok
+  def delete(key), do: KotobaTest.EditorLive.report_delete(key)
 end

@@ -34,7 +34,7 @@ defmodule Kotoba.LiveTest do
     assert LazyHTML.attribute(editor, "aria-labelledby") == ["body-label"]
 
     assert [prompts] = LazyHTML.attribute(editor, "data-prompts")
-    assert JSON.decode!(prompts) == %{"@" => "people", "#" => "work"}
+    assert JSON.decode!(prompts) == %{"@" => "people", "#" => "work", "!" => "broken"}
 
     assert [upload] = LazyHTML.attribute(editor, "data-upload")
     assert LazyHTML.query(doc, "input[type=file]##{upload}") |> Enum.count() == 1
@@ -64,6 +64,36 @@ defmodule Kotoba.LiveTest do
       assert_push_event(view, "kotoba:prompt_results", %{prompt: "work", items: [item]})
       assert item.label == "Work: q"
       assert "w-phx-" <> _rest = item.id
+    end
+
+    test "gives no items for a callback that raises, and the LiveView stays alive", %{
+      view: view
+    } do
+      log =
+        capture_log(fn ->
+          render_hook(view, "kotoba:prompt", %{
+            "id" => @editor,
+            "prompt" => "broken",
+            "query" => "a"
+          })
+
+          assert_push_event(view, "kotoba:prompt_results", %{
+            id: @editor,
+            prompt: "broken",
+            items: []
+          })
+        end)
+
+      assert log =~ ~s(the Kotoba prompt "broken" failed)
+      assert Process.alive?(view.pid)
+
+      render_hook(view, "kotoba:prompt", %{
+        "id" => @editor,
+        "prompt" => "people",
+        "query" => "ada"
+      })
+
+      assert_push_event(view, "kotoba:prompt_results", %{prompt: "people", items: [_ada]})
     end
 
     test "gives no items for an unknown prompt", %{view: view} do
@@ -195,12 +225,13 @@ defmodule Kotoba.LiveTest do
       assert String.ends_with?(node["key"], "-fake.bin")
     end
 
-    for {storage, reason} <- [
-          {"failing", ":disk_full"},
-          {"unsafe", "unsafe_url"},
-          {"broken", "invalid_storage_result"}
+    for {storage, reason, deleted?} <- [
+          {"failing", ":disk_full", false},
+          {"unsafe", "unsafe_url", true},
+          {"broken", "invalid_storage_result", true}
         ] do
       test "logs and removes the marker when the #{storage} storage gives no valid attachment" do
+        Process.register(self(), :kotoba_storage_test)
         {:ok, view, _html} = live(build_conn(), "/editor?storage=#{unquote(storage)}")
 
         upload =
@@ -220,6 +251,15 @@ defmodule Kotoba.LiveTest do
         assert log =~ unquote(reason)
         refute_push_event(view, "insert_node", %{})
         assert Process.alive?(view.pid)
+
+        # A file that the adapter stored, with a result that gives no valid
+        # attachment, is deleted. A failed put stored nothing.
+        if unquote(deleted?) do
+          assert_received {:deleted, key}
+          assert String.ends_with?(key, "-notes.txt")
+        else
+          refute_received {:deleted, _key}
+        end
       end
     end
 

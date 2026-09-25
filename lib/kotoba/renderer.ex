@@ -204,7 +204,7 @@ defmodule Kotoba.Renderer do
   `c:Kotoba.Node.render_markdown/2` callback.
 
   It escapes the inline syntax everywhere (`` ` ``, `*`, `_`, `[`, `]`,
-  `~`, `<` and `\\`), and the block syntax at the start of a line: `#`
+  `~`, `<`, `&` and `\\`), and the block syntax at the start of a line: `#`
   headings, `>` quotes, `-` and `+` bullets, `1.` and `1)` list markers,
   and `---` or `===` lines. So a node that renders its text at the start
   of a block cannot make a heading or a list.
@@ -227,12 +227,17 @@ defmodule Kotoba.Renderer do
   @doc """
   Returns a URL for the destination of a Markdown link, for a
   `c:Kotoba.Node.render_markdown/2` callback. Spaces and parentheses are
-  percent-encoded. Check the URL with `Kotoba.Sanitizer.link_url/2` first.
+  percent-encoded, and `\\`, `&`, `<` and `>` get a backslash, so that a
+  CommonMark renderer decodes no entity. Check the URL with
+  `Kotoba.Sanitizer.link_url/2` first.
 
   ## Examples
 
       iex> Kotoba.Renderer.escape_markdown_url("/docs/a page (draft)")
       "/docs/a%20page%20%28draft%29"
+
+      iex> Kotoba.Renderer.escape_markdown_url("/search?q=a&b")
+      "/search?q=a\\\\&b"
 
   """
   @spec escape_markdown_url(String.t()) :: String.t()

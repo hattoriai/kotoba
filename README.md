@@ -15,6 +15,9 @@ does not run Node.js for it: you add the hook and one style sheet.
 
 ## Install
 
+Kotoba needs Elixir 1.18 or later (it uses the built-in `JSON` module),
+Phoenix 1.8 and Phoenix LiveView 1.2.
+
 Add `kotoba` to the deps in `mix.exs`:
 
 ```elixir
@@ -52,7 +55,7 @@ const liveSocket = new LiveSocket("/live", Socket, {
 ```
 
 Import the style sheet in `assets/css/app.css` (and the Sumi theme, if you
-want it). Put these lines below the other `@import` lines of `app.css`
+want it: Sumi is the design system of Hattori AI, the makers of Kotoba). Put these lines below the other `@import` lines of `app.css`
 (the installer puts them there):
 
 ```css
@@ -178,5 +181,10 @@ and pushes `v<version>`.
 
 Kotoba is released under the Apache License, Version 2.0. See `LICENSE`.
 
-The toolbar icons are from [Lucide](https://lucide.dev) (ISC licence);
-some of them come from Feather (MIT licence). See `NOTICE`.
+The built editor includes third-party code under the MIT licence:
+[Lexical](https://lexical.dev) (Meta Platforms, Inc. and affiliates),
+[PrismJS](https://prismjs.com) (Lea Verou) and
+[`@preact/signals-core`](https://github.com/preactjs/signals) (the Preact
+team). The toolbar icons are from [Lucide](https://lucide.dev) (ISC
+licence); some of them come from Feather (MIT licence). See `NOTICE` for
+the full notices.

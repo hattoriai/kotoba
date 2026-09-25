@@ -7,7 +7,9 @@ defmodule Mix.Tasks.Kotoba.Build do
       $ mix kotoba.build
 
   This task is for work on Kotoba itself. An application that uses Kotoba
-  gets the built files in the Hex package and does not run this task.
+  gets the built files in the Hex package and does not run this task: in
+  any project but Kotoba, the task stops with an error before it changes
+  a file.
 
   The task:
 
@@ -40,6 +42,7 @@ defmodule Mix.Tasks.Kotoba.Build do
 
   @impl Mix.Task
   def run(_args) do
+    ensure_kotoba!(Mix.Project.config())
     Mix.Task.run("loadpaths")
 
     unless Code.ensure_loaded?(Esbuild) do
@@ -58,6 +61,19 @@ defmodule Mix.Tasks.Kotoba.Build do
     Enum.each(@stylesheets, &copy_stylesheet/1)
 
     Mix.shell().info("Kotoba assets are in #{@static}/")
+  end
+
+  # The task empties priv/static, so it must never run in an application.
+  @doc false
+  @spec ensure_kotoba!(keyword()) :: :ok
+  def ensure_kotoba!(config) do
+    if config[:app] == :kotoba do
+      :ok
+    else
+      Mix.raise(
+        "mix kotoba.build is for work on Kotoba itself; an app gets the built files in the Hex package"
+      )
+    end
   end
 
   defp install_packages do

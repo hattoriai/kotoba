@@ -52,7 +52,8 @@ attachments render as their file name, with no image and no link. See
 
 `Kotoba.Content` keeps the rendered HTML of the document (with the
 `:default` policy) in the row. `Kotoba.Content.cast/1` always renders it
-again from the document: it never takes HTML from its input. So the HTML
+again from the document: it never takes HTML from its input, not even
+from a `Kotoba.Content` struct. So the HTML
 in a row that Kotoba wrote is safe.
 
 `Kotoba.Components.kotoba_content/1` trusts the `html` of a stored row,

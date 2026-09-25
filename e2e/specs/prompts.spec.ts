@@ -126,3 +126,29 @@ test("no menu in a code block or in the middle of a word", async ({ page }) => {
   await page.waitForTimeout(300);
   await expect(menu(page)).toBeHidden();
 });
+
+test("a prompt whose callback fails shows No results, and the page stays alive", async ({ page }) => {
+  const editable = await openEditor(page);
+  // A server-side assign that a restart of the LiveView would reset.
+  await page.locator("#push-changes").click();
+  await expect(page.locator("#post_body_editor")).toHaveAttribute("data-change", "true");
+
+  await editable.click();
+  await page.keyboard.type("Hello ");
+  await expect(page.locator("#change-count")).not.toHaveText("0");
+
+  // The "!" prompt of the development page raises in its callback.
+  await page.keyboard.type("!db");
+  await expect(menu(page).locator(".kotoba-menu-status")).toHaveText("No results");
+  await expect(page.locator("#post_body_editor .kotoba-live")).toHaveText("No results");
+  const count = Number(await page.locator("#change-count").textContent());
+
+  // The LiveView did not restart: it keeps its assigns and answers the next prompt.
+  await expect(page.locator("[data-phx-main].phx-error")).toHaveCount(0);
+  await expect(page.locator("#post_body_editor")).toHaveAttribute("data-change", "true");
+  await expect(page.locator("#push-changes")).toBeChecked();
+  await page.keyboard.type(" @grace");
+  await expect(listbox(page).getByRole("option")).toHaveCount(1);
+  await expect(editable).toContainText("Hello !db @grace");
+  await expect.poll(async () => Number(await page.locator("#change-count").textContent())).toBeGreaterThan(count);
+});

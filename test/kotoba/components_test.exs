@@ -258,6 +258,18 @@ defmodule Kotoba.ComponentsTest do
                "Hello"
     end
 
+    test "takes the same nodes as kotoba/1, plain JavaScript URLs included" do
+      content = %{Content.from_markdown("Hello") | html: "<p>cached</p>"}
+
+      assert content_html(content: content, nodes: ["/assets/nodes/chart.js"]) =~
+               "<p>cached</p>"
+
+      assert content_html(
+               content: content,
+               nodes: ["/assets/nodes/chart.js", {KotobaTest.Nodes.Pointer, "/m.js"}]
+             ) =~ "<p>Hello</p>"
+    end
+
     test "escapes text on a re-render" do
       doc = TestJSON.envelope([TestJSON.paragraph([TestJSON.text("<script>x</script>")])])
       {:ok, content} = Content.cast(doc)

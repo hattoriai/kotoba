@@ -55,9 +55,11 @@ defmodule Kotoba.Nodes.Link do
   def markdown(node, opts) do
     text = Renderer.markdown_children(node, opts)
 
-    case href(node, opts) do
+    with href when is_binary(href) <- href(node, opts),
+         destination when is_binary(destination) <- Markdown.destination(href) do
+      "[" <> text <> "](" <> destination <> ")"
+    else
       nil -> text
-      href -> "[" <> text <> "](" <> Markdown.url(href) <> ")"
     end
   end
 end

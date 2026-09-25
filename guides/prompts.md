@@ -76,11 +76,18 @@ def search(scope, query) do
 end
 ```
 
-Kotoba drops items that do not have this shape, and sends at most 50. The
-reply has the query, so the editor drops results that come after a newer
-query.
+Kotoba drops items that do not have this shape, and sends at most 50. It
+removes control characters (such as a tab or a line break) from the id,
+the label and the hint. The reply has the query, so the editor drops
+results that come after a newer query.
 
-The callback runs for each query while the person types. Keep it fast,
+A callback that raises, exits or throws, or that returns anything but a
+list (for example `{:ok, items}`), gives no items. Kotoba logs a warning
+with the prompt name, the menu shows "No results", and the LiveView keeps
+running.
+
+The callback runs for each query while the person types, in the LiveView
+process: a slow callback blocks the LiveView while it runs. Keep it fast,
 and limit the results in the query itself.
 
 ## The query

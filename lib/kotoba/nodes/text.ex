@@ -137,7 +137,7 @@ defmodule Kotoba.Nodes.Text do
   @markdown [bold: "**", italic: "*", strikethrough: "~~"]
 
   @impl Kotoba.Node
-  def render_html(%__MODULE__{text: ""}, _opts), do: {:safe, ""}
+  def render_html(%{text: ""}, _opts), do: {:safe, ""}
 
   def render_html(node, _opts) do
     node
@@ -153,7 +153,7 @@ defmodule Kotoba.Nodes.Text do
   def render_text(node, _opts), do: node.text
 
   @impl Kotoba.Node
-  def render_markdown(%__MODULE__{text: ""}, _opts), do: ""
+  def render_markdown(%{text: ""}, _opts), do: ""
 
   def render_markdown(node, _opts) do
     formats = formats(node)

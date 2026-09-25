@@ -8,7 +8,7 @@ defmodule Kotoba.MixProject do
     [
       app: :kotoba,
       version: @version,
-      elixir: "~> 1.20",
+      elixir: "~> 1.18",
       elixirc_paths: elixirc_paths(Mix.env()),
       test_ignore_filters: [&String.starts_with?(&1, "test/fixtures/")],
       start_permanent: Mix.env() == :prod,
@@ -38,7 +38,9 @@ defmodule Kotoba.MixProject do
     [preferred_envs: [precommit: :test]]
   end
 
-  defp elixirc_paths(:test), do: ["lib", "test/support"]
+  # The development node (dev/lib) is compiled in :test for its tests in
+  # test/dev.
+  defp elixirc_paths(:test), do: ["lib", "test/support", "dev/lib"]
   defp elixirc_paths(_), do: ["lib"]
 
   defp deps do

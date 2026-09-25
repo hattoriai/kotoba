@@ -5,8 +5,11 @@ Kotoba has two style sheets:
 * `kotoba.css`: the structure of the editor (the layout, the toolbar, the
   menus, the nodes). Every colour, font, space and radius comes from a
   `--kotoba-*` custom property.
-* `kotoba-sumi.css`: the Sumi theme. It sets every `--kotoba-*` property
-  from the Sumi tokens.
+* `kotoba-sumi.css`: the Sumi theme. Sumi is the design system of Hattori
+  AI, the makers of Kotoba: ink colours on paper surfaces, with the Outfit
+  and Cormorant Garamond fonts. The theme sets every `--kotoba-*` property
+  from the Sumi tokens, and it also works on a page that does not use
+  Sumi.
 
 ```css
 /* assets/css/app.css */

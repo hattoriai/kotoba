@@ -95,7 +95,9 @@ defmodule Kotoba.Content do
   Casts a JSON string, a document envelope, a bare Lexical root node, a
   `Kotoba.Content` struct, `nil` or `""` to a `Kotoba.Content`.
 
-  Renders `:html` and `:text` at cast time. Returns `:error` when the
+  Renders `:html` and `:text` at cast time, also for a `Kotoba.Content`
+  struct: its `:doc` is parsed again, and its `:html` and `:text` are not
+  kept. Returns `:error` when the
   input is not valid JSON, is not an object, or does not parse as a
   `Kotoba.Document` (see `Kotoba.Document.parse/2`).
 
@@ -110,7 +112,8 @@ defmodule Kotoba.Content do
 
   """
   @impl Ecto.Type
-  def cast(%__MODULE__{} = content), do: {:ok, content}
+  def cast(%__MODULE__{doc: %{} = envelope}), do: parse(envelope)
+  def cast(%__MODULE__{}), do: :error
   def cast(nil), do: {:ok, empty()}
   def cast(""), do: {:ok, empty()}
 

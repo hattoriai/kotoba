@@ -7,7 +7,8 @@ defmodule Mix.Tasks.Kotoba.ReleaseCheck do
       $ mix kotoba.release_check
 
   This task is for work on Kotoba itself; the `release` alias runs it
-  after `mix kotoba.build` and before `mix hex.publish`. It fails when:
+  after `mix kotoba.build` and before `mix hex.publish`. In any project
+  but Kotoba, it stops with an error. It fails when:
 
     * one of the four bundle files (`kotoba.esm.js`, `kotoba.cjs.js`,
       `kotoba.css` and `kotoba-sumi.css`) is missing from `priv/static`,
@@ -23,7 +24,9 @@ defmodule Mix.Tasks.Kotoba.ReleaseCheck do
 
   @impl Mix.Task
   def run(_args) do
-    version = Mix.Project.config()[:version]
+    config = Mix.Project.config()
+    ensure_kotoba!(config)
+    version = config[:version]
 
     case check(@static, "package.json", version) do
       :ok ->
@@ -40,6 +43,18 @@ defmodule Mix.Tasks.Kotoba.ReleaseCheck do
         Build with `mix kotoba.build` (it empties #{@static} first); keep the \
         version of package.json equal to the version of mix.exs.\
         """)
+    end
+  end
+
+  @doc false
+  @spec ensure_kotoba!(keyword()) :: :ok
+  def ensure_kotoba!(config) do
+    if config[:app] == :kotoba do
+      :ok
+    else
+      Mix.raise(
+        "mix kotoba.release_check is for work on Kotoba itself; it checks the files of a Kotoba release"
+      )
     end
   end
 

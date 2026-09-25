@@ -25,16 +25,25 @@ defmodule Kotoba.Prompts do
   An item is a map with an `:id` (a string or an integer), a `:label` (a
   string) and an optional `:hint` (a string), with atom or string keys, or
   an `{id, label}` tuple. Items that do not have this shape are dropped, and
-  at most 50 items are sent.
+  at most 50 items are sent. Control characters (such as a tab or a line
+  break) are removed from the id, the label and the hint.
+
+  A callback that raises, exits or throws, or that returns anything but a
+  list, gives no items: `run/3` logs a warning with the prompt name, and the
+  editor shows "No results". The callback runs in the LiveView process, so a
+  slow callback blocks the LiveView while it runs.
 
   The component `Kotoba.Components.kotoba/1` sends the triggers and names to
   the editor; the functions stay in the LiveView. `Kotoba.Live.handle_prompt/3`
   runs them.
   """
 
+  require Logger
+
   @max_items 50
   @max_query 64
   @max_label 200
+  @max_name 200
   @positional ["@", "#"]
 
   @typedoc "An item as the editor receives it."
@@ -101,7 +110,13 @@ defmodule Kotoba.Prompts do
 
   defp explicit({trigger, name, fun} = prompt) do
     unless trigger?(trigger), do: invalid!(prompt, "a trigger must be one character")
-    unless name?(name), do: invalid!(prompt, "a name must be an atom or a non-empty string")
+
+    unless name?(name),
+      do:
+        invalid!(
+          prompt,
+          "a name must be an atom or a non-empty string of at most #{@max_name} characters"
+        )
 
     unless is_function(fun, 1) or is_function(fun, 2),
       do: invalid!(prompt, "a callback must be a function of arity 1 or 2")
@@ -116,8 +131,12 @@ defmodule Kotoba.Prompts do
 
   defp trigger?(_trigger), do: false
 
-  defp name?(name) when is_atom(name) and not is_nil(name) and not is_boolean(name), do: true
-  defp name?(name) when is_binary(name), do: String.trim(name) != ""
+  defp name?(name) when is_atom(name) and not is_nil(name) and not is_boolean(name),
+    do: String.length(Atom.to_string(name)) <= @max_name
+
+  defp name?(name) when is_binary(name),
+    do: String.trim(name) != "" and String.length(name) <= @max_name
+
   defp name?(_name), do: false
 
   defp check_unique!(prompts, index, what) do
@@ -160,7 +179,8 @@ defmodule Kotoba.Prompts do
   A query of more than #{@max_query} characters gives no items, and the
   callback is not called.
 
-  Raises `ArgumentError` when the callback does not return a list.
+  A callback that raises, exits or throws, or that does not return a list,
+  gives no items, and a warning with the prompt name goes to the log.
   """
   @spec run(prompt(), String.t(), Phoenix.LiveView.Socket.t() | nil) :: [item()]
   def run({_trigger, name, fun}, query, socket \\ nil) when is_binary(query) do
@@ -168,22 +188,43 @@ defmodule Kotoba.Prompts do
       []
     else
       fun
-      |> call(query, socket)
-      |> check_list!(name)
+      |> safe_call(name, query, socket)
       |> Enum.flat_map(&item/1)
       |> Enum.take(@max_items)
     end
   end
 
+  defp safe_call(fun, name, query, socket) do
+    case call(fun, query, socket) do
+      items when is_list(items) ->
+        items
+
+      other ->
+        Logger.warning(
+          "the Kotoba prompt #{inspect(name)} must return a list of items, got: #{inspect(other)}"
+        )
+
+        []
+    end
+  rescue
+    exception ->
+      warn_failure(name, :error, exception, __STACKTRACE__)
+  catch
+    kind, reason when kind in [:exit, :throw] ->
+      warn_failure(name, kind, reason, __STACKTRACE__)
+  end
+
+  defp warn_failure(name, kind, reason, stacktrace) do
+    Logger.warning(
+      "the Kotoba prompt #{inspect(name)} failed, so it gives no items:\n" <>
+        Exception.format(kind, reason, stacktrace)
+    )
+
+    []
+  end
+
   defp call(fun, query, _socket) when is_function(fun, 1), do: fun.(query)
   defp call(fun, query, socket) when is_function(fun, 2), do: fun.(query, socket)
-
-  defp check_list!(items, _name) when is_list(items), do: items
-
-  defp check_list!(other, name) do
-    raise ArgumentError,
-          "the Kotoba prompt #{inspect(name)} must return a list of items, got: #{inspect(other)}"
-  end
 
   @doc """
   Normalizes one result item. Returns `[item]`, or `[]` when the item is
@@ -227,10 +268,16 @@ defmodule Kotoba.Prompts do
   defp text(value) when is_integer(value), do: {:ok, Integer.to_string(value)}
 
   defp text(value) when is_binary(value) do
-    if String.valid?(value) and String.trim(value) != "" and String.length(value) <= @max_label,
-      do: {:ok, value},
-      else: :error
+    if String.valid?(value), do: value |> strip_controls() |> checked_text(), else: :error
   end
 
   defp text(_value), do: :error
+
+  defp strip_controls(value), do: String.replace(value, ~r/\p{Cc}/u, "")
+
+  defp checked_text(value) do
+    if String.trim(value) != "" and String.length(value) <= @max_label,
+      do: {:ok, value},
+      else: :error
+  end
 end

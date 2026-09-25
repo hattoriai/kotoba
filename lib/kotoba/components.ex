@@ -321,7 +321,11 @@ defmodule Kotoba.Components do
     default: :default,
     doc: "`:default` or `:untrusted`, see `Kotoba.Sanitizer`"
 
-  attr :nodes, :list, default: [], doc: "extra node modules, or `{module, js_url}` tuples"
+  attr :nodes, :list,
+    default: [],
+    doc:
+      "extra node modules, `{module, js_url}` tuples, or JavaScript module URLs (the same list as `kotoba/1`; a URL has no module to render)"
+
   attr :class, :any, default: nil
   attr :rest, :global
 
@@ -362,10 +366,13 @@ defmodule Kotoba.Components do
     end
   end
 
+  # The `nodes` of `kotoba/1` can also hold a plain URL (an editor-only
+  # node), which has no module to render.
   defp modules(nodes) do
-    Enum.map(nodes, fn
-      {module, _url} when is_atom(module) -> module
-      module when is_atom(module) -> module
+    Enum.flat_map(nodes, fn
+      {module, _url} when is_atom(module) -> [module]
+      module when is_atom(module) -> [module]
+      url when is_binary(url) -> []
     end)
   end
 end

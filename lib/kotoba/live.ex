@@ -259,27 +259,43 @@ defmodule Kotoba.Live do
     with {:ok, description} <- Attachments.describe(path, entry.client_type),
          {:ok, key} <- key(key_fun, entry, description.content_type),
          meta = %{name: name, content_type: description.content_type, bytes: description.bytes},
-         {:ok, url} <- put(storage, key, path, meta),
-         node = Attachments.node(description, key: key, url: url, name: name),
-         :ok <- check_node(node) do
+         {:ok, node} <- put_node(storage, key, path, meta, description) do
       {:ok, {:ok, node}}
     else
       {:error, reason} -> {:ok, {:error, reason}}
     end
   end
 
+  # When the adapter stored the file but its result gives no valid
+  # attachment, the stored file is deleted, so that no file is left that no
+  # document points to.
+  defp put_node(storage, key, path, meta, description) do
+    case storage.put(key, path, meta) do
+      {:ok, url} when is_binary(url) ->
+        node = Attachments.node(description, key: key, url: url, name: meta.name)
+
+        case check_node(node) do
+          :ok -> {:ok, node}
+          {:error, _reason} = error -> discard(storage, key, error)
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+
+      other ->
+        discard(storage, key, {:error, {:invalid_storage_result, other}})
+    end
+  end
+
+  defp discard(storage, key, error) do
+    _result = storage.delete(key)
+    error
+  end
+
   defp key(key_fun, entry, content_type) do
     case key_fun.(entry, content_type) do
       key when is_binary(key) -> {:ok, key}
       other -> {:error, {:invalid_key, other}}
-    end
-  end
-
-  defp put(storage, key, path, meta) do
-    case storage.put(key, path, meta) do
-      {:ok, url} when is_binary(url) -> {:ok, url}
-      {:error, reason} -> {:error, reason}
-      other -> {:error, {:invalid_storage_result, other}}
     end
   end
 

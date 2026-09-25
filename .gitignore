@@ -5,10 +5,10 @@
 /priv/plts
 assets/node_modules
 e2e/node_modules
-demo/_build
-demo/deps
-demo/priv/uploads
 /priv/static/*
 /tmp
 e2e/test-results
 e2e/playwright-report
+erl_crash.dump
+kotoba-*.tar
+*.ez

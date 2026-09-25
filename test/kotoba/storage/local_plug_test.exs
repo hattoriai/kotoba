@@ -88,6 +88,27 @@ defmodule Kotoba.Storage.Local.PlugTest do
     assert call("/files/2026/09/link.txt", opts).status == 404
   end
 
+  test "gives 404 for a path through a symbolic link to a directory", %{root: root, opts: opts} do
+    outside = Path.join(Path.dirname(root), "outside")
+    File.mkdir_p!(outside)
+    File.write!(Path.join(outside, "secret.txt"), "secret")
+    File.ln_s!(outside, Path.join(root, "up"))
+    File.ln_s!(outside, Path.join(root, "2026/linked"))
+
+    assert call("/files/up/secret.txt", opts).status == 404
+    assert call("/files/2026/linked/secret.txt", opts).status == 404
+    assert call("/files/2026/09/cat.png", opts).status == 200
+  end
+
+  test "serves a file when the root itself is a symbolic link", %{root: root} do
+    link = root <> "-link"
+    File.ln_s!(root, link)
+    on_exit(fn -> File.rm(link) end)
+
+    opts = FilePlug.init(at: "/files", root: link)
+    assert call("/files/2026/09/cat.png", opts).status == 200
+  end
+
   test "passes other paths and methods on", %{opts: opts} do
     for conn <- [
           call("/other/cat.png", opts),

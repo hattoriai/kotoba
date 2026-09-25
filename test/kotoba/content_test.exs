@@ -56,9 +56,21 @@ defmodule Kotoba.ContentTest do
       assert content.html == "<p>hi</p>"
     end
 
-    test "a %Kotoba.Content{} passes through unchanged" do
+    test "a %Kotoba.Content{} that Kotoba built casts to itself" do
       {:ok, content} = Content.cast(root([paragraph([text("hi")])]))
       assert Content.cast(content) == {:ok, content}
+    end
+
+    test "a %Kotoba.Content{} is rendered again: its html and text are not kept" do
+      {:ok, content} = Content.cast(root([paragraph([text("hi")])]))
+      forged = %{content | html: "<script>alert(1)</script>", text: "forged"}
+
+      assert Content.cast(forged) == {:ok, content}
+    end
+
+    test "a %Kotoba.Content{} with a document that is not valid is an error" do
+      assert Content.cast(%{Content.empty() | doc: nil, html: "<script></script>"}) == :error
+      assert Content.cast(%{Content.empty() | doc: %{"root" => "no"}}) == :error
     end
 
     test "nil and the empty string cast to empty/0" do

@@ -569,6 +569,49 @@ defmodule Kotoba.RendererTest do
       assert input |> doc() |> Renderer.to_markdown() == "x"
     end
 
+    test "an entity-encoded javascript: link gives its text, not a link" do
+      # A CommonMark renderer decodes entities in a destination: the output
+      # must never be "[x](javascript&#58;alert%281%29)".
+      for url <- [
+            "javascript&#58;alert(1)",
+            "javascript&colon;alert(1)",
+            "JaVaScRiPt&#x3A;alert(1)",
+            "javascript&#58alert(1)"
+          ] do
+        input = [paragraph([link(url, [text("x")])])]
+        markdown = input |> doc() |> Renderer.to_markdown()
+
+        assert markdown == "x", "#{url} gave #{inspect(markdown)}"
+        refute markdown =~ "javascript"
+      end
+    end
+
+    test "an attachment with an entity-encoded javascript: URL gives its name" do
+      for url <- ["javascript&#58;alert(1)", "javascript&colon;alert(1)"] do
+        input = [
+          attachment(%{"url" => url}),
+          attachment(%{"contentType" => "application/pdf", "name" => "a.pdf", "url" => url})
+        ]
+
+        assert input |> doc() |> Renderer.to_markdown() == "cat.png\n\na.pdf"
+      end
+    end
+
+    test "&, < and > in a link or image destination get a backslash" do
+      input = [
+        paragraph([link("/search?a=1&b=<2>&amp;c", [text("s")])]),
+        attachment(%{"url" => "/uploads/k/cat.png?v=1&#38;w=2"})
+      ]
+
+      assert input |> doc() |> Renderer.to_markdown() ==
+               "[s](/search?a=1\\&b=\\<2\\>\\&amp;c)\n\n![cat.png](/uploads/k/cat.png?v=1\\&#38;w=2)"
+    end
+
+    test "& in text gets a backslash, so an entity reads as text" do
+      input = [paragraph([text("a &lt; b & c &#58;")])]
+      assert input |> doc() |> Renderer.to_markdown() == "a \\&lt; b \\& c \\&#58;"
+    end
+
     test "a custom element node gives its render_markdown/2" do
       {:ok, doc} =
         Kotoba.Document.parse(envelope([element("panel", [paragraph([text("in")])])]),

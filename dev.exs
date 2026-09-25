@@ -77,6 +77,9 @@ defmodule KotobaDev.People do
     query = String.downcase(query)
     Enum.filter(@people, &String.contains?(String.downcase(&1.label), query))
   end
+
+  @doc "The `!` prompt: a search that always fails, as a database that is down."
+  def broken(_query), do: raise("the search is down")
 end
 
 defmodule KotobaDev.Sample do
@@ -222,6 +225,7 @@ end
 defmodule KotobaDev.EditorLive do
   @moduledoc """
   The editor in a form, with the `@` prompt, uploads and the Tag node. The
+  `!` prompt always fails, so the menu shows "No results". The
   buttons under the form send each server event. After Submit, the stored
   content renders below.
 
@@ -242,6 +246,13 @@ defmodule KotobaDev.EditorLive do
   alias Kotoba.{Attachments, Storage}
 
   @editor "post_body_editor"
+
+  @prompts [
+    {"@", :people, &KotobaDev.People.search/1},
+    {"!", :broken, &KotobaDev.People.broken/1}
+  ]
+
+  defp prompts, do: @prompts
 
   @impl true
   def mount(params, _session, socket) do
@@ -280,7 +291,7 @@ defmodule KotobaDev.EditorLive do
         field={@form[:body]}
         label_id="body-label"
         placeholder="Write something…"
-        prompts={[people: &KotobaDev.People.search/1]}
+        prompts={prompts()}
         uploads={@uploads.body}
         readonly={@readonly}
         change={@push_changes}
@@ -382,7 +393,7 @@ defmodule KotobaDev.EditorLive do
     do: {:noreply, update(socket, :changes, &(&1 + 1))}
 
   def handle_event("kotoba:prompt", params, socket),
-    do: {:noreply, Kotoba.Live.handle_prompt(socket, params, people: &KotobaDev.People.search/1)}
+    do: {:noreply, Kotoba.Live.handle_prompt(socket, params, @prompts)}
 
   def handle_event("toggle_changes", _params, socket),
     do: {:noreply, update(socket, :push_changes, &(not &1))}

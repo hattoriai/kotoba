@@ -47,6 +47,16 @@ defmodule Kotoba.NodesTest do
     def render_text(_node, _opts), do: ""
   end
 
+  defmodule FakeUploadMarker do
+    use Kotoba.Node, type: "kotoba-upload-marker", kind: :decorator
+
+    @impl Kotoba.Node
+    def render_html(_node, _opts), do: ""
+
+    @impl Kotoba.Node
+    def render_text(_node, _opts), do: ""
+  end
+
   setup do
     on_exit(fn -> Application.delete_env(:kotoba, :nodes) end)
   end
@@ -78,10 +88,11 @@ defmodule Kotoba.NodesTest do
     assert Nodes.registry([OtherChip])["chip"] == OtherChip
   end
 
-  test "the reserved types are the built-in types and kotoba-unknown" do
+  test "the reserved types are the built-in types and the editor's own types" do
     assert "paragraph" in Nodes.reserved_types()
     assert "mention" in Nodes.reserved_types()
     assert "kotoba-unknown" in Nodes.reserved_types()
+    assert "kotoba-upload-marker" in Nodes.reserved_types()
   end
 
   test "the registry refuses a given node with a built-in type" do
@@ -102,6 +113,12 @@ defmodule Kotoba.NodesTest do
 
   test "the registry refuses the editor's kotoba-unknown type" do
     assert_raise ArgumentError, ~r/"kotoba-unknown"/, fn -> Nodes.registry([FakeUnknown]) end
+  end
+
+  test "the registry refuses the editor's kotoba-upload-marker type" do
+    assert_raise ArgumentError, ~r/"kotoba-upload-marker"/, fn ->
+      Nodes.registry([FakeUploadMarker])
+    end
   end
 
   test "the registry refuses a module that is not a node" do

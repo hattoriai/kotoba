@@ -16,7 +16,7 @@ defmodule Kotoba.Markdown do
   @spec escape(String.t()) :: String.t()
   def escape(text) do
     text
-    |> String.replace(~r/[\\`*_\[\]~<]/, "\\\\\\0")
+    |> String.replace(~r/[\\`*_\[\]~<&]/, "\\\\\\0")
     |> then(
       &Regex.replace(@line_start, &1, fn _all, lead, digits, mark, symbol ->
         escape_line_start(lead, digits, mark, symbol)
@@ -53,10 +53,36 @@ defmodule Kotoba.Markdown do
     end
   end
 
-  @doc "Returns a URL for a Markdown link destination."
+  # A URL with no scheme whose first part (before `/`, `?` or `#`) has a
+  # character reference, such as `javascript&#58;alert(1)`: a Markdown
+  # renderer that decodes it could see a scheme.
+  @scheme ~r/\A[a-zA-Z][a-zA-Z0-9+.\-]*:/
+  @reference_in_first_part ~r/\A[^\/?#]*&[#a-zA-Z]/
+
+  @doc """
+  Returns the Markdown link destination for a URL that
+  `Kotoba.Sanitizer.link_url/2` accepted, or `nil` when the URL must be
+  text: a URL with no scheme and a character reference before its first
+  `/`, `?` or `#`.
+  """
+  @spec destination(String.t()) :: String.t() | nil
+  def destination(url) do
+    if not Regex.match?(@scheme, url) and Regex.match?(@reference_in_first_part, url),
+      do: nil,
+      else: url(url)
+  end
+
+  @doc """
+  Returns a URL for a Markdown link destination.
+
+  `\\`, `&`, `<` and `>` get a backslash, so that a CommonMark renderer
+  reads them as literal characters and decodes no entity. Spaces and
+  parentheses are percent-encoded.
+  """
   @spec url(String.t()) :: String.t()
   def url(url) do
     url
+    |> String.replace(~r/[\\&<>]/, "\\\\\\0")
     |> String.replace(" ", "%20")
     |> String.replace("(", "%28")
     |> String.replace(")", "%29")

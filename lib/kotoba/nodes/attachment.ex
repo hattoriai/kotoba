@@ -39,8 +39,8 @@ defmodule Kotoba.Nodes.Attachment do
 
   """
   @spec image?(t()) :: boolean()
-  def image?(%__MODULE__{content_type: "image/" <> _subtype}), do: true
-  def image?(%__MODULE__{}), do: false
+  def image?(%{content_type: "image/" <> _subtype}), do: true
+  def image?(%{content_type: _content_type}), do: false
 
   @impl Kotoba.Node
   def render_html(node, opts) do
@@ -81,10 +81,12 @@ defmodule Kotoba.Nodes.Attachment do
   def render_markdown(node, opts) do
     name = Markdown.escape(node.name)
 
+    destination = Markdown.destination(node.url)
+
     cond do
-      not Renderer.policy(opts).attachments -> name
-      image?(node) -> "![" <> name <> "](" <> Markdown.url(node.url) <> ")"
-      true -> "[" <> name <> "](" <> Markdown.url(node.url) <> ")"
+      not Renderer.policy(opts).attachments or destination == nil -> name
+      image?(node) -> "![" <> name <> "](" <> destination <> ")"
+      true -> "[" <> name <> "](" <> destination <> ")"
     end
   end
 end

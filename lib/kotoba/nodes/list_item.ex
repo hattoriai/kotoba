@@ -9,6 +9,10 @@ defmodule Kotoba.Nodes.ListItem do
 
   alias Kotoba.Renderer
 
+  # Kotoba.Nodes.List refers to this module's struct, so this module does
+  # not expand the List struct at compile time (a cycle between the two).
+  @list Kotoba.Nodes.List
+
   field :value, :integer, default: 1
   field :checked, :boolean, omit_nil: true
 
@@ -16,13 +20,13 @@ defmodule Kotoba.Nodes.ListItem do
   def render_html(node, opts) do
     class =
       case {opts[:parent], node.checked} do
-        {%Kotoba.Nodes.List{list_type: "check"}, true} ->
+        {%{__struct__: @list, list_type: "check"}, true} ->
           "kotoba-checked"
 
-        {%Kotoba.Nodes.List{list_type: "check"}, false} ->
+        {%{__struct__: @list, list_type: "check"}, false} ->
           "kotoba-unchecked"
 
-        {%Kotoba.Nodes.List{list_type: "check"}, nil} ->
+        {%{__struct__: @list, list_type: "check"}, nil} ->
           unless nested_only?(node), do: "kotoba-unchecked"
 
         _other ->
@@ -43,6 +47,6 @@ defmodule Kotoba.Nodes.ListItem do
   nested list in an item of its own.
   """
   @spec nested_only?(t()) :: boolean()
-  def nested_only?(%__MODULE__{children: children}),
-    do: children != [] and Enum.all?(children, &match?(%Kotoba.Nodes.List{}, &1))
+  def nested_only?(%{children: children}),
+    do: children != [] and Enum.all?(children, &is_struct(&1, @list))
 end

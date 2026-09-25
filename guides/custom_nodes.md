@@ -72,6 +72,16 @@ or `{:safe, iodata}`. A plain string is escaped. Use
 `Kotoba.Renderer.escape_markdown/1` for the Markdown of text, so that the
 text cannot make Markdown syntax, a heading or a list included.
 
+`Kotoba.Renderer.tag/3` escapes the attribute values and the content, but
+not the tag name or the attribute names, and it does not check URLs. So:
+
+* keep the tag and attribute names literal in your code, and never take
+  them from the node's fields;
+* pass each `href` or `src` through `Kotoba.Sanitizer.link_url/2` and
+  render no link when it returns `nil`. For a link, also check the policy:
+  render the link only when `Kotoba.Renderer.policy(opts).links` is true,
+  so that the `:untrusted` policy gives text.
+
 To add `.formatter.exs` support for `field` without parentheses, add
 `:kotoba` to `import_deps`.
 
@@ -169,8 +179,9 @@ Kotoba.Content.rerender(content, nodes: [MyApp.Kotoba.Nodes.Callout])
 <.kotoba_content content={@post.body} nodes={[MyApp.Kotoba.Nodes.Callout]} />
 ```
 
-An app node cannot have a reserved type (a built-in type, or
-`"kotoba-unknown"`, see `Kotoba.Nodes.reserved_types/0`): the registry
+An app node cannot have a reserved type (a built-in type,
+`"kotoba-unknown"` or `"kotoba-upload-marker"`, see
+`Kotoba.Nodes.reserved_types/0`): the registry
 raises `ArgumentError`, as the editor refuses it. Do not start a type with
 `kotoba-`; the generator refuses an app name that would do this.
 

@@ -33,8 +33,9 @@ defmodule Kotoba.Storage.Local.Plug do
       every other file has `Content-Disposition: attachment`.
     * A path with a segment that is not a valid key segment (`..`, `.`, or
       a character other than ASCII letters, digits, `.`, `-` and `_`) gives
-      `400`. A key with no regular file (a directory or a symbolic link
-      included) gives `404`.
+      `400`. A key with no regular file gives `404`: a directory, a symbolic
+      link to a file, and a path through a symbolic link to a directory
+      included.
   """
 
   @behaviour Plug
@@ -70,29 +71,51 @@ defmodule Kotoba.Storage.Local.Plug do
   defp serve(conn, segments, opts) do
     if Enum.all?(segments, &Storage.valid_segment?/1) do
       root = opts |> Keyword.get_lazy(:root, &Local.root/0) |> Path.expand()
-      send_regular_file(conn, Path.join([root | segments]), opts)
+
+      case regular_file(root, segments) do
+        {:ok, path} -> send_regular_file(conn, path, opts)
+        :error -> halt_with(conn, 404)
+      end
     else
       halt_with(conn, 400)
     end
   end
 
-  defp send_regular_file(conn, path, opts) do
-    case File.lstat(path) do
-      {:ok, %File.Stat{type: :regular}} ->
-        type = Attachments.content_type(Path.extname(path))
+  # Each directory under the root must be a real directory and the last
+  # segment a regular file: a symbolic link at any level gives :error.
+  defp regular_file(root, segments) do
+    {directories, [file]} = Enum.split(segments, -1)
 
-        conn
-        |> put_resp_content_type(type, nil)
-        |> put_resp_header("cache-control", "private, max-age=#{opts[:max_age]}")
-        |> put_resp_header("x-content-type-options", "nosniff")
-        |> put_resp_header("content-security-policy", "default-src 'none'; sandbox")
-        |> put_resp_header("content-disposition", disposition(type))
-        |> send_body(path)
-        |> halt()
+    directory =
+      Enum.reduce_while(directories, root, fn segment, parent ->
+        path = Path.join(parent, segment)
 
-      _other ->
-        halt_with(conn, 404)
+        case File.lstat(path) do
+          {:ok, %File.Stat{type: :directory}} -> {:cont, path}
+          _other -> {:halt, nil}
+        end
+      end)
+
+    with directory when is_binary(directory) <- directory,
+         path = Path.join(directory, file),
+         {:ok, %File.Stat{type: :regular}} <- File.lstat(path) do
+      {:ok, path}
+    else
+      _other -> :error
     end
+  end
+
+  defp send_regular_file(conn, path, opts) do
+    type = Attachments.content_type(Path.extname(path))
+
+    conn
+    |> put_resp_content_type(type, nil)
+    |> put_resp_header("cache-control", "private, max-age=#{opts[:max_age]}")
+    |> put_resp_header("x-content-type-options", "nosniff")
+    |> put_resp_header("content-security-policy", "default-src 'none'; sandbox")
+    |> put_resp_header("content-disposition", disposition(type))
+    |> send_body(path)
+    |> halt()
   end
 
   defp send_body(%Plug.Conn{method: "HEAD"} = conn, _path), do: send_resp(conn, 200, "")
