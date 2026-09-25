@@ -21,6 +21,8 @@
   --kotoba-accent: #2f5bd3;
   --kotoba-accent-text: #ffffff;
   --kotoba-selection: rgba(47, 91, 211, 0.16);
+  --kotoba-mention-text: var(--kotoba-accent);
+  --kotoba-mention-background: var(--kotoba-selection);
   --kotoba-radius: 6px;
   --kotoba-space: 0.5rem;
   --kotoba-padding: 0.75rem 1rem;
@@ -316,8 +318,8 @@
   display: inline-block;
   padding: 0 0.35em;
   border-radius: calc(var(--kotoba-radius) - 2px);
-  background: var(--kotoba-selection);
-  color: var(--kotoba-accent);
+  background: var(--kotoba-mention-background);
+  color: var(--kotoba-mention-text);
   font-weight: 500;
   cursor: default;
 }

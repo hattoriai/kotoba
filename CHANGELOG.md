@@ -33,7 +33,10 @@ The first release.
   leave the editor, a prompt menu as a `listbox`, and a polite live region.
 - `kotoba.css` (structure, themed through `--kotoba-*` properties) and
   `kotoba-sumi.css` (the Sumi theme, with dark and light through
-  `data-theme` and `prefers-color-scheme`).
+  `data-theme` and `prefers-color-scheme`). A mention has its own
+  `--kotoba-mention-text` and `--kotoba-mention-background`; in the Sumi
+  theme it is ink on a quiet tint, so it never reads as the blade that a
+  Sumi page keeps for what needs attention.
 - `Kotoba.Content`: an Ecto type that stores the document with its cached
   HTML and text, with `rerender/2` and `from_markdown/2`.
 - `Kotoba.Document`: parses and checks a document, keeps unknown nodes, and

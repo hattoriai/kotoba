@@ -35,4 +35,14 @@ defmodule Kotoba.ThemeTest do
       assert sumi =~ ~r/^\s*#{property}: var\(#{token},/m, "#{property} does not read #{token}"
     end
   end
+
+  test "the Sumi mention is ink on a tint, never the blade" do
+    sumi = File.read!(Path.join(@css, "kotoba-sumi.css"))
+
+    for property <- ["--kotoba-mention-text", "--kotoba-mention-background"] do
+      [value] = Regex.run(~r/^\s*#{property}:([^;]+);/m, sumi, capture: :all_but_first)
+      assert value =~ "--color-base-content"
+      refute value =~ "blade"
+    end
+  end
 end
