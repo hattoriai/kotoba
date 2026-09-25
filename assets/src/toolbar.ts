@@ -44,6 +44,7 @@ import {
   type TextFormatType,
 } from "lexical";
 
+import { TOOLBAR_ICONS, renderIcon } from "./icons";
 import { $selectedLinkUrl } from "./link";
 
 export type BlockType =
@@ -89,7 +90,6 @@ export type ToolbarCommand =
 interface ToolbarItem {
   command: ToolbarCommand;
   label: string;
-  text: string;
   group: string;
   shortcut?: string;
 }
@@ -97,26 +97,27 @@ interface ToolbarItem {
 const MOD = typeof navigator !== "undefined" && /Mac|iP(hone|ad)/.test(navigator.platform) ? "⌘" : "Ctrl+";
 
 export const TOOLBAR_ITEMS: readonly ToolbarItem[] = [
-  { command: "bold", label: "Bold", text: "B", group: "Text", shortcut: `${MOD}B` },
-  { command: "italic", label: "Italic", text: "I", group: "Text", shortcut: `${MOD}I` },
-  { command: "strikethrough", label: "Strikethrough", text: "S", group: "Text" },
-  { command: "code", label: "Inline code", text: "</>", group: "Text" },
-  { command: "link", label: "Link", text: "Link", group: "Text", shortcut: `${MOD}K` },
-  { command: "h1", label: "Heading 1", text: "H1", group: "Blocks" },
-  { command: "h2", label: "Heading 2", text: "H2", group: "Blocks" },
-  { command: "h3", label: "Heading 3", text: "H3", group: "Blocks" },
-  { command: "quote", label: "Quote", text: "“ ”", group: "Blocks" },
-  { command: "bullet", label: "Bulleted list", text: "•", group: "Lists" },
-  { command: "number", label: "Numbered list", text: "1.", group: "Lists" },
-  { command: "check", label: "Check list", text: "☐", group: "Lists" },
-  { command: "code-block", label: "Code block", text: "{ }", group: "Insert" },
-  { command: "rule", label: "Horizontal rule", text: "—", group: "Insert" },
-  { command: "upload", label: "Attach a file", text: "Attach", group: "Insert" },
-  { command: "undo", label: "Undo", text: "↶", group: "History", shortcut: `${MOD}Z` },
-  { command: "redo", label: "Redo", text: "↷", group: "History" },
+  { command: "bold", label: "Bold", group: "Text", shortcut: `${MOD}B` },
+  { command: "italic", label: "Italic", group: "Text", shortcut: `${MOD}I` },
+  { command: "strikethrough", label: "Strikethrough", group: "Text" },
+  { command: "code", label: "Inline code", group: "Text" },
+  { command: "link", label: "Link", group: "Text", shortcut: `${MOD}K` },
+  { command: "h1", label: "Heading 1", group: "Blocks" },
+  { command: "h2", label: "Heading 2", group: "Blocks" },
+  { command: "h3", label: "Heading 3", group: "Blocks" },
+  { command: "h4", label: "Heading 4", group: "Blocks" },
+  { command: "quote", label: "Quote", group: "Blocks" },
+  { command: "bullet", label: "Bulleted list", group: "Lists" },
+  { command: "number", label: "Numbered list", group: "Lists" },
+  { command: "check", label: "Check list", group: "Lists" },
+  { command: "code-block", label: "Code block", group: "Insert" },
+  { command: "rule", label: "Horizontal rule", group: "Insert" },
+  { command: "upload", label: "Attach a file", group: "Insert" },
+  { command: "undo", label: "Undo", group: "History", shortcut: `${MOD}Z` },
+  { command: "redo", label: "Redo", group: "History" },
 ];
 
-const COMMANDS = new Set<string>(TOOLBAR_ITEMS.map((item) => item.command).concat("h4"));
+const COMMANDS = new Set<string>(TOOLBAR_ITEMS.map((item) => item.command));
 const TOGGLE_FORMATS = new Set<string>(["bold", "italic", "strikethrough", "code"]);
 const BLOCK_COMMANDS = new Set<string>(["h1", "h2", "h3", "h4", "quote", "bullet", "number", "check", "code-block"]);
 
@@ -399,10 +400,7 @@ function buildToolbar(uploads: boolean): HTMLElement {
     button.title = item.shortcut ? `${item.label} (${item.shortcut})` : item.label;
     button.tabIndex = -1;
 
-    const text = document.createElement("span");
-    text.setAttribute("aria-hidden", "true");
-    text.textContent = item.text;
-    button.append(text);
+    button.append(renderIcon(TOOLBAR_ICONS[item.command]));
 
     group.append(button);
   }

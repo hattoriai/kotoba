@@ -35,6 +35,8 @@ defmodule Mix.Tasks.Kotoba.Build do
 
   @impl Mix.Task
   def run(_args) do
+    Mix.Task.run("loadpaths")
+
     unless Code.ensure_loaded?(Esbuild) do
       Mix.raise("""
       mix kotoba.build needs the :esbuild dependency, which is available in \
@@ -42,7 +44,6 @@ defmodule Mix.Tasks.Kotoba.Build do
       """)
     end
 
-    Mix.Task.run("loadpaths")
     {:ok, _apps} = Application.ensure_all_started(:esbuild)
 
     install_packages()

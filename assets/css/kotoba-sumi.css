@@ -30,4 +30,10 @@
   --kotoba-token-punctuation: var(--sumi-muted, var(--sumi-text-muted, #6a655c));
   --kotoba-token-operator: var(--sumi-muted, var(--sumi-text-muted, #6a655c));
   --kotoba-token-variable: var(--sumi-ink, var(--color-base-content, #0a0a0b));
+  --kotoba-token-string: color-mix(in oklab, var(--kotoba-text) 60%, var(--kotoba-accent));
+  --kotoba-token-constant: color-mix(in oklab, var(--kotoba-accent) 70%, var(--kotoba-text));
+  --kotoba-token-attr: color-mix(in oklab, var(--kotoba-accent) 45%, var(--kotoba-text));
+  --kotoba-token-inserted: color-mix(in oklab, var(--kotoba-text) 55%, #2e9d5b);
+  --kotoba-token-deleted: color-mix(in oklab, var(--kotoba-text) 35%, var(--kotoba-accent));
+  --kotoba-shadow: 0 4px 16px color-mix(in oklab, var(--kotoba-text) 18%, transparent);
 }

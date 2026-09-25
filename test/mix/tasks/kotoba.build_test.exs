@@ -6,6 +6,8 @@ defmodule Mix.Tasks.Kotoba.BuildTest do
   @root Path.expand("../../..", __DIR__)
   @static Path.join(@root, "priv/static")
   @files ~w(kotoba.esm.js kotoba.cjs.js kotoba.css kotoba-sumi.css)
+  @maps ~w(kotoba.esm.js.map kotoba.cjs.js.map)
+  @exports ~w(AttachmentNode Kotoba MentionNode)
 
   @moduletag timeout: 600_000
 
@@ -13,7 +15,10 @@ defmodule Mix.Tasks.Kotoba.BuildTest do
     @moduletag skip: "npm is not on the path, so mix kotoba.build cannot run"
   end
 
-  test "mix kotoba.build writes the bundles and the style sheets" do
+  setup_all do
+    # Files from an earlier build must not make the test pass.
+    for file <- @files ++ @maps, do: File.rm(Path.join(@static, file))
+
     mix = System.find_executable("mix") || flunk("mix is not on the path")
 
     {output, status} =
@@ -23,23 +28,45 @@ defmodule Mix.Tasks.Kotoba.BuildTest do
         stderr_to_stdout: true
       )
 
+    %{output: output, status: status}
+  end
+
+  test "mix kotoba.build writes the bundles and the style sheets", %{
+    output: output,
+    status: status
+  } do
     assert status == 0, "mix kotoba.build failed:\n" <> output
 
-    for file <- @files do
+    for file <- @files ++ @maps do
       path = Path.join(@static, file)
       assert File.regular?(path), "#{file} is missing"
       assert File.stat!(path).size > 0, "#{file} is empty"
     end
+  end
 
+  test "the ESM bundle exports the hook and the node classes" do
     esm = File.read!(Path.join(@static, "kotoba.esm.js"))
     [exports] = Regex.run(~r/export\{([^}]*)\}/, esm, capture: :all_but_first)
     names = exports |> String.split(",") |> Enum.map(&(&1 |> String.split(" as ") |> List.last()))
 
-    assert "Kotoba" in names
-    assert "AttachmentNode" in names
-    assert "MentionNode" in names
+    for name <- @exports, do: assert(name in names, "kotoba.esm.js does not export #{name}")
+  end
 
-    cjs = File.read!(Path.join(@static, "kotoba.cjs.js"))
-    assert cjs =~ "Kotoba:()=>"
+  describe "the CJS bundle" do
+    if System.find_executable("node") == nil do
+      @describetag skip: "node is not on the path, so the CJS bundle cannot be required"
+    end
+
+    test "require() of the package entry point gives the hook and the node classes" do
+      script = """
+      const kotoba = require("./priv/static/kotoba.cjs.js");
+      process.stdout.write(JSON.stringify(Object.keys(kotoba).sort()));
+      """
+
+      {output, status} = System.cmd("node", ["-e", script], cd: @root, stderr_to_stdout: true)
+
+      assert status == 0, "node could not require kotoba.cjs.js:\n" <> output
+      assert JSON.decode!(output) == @exports
+    end
   end
 end

@@ -35,3 +35,4 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `kotoba-sumi.css` (the Sumi theme).
 - `mix kotoba.build`: builds the bundles and copies the style sheets into
   `priv/static`.
+- Toolbar icons from Lucide (ISC licence), sized with `--kotoba-icon-size`.

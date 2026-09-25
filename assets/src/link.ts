@@ -43,12 +43,13 @@ export function normalizeUrl(input: string): string {
 }
 
 export function createLinkForm(editor: LexicalEditor, options: LinkOptions): LinkForm {
-  const form = document.createElement("form");
+  // A div, not a form: the editor is usually inside the app's form, and a
+  // form may not hold another form.
+  const form = document.createElement("div");
   form.className = "kotoba-link-form";
   form.hidden = true;
   form.setAttribute("role", "dialog");
   form.setAttribute("aria-label", "Link");
-  form.noValidate = true;
 
   const inputId = `${options.idPrefix}-link-url`;
   const label = document.createElement("label");
@@ -65,7 +66,7 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
   input.placeholder = "https://";
 
   const apply = document.createElement("button");
-  apply.type = "submit";
+  apply.type = "button";
   apply.className = "kotoba-link-apply";
   apply.textContent = "Apply";
 
@@ -112,9 +113,7 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
     input.select();
   };
 
-  const onSubmit = (event: SubmitEvent): void => {
-    event.preventDefault();
-    event.stopPropagation();
+  const submit = (): void => {
     const url = normalizeUrl(input.value);
     if (url === "") {
       toggle(null);
@@ -131,8 +130,17 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
       event.preventDefault();
       event.stopPropagation();
       close();
+    } else if (event.key === "Enter" && event.target === input) {
+      // Enter in the input would otherwise submit the app's form.
+      event.preventDefault();
+      event.stopPropagation();
+      submit();
     }
   };
+
+  // The input has no name, but its events would still reach the app's form
+  // (a phx-change with an empty target).
+  const onInput = (event: Event): void => event.stopPropagation();
 
   const onRemove = (): void => toggle(null);
 
@@ -141,7 +149,9 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
     form.hidden = true;
   };
 
-  form.addEventListener("submit", onSubmit);
+  apply.addEventListener("click", submit);
+  input.addEventListener("input", onInput);
+  input.addEventListener("change", onInput);
   form.addEventListener("keydown", onKeyDown);
   form.addEventListener("focusout", onFocusOut);
   remove.addEventListener("click", onRemove);
@@ -166,7 +176,9 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
     open,
     dispose() {
       unregister();
-      form.removeEventListener("submit", onSubmit);
+      apply.removeEventListener("click", submit);
+      input.removeEventListener("input", onInput);
+      input.removeEventListener("change", onInput);
       form.removeEventListener("keydown", onKeyDown);
       form.removeEventListener("focusout", onFocusOut);
       remove.removeEventListener("click", onRemove);

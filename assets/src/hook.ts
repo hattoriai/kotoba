@@ -187,7 +187,9 @@ class Instance {
       if (typeof payload.prompt === "string") this.prompts?.receive(payload.prompt, payload.items, payload.query);
     });
 
-    this.ready = this.mount();
+    this.ready = this.mount().catch((error: unknown) => {
+      console.error("Kotoba: the editor could not mount", error);
+    });
   }
 
   private on(event: string, handler: (payload: Record<string, unknown>) => void): void {
@@ -205,11 +207,14 @@ class Instance {
     const appNodes = await loadNodes(this.config.nodes);
     if (this.destroyed) return;
 
-    const editor = createKotobaEditor({
-      namespace: this.id,
-      nodes: appNodes,
-      editable: !this.config.readonly,
-    });
+    const options = { namespace: this.id, editable: !this.config.readonly };
+    let editor: LexicalEditor;
+    try {
+      editor = createKotobaEditor({ ...options, nodes: appNodes });
+    } catch (error) {
+      console.error("Kotoba: the app nodes could not be registered; the editor has the built-in nodes only", error);
+      editor = createKotobaEditor({ ...options, nodes: [] });
+    }
     this.editor = editor;
 
     const surface = document.createElement("div");

@@ -89,13 +89,19 @@ export function createUploads(editor: LexicalEditor, options: UploadOptions): Up
     options.announce(files.length === 1 ? `Uploading ${files[0]?.name ?? "a file"}` : `Uploading ${files.length} files`);
   };
 
-  const onChange = (): void => {
+  // The picker's events must not reach the app's form: LiveView would push
+  // a form change with an empty target.
+  const onInput = (event: Event): void => event.stopPropagation();
+
+  const onChange = (event: Event): void => {
+    event.stopPropagation();
     const files = Array.from(picker.files ?? []);
     picker.value = "";
     handOff(target?.multiple ? files : files.slice(0, 1));
   };
 
   picker.addEventListener("change", onChange);
+  picker.addEventListener("input", onInput);
   if (target !== null) options.host.append(picker);
 
   const unregister = mergeRegister(
@@ -140,6 +146,7 @@ export function createUploads(editor: LexicalEditor, options: UploadOptions): Up
     dispose() {
       unregister();
       picker.removeEventListener("change", onChange);
+      picker.removeEventListener("input", onInput);
       picker.remove();
     },
   };

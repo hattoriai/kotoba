@@ -1,6 +1,6 @@
 // The Lexical editor: its nodes, its theme and its plugins.
 
-import "./prism";
+import { restoreHostPrism } from "./prism";
 
 import { $isCodeNode, CodeHighlightNode, CodeNode } from "@lexical/code-core";
 import { registerCodeHighlighting } from "@lexical/code-prism";
@@ -45,7 +45,7 @@ import {
   type Transformer,
 } from "@lexical/markdown";
 import { HeadingNode, QuoteNode, registerRichText } from "@lexical/rich-text";
-import { $insertNodeToNearestRoot } from "@lexical/utils";
+import { $insertNodeToNearestRoot, $unwrapNode } from "@lexical/utils";
 import {
   $getSelection,
   $isRangeSelection,
@@ -62,6 +62,11 @@ import { AttachmentNode } from "./nodes/attachment";
 import { registerDecorators } from "./nodes/decorator";
 import { UnknownNode, UploadMarkerNode } from "./nodes/internal";
 import { MentionNode } from "./nodes/mention";
+import { UNKNOWN_TYPE, UPLOAD_MARKER_TYPE } from "./protocol";
+
+// Every import above has run, so the editor's Prism and its grammars are
+// loaded: the host page gets its own `Prism` back.
+restoreHostPrism();
 
 /** The node classes that every Kotoba editor has. */
 export const BUILT_IN_NODES: readonly Klass<LexicalNode>[] = [
@@ -168,7 +173,7 @@ export const THEME: EditorThemeClasses = {
   },
 };
 
-// Headings h1–h4 only, as the toolbar offers.
+// Headings h1–h4 only, as the toolbar offers (`#####` stays text).
 const HEADING_1_TO_4: ElementTransformer = { ...HEADING, regExp: /^(#{1,4})\s/ };
 
 const HORIZONTAL_RULE: ElementTransformer = {
@@ -211,6 +216,10 @@ export function isLinkUrl(url: string): boolean {
   }
 }
 
+function $unwrapUnsafeLink(node: LinkNode): void {
+  if (!isLinkUrl(node.getURL())) $unwrapNode(node);
+}
+
 export interface EditorOptions {
   namespace: string;
   nodes: readonly Klass<LexicalNode>[];
@@ -221,7 +230,17 @@ export interface EditorOptions {
 export function createKotobaEditor(options: EditorOptions): LexicalEditor {
   const builtInTypes = new Set(BUILT_IN_NODES.map((klass) => klass.getType()));
   const appNodes = options.nodes.filter((klass) => {
-    const type = klass.getType();
+    let type: string;
+    try {
+      type = klass.getType();
+    } catch (error) {
+      console.error("Kotoba: an app node class has a getType() that fails; it is not registered", error);
+      return false;
+    }
+    if (typeof type !== "string" || type === "") {
+      console.error("Kotoba: an app node class has no type; it is not registered");
+      return false;
+    }
     if (builtInTypes.has(type) || CORE_TYPES.includes(type)) {
       console.error(`Kotoba: the node type "${type}" is built in; the app node is not registered`);
       return false;
@@ -238,9 +257,16 @@ export function createKotobaEditor(options: EditorOptions): LexicalEditor {
   });
 }
 
-/** The node types that the editor can read. */
+/**
+ * The node types that a document can have. The internal node types (upload
+ * markers, unknown nodes) are left out: a document or an `insert_node` that
+ * has one is treated as an unknown node.
+ */
 export function registeredTypes(editor: LexicalEditor): Set<string> {
-  return new Set(editor._nodes.keys());
+  const types = new Set(editor._nodes.keys());
+  types.delete(UPLOAD_MARKER_TYPE);
+  types.delete(UNKNOWN_TYPE);
+  return types;
 }
 
 /** Registers the rich text plugins. Returns a function that removes them. */
@@ -259,6 +285,10 @@ export function registerPlugins(editor: LexicalEditor): () => void {
       excludeParents: [(parent) => $isCodeNode(parent)],
       matchers: [autoLinkUrlMatcher, autoLinkEmailMatcher],
     }),
+    // A link from a markdown shortcut or pasted HTML skips validateUrl; a
+    // link whose URL is not allowed becomes its text.
+    editor.registerNodeTransform(LinkNode, $unwrapUnsafeLink),
+    editor.registerNodeTransform(AutoLinkNode, $unwrapUnsafeLink),
     registerMarkdownShortcuts(editor, MARKDOWN_TRANSFORMERS),
     registerCodeHighlighting(editor),
     editor.registerCommand(
