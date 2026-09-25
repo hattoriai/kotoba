@@ -180,7 +180,7 @@ Kotoba.Content.rerender(content, nodes: [MyApp.Kotoba.Nodes.Callout])
 ```
 
 An app node cannot have a reserved type (a built-in type,
-`"kotoba-unknown"` or `"kotoba-upload-marker"`, see
+`"kotoba-unknown"` or `"kotoba-upload"`, see
 `Kotoba.Nodes.reserved_types/0`): the registry
 raises `ArgumentError`, as the editor refuses it. Do not start a type with
 `kotoba-`; the generator refuses an app name that would do this.

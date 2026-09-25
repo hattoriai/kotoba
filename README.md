@@ -16,7 +16,8 @@ does not run Node.js for it: you add the hook and one style sheet.
 ## Install
 
 Kotoba needs Elixir 1.18 or later (it uses the built-in `JSON` module),
-Phoenix 1.8 and Phoenix LiveView 1.2.
+Phoenix 1.8 and Phoenix LiveView 1.2. CI runs the tests on Elixir 1.18
+(OTP 27) in a separate `floor` job, as well as on the current version.
 
 Add `kotoba` to the deps in `mix.exs`:
 

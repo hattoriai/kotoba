@@ -47,8 +47,8 @@ defmodule Kotoba.NodesTest do
     def render_text(_node, _opts), do: ""
   end
 
-  defmodule FakeUploadMarker do
-    use Kotoba.Node, type: "kotoba-upload-marker", kind: :decorator
+  defmodule FakeUpload do
+    use Kotoba.Node, type: "kotoba-upload", kind: :decorator
 
     @impl Kotoba.Node
     def render_html(_node, _opts), do: ""
@@ -92,7 +92,7 @@ defmodule Kotoba.NodesTest do
     assert "paragraph" in Nodes.reserved_types()
     assert "mention" in Nodes.reserved_types()
     assert "kotoba-unknown" in Nodes.reserved_types()
-    assert "kotoba-upload-marker" in Nodes.reserved_types()
+    assert "kotoba-upload" in Nodes.reserved_types()
   end
 
   test "the registry refuses a given node with a built-in type" do
@@ -115,9 +115,37 @@ defmodule Kotoba.NodesTest do
     assert_raise ArgumentError, ~r/"kotoba-unknown"/, fn -> Nodes.registry([FakeUnknown]) end
   end
 
-  test "the registry refuses the editor's kotoba-upload-marker type" do
-    assert_raise ArgumentError, ~r/"kotoba-upload-marker"/, fn ->
-      Nodes.registry([FakeUploadMarker])
+  test "the reserved types include the editor's own types of assets/src/protocol.ts" do
+    protocol = File.read!(Path.expand("../../assets/src/protocol.ts", __DIR__))
+
+    for constant <- ~w(UNKNOWN_TYPE UPLOAD_MARKER_TYPE) do
+      [type] =
+        Regex.run(~r/export const #{constant} = "([^"]+)";/, protocol, capture: :all_but_first)
+
+      assert type in Nodes.reserved_types(), "#{constant} (#{type}) is not reserved"
+    end
+  end
+
+  test "registry/1 refuses an app node with the type kotoba-upload" do
+    [{module, _binary}] =
+      Code.compile_string("""
+      defmodule Kotoba.NodesTest.ProbeUpload do
+        use Kotoba.Node, type: "kotoba-upload", kind: :inline
+        @impl Kotoba.Node
+        def render_html(_node, _opts), do: ""
+        @impl Kotoba.Node
+        def render_text(_node, _opts), do: ""
+      end
+      """)
+
+    assert_raise ArgumentError, ~r/has the type "kotoba-upload", which is reserved/, fn ->
+      Nodes.registry([module])
+    end
+  end
+
+  test "the registry refuses the editor's kotoba-upload type" do
+    assert_raise ArgumentError, ~r/"kotoba-upload"/, fn ->
+      Nodes.registry([FakeUpload])
     end
   end
 

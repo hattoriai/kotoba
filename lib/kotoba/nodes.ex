@@ -6,8 +6,8 @@ defmodule Kotoba.Nodes do
   has the built-in nodes, the nodes in the `:nodes` key of the `:kotoba`
   application config, and the nodes that the caller gives. An app node
   cannot have the type of a built-in node or of an editor node
-  (`"kotoba-unknown"` or `"kotoba-upload-marker"`, see `reserved_types/0`): the registry raises `ArgumentError`, as the editor
-  refuses such a node. A caller node replaces a configured node with the
+  (`"kotoba-unknown"` or `"kotoba-upload"`, see `reserved_types/0`): the
+  registry raises `ArgumentError`, as the editor refuses such a node. A caller node replaces a configured node with the
   same type:
 
       config :kotoba, nodes: [MyApp.Nodes.Pointer]
@@ -43,7 +43,7 @@ defmodule Kotoba.Nodes do
 
   # The editor's own node types: a node for a type it does not know, and
   # the marker of an upload in progress.
-  @editor_types ["kotoba-unknown", "kotoba-upload-marker"]
+  @editor_types ["kotoba-unknown", "kotoba-upload"]
 
   @typedoc "A map from a node type to its module."
   @type registry :: %{String.t() => module()}
@@ -55,8 +55,8 @@ defmodule Kotoba.Nodes do
   @doc """
   Returns the node types that an app node cannot have: the types of the
   built-in nodes, and the editor's own node types, `"kotoba-unknown"` (the
-  node for a type it does not know) and `"kotoba-upload-marker"` (the
-  marker of an upload in progress).
+  node for a type it does not know) and `"kotoba-upload"` (the marker of
+  an upload in progress).
   """
   @spec reserved_types() :: [String.t()]
   def reserved_types, do: Enum.map(@built_in, & &1.type()) ++ @editor_types

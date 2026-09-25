@@ -69,6 +69,46 @@ jobs:
         env:
           MIX_ENV: dev
 
+  # The lowest Elixir that mix.exs accepts (~> 1.18, for the built-in JSON
+  # module), so that the floor stays true. Format, credo, docs and
+  # dialyzer run only in the test job.
+  floor:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: erlef/setup-beam@v1
+        id: beam
+        with:
+          elixir-version: "1.18.3"
+          otp-version: "27.2"
+          version-type: strict
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            deps
+            _build
+          key: mix-floor-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-${{ hashFiles('mix.lock') }}
+          restore-keys: |
+            mix-floor-${{ steps.beam.outputs.elixir-version }}-${{ steps.beam.outputs.otp-version }}-
+
+      - name: Seed fake assets
+        run: |
+          mkdir -p priv/static
+          touch priv/static/kotoba.esm.js priv/static/kotoba.cjs.js priv/static/kotoba.css priv/static/kotoba-sumi.css
+
+      - run: mix deps.get
+
+      - run: mix compile --warnings-as-errors
+        env:
+          MIX_ENV: test
+
+      - run: mix test --exclude build
+        env:
+          MIX_ENV: test
+
   e2e:
     runs-on: ubuntu-latest
 
