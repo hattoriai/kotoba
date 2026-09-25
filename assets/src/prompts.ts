@@ -311,7 +311,9 @@ export function createPrompts(editor: LexicalEditor, options: PromptOptions): Pr
       active = 0;
       loading = false;
       render();
-      options.announce(items.length === 0 ? "No results" : `${items.length} results`);
+      options.announce(
+        items.length === 0 ? "No results" : items.length === 1 ? "1 result" : `${items.length} results`,
+      );
     },
     close,
     dispose() {

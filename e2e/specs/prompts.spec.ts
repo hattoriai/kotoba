@@ -25,6 +25,7 @@ test("@ opens the menu under the caret with the server's results", async ({ page
   await expect(options).toHaveCount(1);
   await expect(options.first().locator(".kotoba-menu-label")).toHaveText("Margaret Hamilton");
   await expect(options.first().locator(".kotoba-menu-hint")).toHaveText("Engineer");
+  await expect(page.locator("#post_body_editor .kotoba-live")).toHaveText("1 result");
 });
 
 test("arrows move the active option and Enter inserts a mention", async ({ page }) => {

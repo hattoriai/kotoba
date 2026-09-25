@@ -113,6 +113,32 @@ or in the router:
 forward "/uploads/kotoba", Kotoba.Storage.Local.Plug, at: "/"
 ```
 
+### Files behind a login, per tenant
+
+The endpoint plug and a `forward` serve every file to every visitor. When
+only the people of an account may see its files, and the account is a
+dynamic segment of the path (`/:org_slug/...`), serve the files from a
+route in the scope that checks the login, and start each key with the
+path of that route:
+
+```elixir
+# config/config.exs
+config :kotoba, Kotoba.Storage.Local, url_prefix: "/"
+
+# The LiveView: keys like "acme/uploads/2026/09/<uuid>-name.png"
+Kotoba.Live.consume_uploads(socket, :attachments, "post-body",
+  key: &("#{slug}/uploads/" <> Kotoba.Storage.key(&1.client_name, &2))
+)
+
+# The router, in the scope that requires a member of :org_slug
+get "/uploads/*key", Kotoba.Storage.Local.Plug, [at: "/"], alias: false
+```
+
+The URL of a file is then its key, the router lets only the account's
+people reach it, and the plug serves the file at that path under the
+root. `forward` cannot take a path with a dynamic segment, so use a
+`get` route (`alias: false` keeps the scope's alias off the module).
+
 The plug serves only `GET` and `HEAD`, with safe headers. See the
 [Security](security.md) guide. Do not serve the directory with
 `Plug.Static`: it sends none of these headers.

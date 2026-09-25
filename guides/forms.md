@@ -177,6 +177,32 @@ your own icons, give a `toolbar` slot:
 `for` set to the editor id. `Kotoba.Components.toolbar_commands/0` lists
 the commands.
 
+## Testing a form
+
+In `Phoenix.LiveViewTest`, `form/3` refuses a value for a hidden input
+that differs from the rendered one, and the document is a hidden input.
+Give the document in the value of `render_submit/2` or `render_change/2`,
+as JSON, the way the hook sends it:
+
+```elixir
+doc = JSON.encode!(Kotoba.Content.from_markdown("Hello **world**").doc)
+
+view
+|> form("#post-form", post: %{title: "Hello"})
+|> render_submit(%{post: %{body: doc}})
+```
+
+The editor's own events (`kotoba:prompt`, `kotoba:change`) go through
+`render_hook/3` on the editor element, which keeps its `phx-target`:
+
+```elixir
+view
+|> element("#post-body")
+|> render_hook("kotoba:prompt", %{"id" => "post-body", "prompt" => "people", "query" => "ad"})
+
+assert_push_event(view, "kotoba:prompt_results", %{items: [%{label: "Ada Lovelace"}]})
+```
+
 ## Stored content without the editor
 
 `Kotoba.Content.cast/1` also takes a map (the document envelope, or a bare
