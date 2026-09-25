@@ -180,6 +180,16 @@ defmodule Kotoba.Content do
   def embed_as(_format), do: :dump
 
   @doc """
+  Returns the current content cache version.
+
+  A `Kotoba.Content` with another `:version` has a cache made by another
+  version of Kotoba; `Kotoba.Components.kotoba_content/1` renders such a
+  document again instead of using its `:html`.
+  """
+  @spec cache_version() :: pos_integer()
+  def cache_version, do: @version
+
+  @doc """
   Returns an empty `Kotoba.Content`, for a new form or a blank field.
   """
   @spec empty() :: t()

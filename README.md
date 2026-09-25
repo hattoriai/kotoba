@@ -73,15 +73,98 @@ end
 
 ### Form component
 
-Add the editor to a form with `<.kotoba>`:
+Import the components (for example in the `html_helpers` of your web
+module) and add the editor to a form with `<.kotoba>`:
+
+```elixir
+import Kotoba.Components
+```
 
 ```heex
 <.form for={@form} id="post-form" phx-change="validate" phx-submit="save">
   <.input field={@form[:title]} label="Title" />
-  <.kotoba field={@form[:body]} placeholder="Write your post..." />
+  <label id="post-body-label">Body</label>
+  <.kotoba
+    field={@form[:body]}
+    id="post-body"
+    label_id="post-body-label"
+    placeholder="Write your post..."
+  />
   <.button>Save</.button>
 </.form>
 ```
+
+The editor writes the document to a hidden input, so the form posts it with
+the other fields. In a LiveComponent, add `phx-target={@myself}`.
+
+### Mentions
+
+Give the editor a prompt list. The trigger `@` opens a menu with the results
+of the first function:
+
+```heex
+<.kotoba field={@form[:body]} id="post-body" prompts={@prompts} />
+```
+
+```elixir
+def mount(_params, _session, socket) do
+  {:ok, assign(socket, prompts: [people: &MyApp.People.search/1])}
+end
+
+def handle_event("kotoba:prompt", params, socket) do
+  {:noreply, Kotoba.Live.handle_prompt(socket, params, socket.assigns.prompts)}
+end
+```
+
+`MyApp.People.search/1` gets the query and returns items such as
+`%{id: 1, label: "Ada Lovelace"}`. See `Kotoba.Prompts`.
+
+### Attachments
+
+Allow a LiveView upload, give it to the editor, and store the finished
+files with `Kotoba.Live.consume_uploads/4`:
+
+```elixir
+socket =
+  allow_upload(socket, :attachments,
+    accept: ~w(.png .jpg .gif .webp .pdf),
+    max_file_size: 10_000_000,
+    auto_upload: true,
+    progress: &handle_progress/3
+  )
+
+defp handle_progress(:attachments, %{done?: true}, socket),
+  do: {:noreply, Kotoba.Live.consume_uploads(socket, :attachments, "post-body")}
+
+defp handle_progress(:attachments, _entry, socket), do: {:noreply, socket}
+```
+
+```heex
+<.kotoba field={@form[:body]} id="post-body" uploads={@uploads.attachments} />
+```
+
+Call `Kotoba.Live.consume_uploads/4` from the form's `phx-change` handler
+too, so that a file that fails validation loses its placeholder.
+
+The files go to a `Kotoba.Storage` adapter. The local adapter keeps them on
+disk, and `Kotoba.Storage.Local.Plug` serves them:
+
+```elixir
+config :kotoba, storage: Kotoba.Storage.Local
+
+config :kotoba, Kotoba.Storage.Local,
+  root: "priv/uploads/kotoba",
+  url_prefix: "/uploads/kotoba"
+```
+
+```elixir
+# In the endpoint, before the router:
+plug Kotoba.Storage.Local.Plug
+```
+
+For S3 or another store, write a module with the three `Kotoba.Storage`
+callbacks (`put/3`, `url/1`, `delete/1`) and set `config :kotoba, storage:`
+to it. The `Kotoba.Storage` docs have an example.
 
 ### Render component
 

@@ -18,20 +18,26 @@
 //   * `data-link-schemes` - comma-separated allowed link schemes
 //     ("http,https,mailto"); the same list as the server's sanitizer.
 //
-// The hook pushes (every message has `v: 1`):
+// The hook pushes (every message has `v: 1` and the hook element's `id`):
 //
-//   * `kotoba:change` `{v, doc}` - the document envelope, debounced.
-//   * `kotoba:prompt` `{v, prompt, query}` - a prompt query.
+//   * `kotoba:change` `{v, id, doc}` - the document envelope, debounced.
+//   * `kotoba:prompt` `{v, id, prompt, query}` - a prompt query.
 //
 // It handles these server events (a payload with an `id` other than the
 // hook element's id is for another editor, and is ignored):
 //
 //   * `set_content` `{doc}` - replaces the document.
-//   * `insert_node` `{node}` - inserts a node (in place of the oldest upload
-//     marker, or at the selection).
+//   * `insert_node` `{node, ref?}` - inserts a node in place of the upload
+//     marker of the LiveView upload entry `ref`, else in place of the oldest
+//     upload marker, else at the selection.
+//   * `remove_marker` `{ref}` - removes the upload marker of the LiveView
+//     upload entry `ref` (an upload that failed).
 //   * `set_readonly` `{readonly}`
 //   * `focus` `{}`
-//   * `kotoba:prompt_results` `{prompt, items: [{id, label, hint?}]}`
+//   * `kotoba:prompt_results` `{prompt, query?, items: [{id, label, hint?}]}`
+//
+// A change of `data-readonly` in a LiveView patch also sets the read-only
+// state.
 
 import {
   $getRoot,
@@ -167,12 +173,14 @@ class Instance {
   private pushed = "";
   private timer: ReturnType<typeof setTimeout> | undefined;
   private destroyed = false;
+  private readonlyAttribute: string | undefined;
   private readonly ready: Promise<void>;
 
   constructor(hook: KotobaHook) {
     this.hook = hook;
     this.el = hook.el;
     this.config = readConfig(hook.el);
+    this.readonlyAttribute = hook.el.dataset.readonly;
     instances += 1;
     this.id = hook.el.id || `kotoba-${instances}`;
 
@@ -185,7 +193,12 @@ class Instance {
     // Server events are registered at once, so that none is lost while the
     // app node modules load; each one waits for the editor.
     this.on("set_content", (payload) => this.setContent(payload.doc));
-    this.on("insert_node", (payload) => this.insertNode(payload.node));
+    this.on("insert_node", (payload) =>
+      this.insertNode(payload.node, typeof payload.ref === "string" ? payload.ref : undefined),
+    );
+    this.on("remove_marker", (payload) => {
+      if (typeof payload.ref === "string") this.uploads?.remove(payload.ref);
+    });
     this.on("set_readonly", (payload) => this.setReadonly(payload.readonly === true));
     this.on("focus", () => this.editor?.focus());
     this.on("kotoba:prompt_results", (payload) => {
@@ -276,7 +289,7 @@ class Instance {
         editable,
         idPrefix: this.id,
         triggers: this.config.prompts,
-        request: (prompt, query) => this.push("kotoba:prompt", { v: PROTOCOL_VERSION, prompt, query }),
+        request: (prompt, query) => this.push("kotoba:prompt", { v: PROTOCOL_VERSION, id: this.id, prompt, query }),
         announce: this.announce,
       });
     }
@@ -350,7 +363,7 @@ class Instance {
     this.load(doc, true);
   }
 
-  private insertNode(json: unknown): void {
+  private insertNode(json: unknown, ref: string | undefined): void {
     const editor = this.editor;
     if (editor === null || !isObject(json) || typeof json.type !== "string") {
       console.error("Kotoba: insert_node needs a node with a type", json);
@@ -363,7 +376,7 @@ class Instance {
 
     editor.update(() => {
       const node = $parseSerializedNode({ version: 1, ...json } as unknown as SerializedLexicalNode);
-      this.uploads?.$insert(node);
+      this.uploads?.$insert(node, ref);
     });
   }
 
@@ -373,6 +386,18 @@ class Instance {
     editor.setEditable(!readonly);
     this.toolbar?.setDisabled(readonly);
     if (readonly) this.prompts?.close();
+  }
+
+  // LiveView patches the data attributes of a `phx-update="ignore"` element
+  // and then calls `updated()`. A new `data-readonly` value sets the state; the
+  // same value again does not undo a `set_readonly` push.
+  syncAttributes(): void {
+    const value = this.el.dataset.readonly;
+    if (value === this.readonlyAttribute) return;
+    this.readonlyAttribute = value;
+    void this.ready.then(() => {
+      if (!this.destroyed) this.setReadonly(value !== undefined && value !== "false");
+    });
   }
 
   private updatePlaceholder(): void {
@@ -399,7 +424,11 @@ class Instance {
     this.timer = undefined;
     if (this.destroyed || this.json === "" || this.json === this.pushed) return;
     this.pushed = this.json;
-    this.push("kotoba:change", { v: PROTOCOL_VERSION, doc: JSON.parse(this.json) as DocumentEnvelope });
+    this.push("kotoba:change", {
+      v: PROTOCOL_VERSION,
+      id: this.id,
+      doc: JSON.parse(this.json) as DocumentEnvelope,
+    });
   }
 
   private push(event: string, payload: object): void {
@@ -467,6 +496,9 @@ function copyLabel(from: HTMLElement, to: HTMLElement): void {
 export const Kotoba = {
   mounted(this: KotobaHook): void {
     this.kotoba = new Instance(this);
+  },
+  updated(this: KotobaHook): void {
+    this.kotoba?.syncAttributes();
   },
   destroyed(this: KotobaHook): void {
     this.kotoba?.destroy();

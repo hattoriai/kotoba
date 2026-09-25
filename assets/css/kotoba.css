@@ -491,9 +491,10 @@ div.kotoba-unknown {
   box-shadow: var(--kotoba-focus-ring, 0 0 0 2px var(--kotoba-accent));
 }
 
-/* Screen reader announcements */
+/* Visually hidden: the live region and the LiveView file input */
 
-.kotoba-live {
+.kotoba-live,
+.kotoba-visually-hidden {
   position: absolute;
   width: 1px;
   height: 1px;

@@ -39,3 +39,20 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `--kotoba-icon-size`.
 - Links in the editor follow the server's link rule: relative URLs are kept,
   and the allowed schemes come from the hook's `data-link-schemes` attribute.
+- `Kotoba.Components`: `<.kotoba>` (the editor for a form field, with the
+  hidden input, prompts, app nodes and a LiveView file input),
+  `<.kotoba_toolbar>` (a custom toolbar) and `<.kotoba_content>` (the cached
+  HTML, or a new rendering for another policy or cache version).
+- `Kotoba.Live`: `handle_prompt/3`, `consume_uploads/4`, `push_content/3`,
+  `insert_node/4`, `set_readonly/3`, `focus/2` and `remove_marker/3`. Every
+  push carries the editor id.
+- `Kotoba.Prompts`: prompt lists (`[people: &search/1]` or
+  `[{"@", :people, &search/1}]`) and their result items.
+- `Kotoba.Storage` (a behaviour for file stores), `Kotoba.Storage.Local` (files
+  on disk) and `Kotoba.Storage.Local.Plug` (serves them, read only).
+- `Kotoba.Attachments`: checks the content type of an uploaded file from its
+  bytes, and reads the size of PNG, JPEG, GIF and WebP images.
+- The hook sends the editor id with `kotoba:change` and `kotoba:prompt`,
+  handles `remove_marker`, puts an attachment in place of its own upload
+  marker (`insert_node` with a `ref`), and reads a new `data-readonly` from a
+  LiveView patch.

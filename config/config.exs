@@ -28,3 +28,15 @@ if config_env() == :dev do
       env: %{"NODE_PATH" => nil}
     ]
 end
+
+if config_env() == :test do
+  config :logger, level: :warning
+  config :phoenix, :json_library, JSON
+
+  config :kotoba, KotobaTest.Endpoint,
+    secret_key_base: String.duplicate("kotoba-test-secret-key-base-", 4),
+    live_view: [signing_salt: "kotoba-test-salt"],
+    pubsub_server: KotobaTest.PubSub,
+    render_errors: [formats: [html: KotobaTest.ErrorHTML], layout: false],
+    server: false
+end

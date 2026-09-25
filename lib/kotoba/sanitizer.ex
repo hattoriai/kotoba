@@ -131,11 +131,29 @@ defmodule Kotoba.Sanitizer do
   defp check_scheme(url, opts) do
     case Regex.run(@scheme, url, capture: :all_but_first) do
       nil -> url
-      [scheme] -> if String.downcase(scheme) in schemes(opts), do: url
+      [scheme] -> if String.downcase(scheme) in allowed_schemes(opts), do: url
     end
   end
 
-  defp schemes(opts) do
+  @doc """
+  Returns the allowed link schemes, in lower case.
+
+  The editor gets the same list (see `Kotoba.Components.kotoba/1`), so that
+  it keeps the links that the server keeps.
+
+  ## Options
+
+    * `:schemes` - the allowed schemes. The default comes from
+      `config :kotoba, allowed_link_schemes:`, else `~w(http https mailto)`.
+
+  ## Examples
+
+      iex> Kotoba.Sanitizer.allowed_schemes(schemes: ["HTTPS", "tel"])
+      ["https", "tel"]
+
+  """
+  @spec allowed_schemes(keyword()) :: [String.t()]
+  def allowed_schemes(opts \\ []) do
     opts
     |> Keyword.get_lazy(:schemes, fn ->
       Application.get_env(:kotoba, :allowed_link_schemes, @default_schemes)

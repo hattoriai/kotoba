@@ -3,8 +3,13 @@
 // Lexical's DRAG_DROP_PASTE command. In both cases the hook puts an upload
 // marker at the caret for each file and hands the files to the LiveView file
 // input (`data-upload`) with LiveView's `track-uploads` event. When the
-// server has stored a file, it pushes `insert_node` with an attachment node,
-// which takes the place of the oldest marker.
+// server has stored a file, it pushes `insert_node` with an attachment node
+// and the upload entry's `ref`, which takes the place of that file's marker
+// (or of the oldest marker, when there is no `ref`). When the upload fails,
+// the server pushes `remove_marker` with the entry's `ref`.
+//
+// LiveView gives each File a `_phxRef` when it tracks it; the entry's `ref`
+// on the server is the same string.
 
 import { DRAG_DROP_PASTE } from "@lexical/rich-text";
 import {
@@ -26,8 +31,13 @@ import { $createUploadMarkerNode, $isUploadMarkerNode } from "./nodes/internal";
 export interface Uploads {
   enabled: boolean;
   open(): void;
-  /** Puts a node in place of the oldest upload marker, or at the selection. */
-  $insert(node: LexicalNode): void;
+  /**
+   * Puts a node in place of the upload marker for the entry `ref`, else of the
+   * oldest upload marker, else at the selection.
+   */
+  $insert(node: LexicalNode, ref?: string): void;
+  /** Removes the upload marker for the entry `ref`. */
+  remove(ref: string): void;
   /** Forgets the upload markers (for example after `set_content`). */
   reset(): void;
   dispose(): void;
@@ -53,9 +63,32 @@ export function $insertAtSelection(node: LexicalNode): void {
   $insertNodes([node]);
 }
 
+interface Marker {
+  key: NodeKey;
+  file: File;
+}
+
+function entryRef(file: File): string | undefined {
+  const ref = (file as File & { _phxRef?: unknown })._phxRef;
+  return typeof ref === "string" ? ref : undefined;
+}
+
 export function createUploads(editor: LexicalEditor, options: UploadOptions): Uploads {
   const { target } = options;
-  let markers: NodeKey[] = [];
+  let markers: Marker[] = [];
+
+  // Takes the marker for `ref` (or the oldest one, without a `ref`) out of the
+  // list, and returns it when it is still in the document.
+  const $takeMarker = (ref: string | undefined): LexicalNode | null => {
+    while (markers.length > 0) {
+      const index = ref === undefined ? 0 : markers.findIndex((marker) => entryRef(marker.file) === ref);
+      if (index === -1) return null;
+      const [marker] = markers.splice(index, 1);
+      const node = marker === undefined ? null : $getNodeByKey(marker.key);
+      if ($isUploadMarkerNode(node) && node.isAttached()) return node;
+    }
+    return null;
+  };
 
   const picker = document.createElement("input");
   picker.type = "file";
@@ -79,7 +112,7 @@ export function createUploads(editor: LexicalEditor, options: UploadOptions): Up
         for (const file of files) {
           const marker = $createUploadMarkerNode(file.name);
           $insertAtSelection(marker);
-          markers.push(marker.getKey());
+          markers.push({ key: marker.getKey(), file });
         }
       },
       { tag: "history-merge" },
@@ -123,22 +156,25 @@ export function createUploads(editor: LexicalEditor, options: UploadOptions): Up
       syncPicker();
       picker.click();
     },
-    $insert(node: LexicalNode) {
-      while (markers.length > 0) {
-        const key = markers.shift() as NodeKey;
-        const marker = $getNodeByKey(key);
-        if ($isUploadMarkerNode(marker) && marker.isAttached()) {
-          if (node.isInline()) {
-            marker.replace(node);
-          } else {
-            marker.selectPrevious();
-            marker.remove();
-            $insertNodes([node]);
-          }
-          return;
-        }
+    $insert(node: LexicalNode, ref?: string) {
+      const marker = (ref === undefined ? null : $takeMarker(ref)) ?? $takeMarker(undefined);
+      if (marker === null) {
+        $insertAtSelection(node);
+      } else if (node.isInline()) {
+        marker.replace(node);
+      } else {
+        marker.selectPrevious();
+        marker.remove();
+        $insertNodes([node]);
       }
-      $insertAtSelection(node);
+    },
+    remove(ref: string) {
+      editor.update(
+        () => {
+          $takeMarker(ref)?.remove();
+        },
+        { tag: "history-merge" },
+      );
     },
     reset() {
       markers = [];

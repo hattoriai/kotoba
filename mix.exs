@@ -13,7 +13,10 @@ defmodule Kotoba.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
-      dialyzer: [plt_add_apps: [:mix, :ex_unit], plt_file: {:no_warn, "priv/plts/project.plt"}],
+      dialyzer: [
+        plt_add_apps: [:mix, :ex_unit, :esbuild],
+        plt_file: {:no_warn, "priv/plts/project.plt"}
+      ],
       package: package(),
       docs: docs(),
       description: description(),
@@ -41,6 +44,7 @@ defmodule Kotoba.MixProject do
       {:ecto, "~> 3.13"},
       {:esbuild, "~> 0.10", only: :dev, runtime: false},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
+      {:lazy_html, "~> 0.1", only: :test},
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_view, "~> 1.2"},
