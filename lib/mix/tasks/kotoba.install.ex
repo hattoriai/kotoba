@@ -20,7 +20,9 @@ defmodule Mix.Tasks.Kotoba.Install do
       with a comment that shows the directory config for
       `config/runtime.exs`.
 
-  Then it prints the esbuild note (the app's esbuild must resolve `kotoba`
+  Then it prints the `Kotoba.Storage.Local` directory config for
+  `config/runtime.exs` and `config/dev.exs` (the adapter needs a `:root`
+  before the first upload), the esbuild note (the app's esbuild must resolve `kotoba`
   from `deps/` through `NODE_PATH`) and the router line for
   `Kotoba.Storage.Local.Plug`.
 
@@ -55,7 +57,7 @@ defmodule Mix.Tasks.Kotoba.Install do
     if Enum.all?(results, &(&1 == :unchanged)) do
       Mix.shell().info("Kotoba is already installed. Nothing changed.")
     else
-      notes()
+      notes(app)
     end
   end
 
@@ -99,7 +101,7 @@ defmodule Mix.Tasks.Kotoba.Install do
     "Add the storage config to config/config.exs:\n\n" <> indent(Edits.config_block(app))
   end
 
-  defp notes do
+  defp notes(app) do
     node_path? =
       case File.read(@config) do
         {:ok, source} -> Edits.node_path?(source)
@@ -121,6 +123,17 @@ defmodule Mix.Tasks.Kotoba.Install do
     Mix.shell().info("""
 
     #{esbuild}
+
+    Kotoba.Storage.Local needs a directory for the files. Give it one in
+    config/runtime.exs, an absolute path outside the release:
+
+        config :kotoba, Kotoba.Storage.Local,
+          root: System.get_env("KOTOBA_UPLOADS", "/var/lib/#{app}/uploads"),
+          url_prefix: "/uploads/kotoba"
+
+    and one for development in config/dev.exs:
+
+        config :kotoba, Kotoba.Storage.Local, root: Path.expand("../priv/uploads/kotoba", __DIR__)
 
     For the Sumi theme, remove the comment marks around the kotoba-sumi.css
     import in assets/css/app.css.

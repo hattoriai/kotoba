@@ -213,8 +213,9 @@ The editor loads the module with `import()`, so serve it as an ES module,
 for example with an esbuild profile
 (`js/kotoba/nodes/*.js --bundle --format=esm --outdir=../priv/static/assets/kotoba/nodes`).
 The module exports a factory, `export default (lexical) => class ...`, so
-the node class extends the editor's own copy of Lexical. The editor refuses
-a node type that is the same as a built-in type.
+the node class extends the editor's own copy of Lexical. A node cannot
+have the type of a built-in node: the editor refuses it, and
+`Kotoba.Nodes.registry/1` raises `ArgumentError`.
 
 Put the node in `config :kotoba, nodes:`: `Kotoba.Content` renders its
 cache when it casts, with the configured nodes. A node that is not

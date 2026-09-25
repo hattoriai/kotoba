@@ -5,7 +5,7 @@ defmodule Mix.Tasks.Kotoba.Gen.NodeTest do
   alias Kotoba.{Document, Renderer}
   alias Mix.Tasks.Kotoba.Gen.Node, as: GenNode
 
-  @app "kotoba_gen_probe"
+  @app "gen_probe"
 
   setup do
     root = Path.join(System.tmp_dir!(), "kotoba-gen-node-#{System.unique_integer([:positive])}")
@@ -119,31 +119,31 @@ defmodule Mix.Tasks.Kotoba.Gen.NodeTest do
   test "writes the Elixir module, the JavaScript module and the test", %{root: root} do
     run(root, ["Callout"])
 
-    assert File.exists?(Path.join(root, "lib/kotoba_gen_probe/kotoba/nodes/callout.ex"))
+    assert File.exists?(Path.join(root, "lib/gen_probe/kotoba/nodes/callout.ex"))
     assert File.exists?(Path.join(root, "assets/js/kotoba/nodes/callout.js"))
-    assert File.exists?(Path.join(root, "test/kotoba_gen_probe/kotoba/nodes/callout_test.exs"))
+    assert File.exists?(Path.join(root, "test/gen_probe/kotoba/nodes/callout_test.exs"))
 
     output = messages()
-    assert output =~ "* creating lib/kotoba_gen_probe/kotoba/nodes/callout.ex"
-    assert output =~ "config :kotoba, nodes: [KotobaGenProbe.Kotoba.Nodes.Callout]"
+    assert output =~ "* creating lib/gen_probe/kotoba/nodes/callout.ex"
+    assert output =~ "config :kotoba, nodes: [GenProbe.Kotoba.Nodes.Callout]"
 
     assert output =~
-             ~s|nodes={[{KotobaGenProbe.Kotoba.Nodes.Callout, ~p"/assets/kotoba/nodes/callout.js"}]}|
+             ~s|nodes={[{GenProbe.Kotoba.Nodes.Callout, ~p"/assets/kotoba/nodes/callout.js"}]}|
 
     assert output =~ "esbuild"
   end
 
   test "the decorator module compiles, parses and renders", %{root: root} do
     run(root, ["Callout"])
-    source = read(root, "lib/kotoba_gen_probe/kotoba/nodes/callout.ex")
+    source = read(root, "lib/gen_probe/kotoba/nodes/callout.ex")
 
     assert Code.format_string!(source, locals_without_parens: [field: 2, field: 3])
            |> IO.iodata_to_binary()
            |> Kernel.<>("\n") == source
 
     module = compile!(source, "callout.ex")
-    assert module == KotobaGenProbe.Kotoba.Nodes.Callout
-    assert module.type() == "kotoba-gen-probe-callout"
+    assert module == GenProbe.Kotoba.Nodes.Callout
+    assert module.type() == "gen-probe-callout"
     assert module.kind() == :decorator
     assert Enum.map(module.fields(), & &1.key) == ["label", "version"]
 
@@ -159,12 +159,12 @@ defmodule Mix.Tasks.Kotoba.Gen.NodeTest do
     assert {:ok, parsed} = Document.parse(doc, nodes: [module])
 
     assert parsed |> Renderer.to_html() |> Phoenix.HTML.safe_to_string() ==
-             ~s(<div class="kotoba-gen-probe-callout">&lt;i&gt;Note&lt;/i&gt;</div>)
+             ~s(<div class="gen-probe-callout">&lt;i&gt;Note&lt;/i&gt;</div>)
 
     assert Renderer.to_text(parsed) == "<i>Note</i>"
     assert Renderer.to_markdown(parsed) == "\\<i>Note\\</i>"
 
-    assert run_generated_test!(read(root, "test/kotoba_gen_probe/kotoba/nodes/callout_test.exs")) ==
+    assert run_generated_test!(read(root, "test/gen_probe/kotoba/nodes/callout_test.exs")) ==
              2
   end
 
@@ -177,9 +177,9 @@ defmodule Mix.Tasks.Kotoba.Gen.NodeTest do
 
       result ->
         assert result == %{
-                 "type" => "kotoba-gen-probe-callout",
+                 "type" => "gen-probe-callout",
                  "json" => %{
-                   "type" => "kotoba-gen-probe-callout",
+                   "type" => "gen-probe-callout",
                    "version" => 1,
                    "label" => "Hi"
                  },
@@ -193,29 +193,29 @@ defmodule Mix.Tasks.Kotoba.Gen.NodeTest do
   test "an inline node goes in a paragraph", %{root: root} do
     run(root, ["StatusChip", "--kind", "inline"])
 
-    source = read(root, "lib/kotoba_gen_probe/kotoba/nodes/status_chip.ex")
+    source = read(root, "lib/gen_probe/kotoba/nodes/status_chip.ex")
     module = compile!(source, "status_chip.ex")
-    assert module.type() == "kotoba-gen-probe-status-chip"
+    assert module.type() == "gen-probe-status-chip"
     assert module.kind() == :inline
     assert source =~ ~s|Renderer.tag("span"|
 
-    test_source = read(root, "test/kotoba_gen_probe/kotoba/nodes/status_chip_test.exs")
+    test_source = read(root, "test/gen_probe/kotoba/nodes/status_chip_test.exs")
     assert test_source =~ ~s("paragraph")
     assert run_generated_test!(test_source) == 2
 
     case js_check!(root, "assets/js/kotoba/nodes/status_chip.js") do
       :skipped -> :ok
-      result -> assert %{"inline" => true, "type" => "kotoba-gen-probe-status-chip"} = result
+      result -> assert %{"inline" => true, "type" => "gen-probe-status-chip"} = result
     end
   end
 
   test "a block node", %{root: root} do
     run(root, ["Panel", "--kind", "block"])
 
-    module = compile!(read(root, "lib/kotoba_gen_probe/kotoba/nodes/panel.ex"), "panel.ex")
+    module = compile!(read(root, "lib/gen_probe/kotoba/nodes/panel.ex"), "panel.ex")
     assert module.kind() == :block
 
-    assert run_generated_test!(read(root, "test/kotoba_gen_probe/kotoba/nodes/panel_test.exs")) ==
+    assert run_generated_test!(read(root, "test/gen_probe/kotoba/nodes/panel_test.exs")) ==
              2
 
     case js_check!(root, "assets/js/kotoba/nodes/panel.js") do
@@ -251,11 +251,56 @@ defmodule Mix.Tasks.Kotoba.Gen.NodeTest do
     refute File.exists?(Path.join(root, "assets"))
   end
 
-  test "takes the app from the Mix project without --app", %{root: root} do
-    File.cd!(root, fn -> GenNode.run(["Callout"]) end)
+  defmodule ProbeProject do
+    def project, do: [app: :probe_app, version: "0.1.0"]
+  end
 
-    source = read(root, "lib/kotoba/kotoba/nodes/callout.ex")
-    assert source =~ "defmodule Kotoba.Kotoba.Nodes.Callout do"
-    assert source =~ ~s(type: "kotoba-callout")
+  test "takes the app from the Mix project without --app", %{root: root} do
+    Mix.Project.push(ProbeProject)
+
+    try do
+      File.cd!(root, fn -> GenNode.run(["Callout"]) end)
+    after
+      Mix.Project.pop()
+    end
+
+    source = read(root, "lib/probe_app/kotoba/nodes/callout.ex")
+    assert source =~ "defmodule ProbeApp.Kotoba.Nodes.Callout do"
+    assert source =~ ~s(type: "probe-app-callout")
+  end
+
+  test "refuses an app whose types would start with kotoba-", %{root: root} do
+    for app <- ["kotoba", "kotoba_web"] do
+      assert_raise Mix.Error, ~r/would start with "kotoba-", which Kotoba reserves/, fn ->
+        File.cd!(root, fn -> GenNode.run(["Unknown", "--app", app]) end)
+      end
+    end
+
+    # The Kotoba project itself.
+    assert_raise Mix.Error, ~r/"kotoba"/, fn ->
+      File.cd!(root, fn -> GenNode.run(["Callout"]) end)
+    end
+
+    refute File.exists?(Path.join(root, "assets"))
+  end
+
+  test "the generated comments show the key option" do
+    [{_ex, ex}, {_js, js}, _test] =
+      GenNode.files(GenNode.assigns("my_app", "Callout", :decorator))
+
+    assert ex =~ ~s(field :ref_id, :string, key: "refId")
+    assert js =~ ~s(key: "refId")
+    assert js =~ "export default (lexical) =>"
+  end
+
+  test "prints the watcher and the aliases for the esbuild profile", %{root: root} do
+    run(root, ["Callout"])
+    output = messages()
+
+    assert output =~
+             ~S|kotoba_nodes: {Esbuild, :install_and_run, [:kotoba_nodes, ~w(--sourcemap=inline --watch)]}|
+
+    assert output =~ ~s("esbuild kotoba_nodes")
+    assert output =~ ~s("esbuild kotoba_nodes --minify")
   end
 end

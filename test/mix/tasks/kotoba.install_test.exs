@@ -63,6 +63,11 @@ defmodule Mix.Tasks.Kotoba.InstallTest do
     for {_fixture, path} <- @files, do: assert(output =~ "* updating #{path}")
     assert output =~ "+   hooks: {...colocatedHooks, Kotoba},"
     assert output =~ "NODE_PATH"
+    assert output =~ ~s|root: System.get_env("KOTOBA_UPLOADS", "/var/lib/kotoba/uploads")|
+
+    assert output =~
+             ~S|config :kotoba, Kotoba.Storage.Local, root: Path.expand("../priv/uploads/kotoba", __DIR__)|
+
     assert output =~ ~s(forward "/uploads/kotoba", Kotoba.Storage.Local.Plug, at: "/")
   end
 

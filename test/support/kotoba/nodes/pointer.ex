@@ -30,7 +30,7 @@ defmodule KotobaTest.Nodes.Pointer do
 
     case href(node, opts) do
       nil -> label
-      href -> "[" <> label <> "](" <> Kotoba.Markdown.url(href) <> ")"
+      href -> "[" <> label <> "](" <> Renderer.escape_markdown_url(href) <> ")"
     end
   end
 

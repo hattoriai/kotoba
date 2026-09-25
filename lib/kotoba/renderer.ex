@@ -213,6 +213,20 @@ defmodule Kotoba.Renderer do
   def escape_markdown(text) when is_binary(text), do: Kotoba.Markdown.escape(text)
 
   @doc """
+  Returns a URL for the destination of a Markdown link, for a
+  `c:Kotoba.Node.render_markdown/2` callback. Spaces and parentheses are
+  percent-encoded. Check the URL with `Kotoba.Sanitizer.link_url/2` first.
+
+  ## Examples
+
+      iex> Kotoba.Renderer.escape_markdown_url("/docs/a page (draft)")
+      "/docs/a%20page%20%28draft%29"
+
+  """
+  @spec escape_markdown_url(String.t()) :: String.t()
+  def escape_markdown_url(url) when is_binary(url), do: Kotoba.Markdown.url(url)
+
+  @doc """
   Returns the safe HTML of an unknown node of `type`.
   """
   @spec unknown_html(String.t()) :: Phoenix.HTML.safe()

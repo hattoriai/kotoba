@@ -7,7 +7,7 @@ defmodule Kotoba.NodesTest do
   doctest Kotoba.Nodes.Attachment
 
   defmodule Chip do
-    use Kotoba.Node, type: "mention", kind: :decorator
+    use Kotoba.Node, type: "chip", kind: :decorator
     field :label, :string, required: true
 
     @impl Kotoba.Node
@@ -15,6 +15,40 @@ defmodule Kotoba.NodesTest do
 
     @impl Kotoba.Node
     def render_text(node, _opts), do: node.label
+  end
+
+  defmodule OtherChip do
+    use Kotoba.Node, type: "chip", kind: :decorator
+
+    @impl Kotoba.Node
+    def render_html(_node, _opts), do: ""
+
+    @impl Kotoba.Node
+    def render_text(_node, _opts), do: ""
+  end
+
+  defmodule FakeMention do
+    use Kotoba.Node, type: "mention", kind: :decorator
+
+    @impl Kotoba.Node
+    def render_html(_node, _opts), do: ""
+
+    @impl Kotoba.Node
+    def render_text(_node, _opts), do: ""
+  end
+
+  defmodule FakeUnknown do
+    use Kotoba.Node, type: "kotoba-unknown", kind: :decorator
+
+    @impl Kotoba.Node
+    def render_html(_node, _opts), do: ""
+
+    @impl Kotoba.Node
+    def render_text(_node, _opts), do: ""
+  end
+
+  setup do
+    on_exit(fn -> Application.delete_env(:kotoba, :nodes) end)
   end
 
   test "the registry maps each built-in type to its module" do
@@ -29,15 +63,45 @@ defmodule Kotoba.NodesTest do
     assert registry["listitem"] == Nodes.ListItem
   end
 
-  test "a given node replaces the built-in node of the same type" do
-    assert Nodes.registry([Chip])["mention"] == Chip
+  test "the registry adds a given node" do
+    assert Nodes.registry([Chip])["chip"] == Chip
+    assert Nodes.registry([Chip])["mention"] == Nodes.Mention
   end
 
   test "the registry reads the application config" do
     Application.put_env(:kotoba, :nodes, [Chip])
-    on_exit(fn -> Application.delete_env(:kotoba, :nodes) end)
+    assert Nodes.registry()["chip"] == Chip
+  end
 
-    assert Nodes.registry()["mention"] == Chip
+  test "a given node replaces a configured node of the same type" do
+    Application.put_env(:kotoba, :nodes, [Chip])
+    assert Nodes.registry([OtherChip])["chip"] == OtherChip
+  end
+
+  test "the reserved types are the built-in types and kotoba-unknown" do
+    assert "paragraph" in Nodes.reserved_types()
+    assert "mention" in Nodes.reserved_types()
+    assert "kotoba-unknown" in Nodes.reserved_types()
+  end
+
+  test "the registry refuses a given node with a built-in type" do
+    message =
+      ~s(Kotoba.NodesTest.FakeMention has the type "mention", which is reserved for a built-in node; give it another type)
+
+    assert_raise ArgumentError, message, fn -> Nodes.registry([FakeMention]) end
+  end
+
+  test "the registry refuses a configured node with a built-in type" do
+    Application.put_env(:kotoba, :nodes, [FakeMention])
+    assert_raise ArgumentError, ~r/FakeMention has the type "mention"/, fn -> Nodes.registry() end
+
+    assert_raise ArgumentError, ~r/reserved for a built-in node/, fn ->
+      Kotoba.Content.cast(%{"type" => "root", "children" => []})
+    end
+  end
+
+  test "the registry refuses the editor's kotoba-unknown type" do
+    assert_raise ArgumentError, ~r/"kotoba-unknown"/, fn -> Nodes.registry([FakeUnknown]) end
   end
 
   test "the registry refuses a module that is not a node" do

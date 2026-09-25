@@ -19,7 +19,12 @@ defmodule Kotoba.Install.Edits do
   @doc false
   @spec app_js(String.t()) :: result()
   def app_js(source) when is_binary(source) do
-    import? = Regex.match?(~r/import\s*\{[^}]*\bKotoba\b[^}]*\}\s*from\s*["']kotoba["']/, source)
+    # Any import that binds `Kotoba`, from "kotoba" or from another path.
+    import? =
+      Regex.match?(
+        ~r/^import\s*(?:\{[^}]*\bKotoba\b[^}]*\}|Kotoba\b[^\n]*?)\s*from\s*["']/m,
+        source
+      )
 
     case hooks(source) do
       :error ->
@@ -48,14 +53,46 @@ defmodule Kotoba.Install.Edits do
       """
   end
 
+  # After the line where the last top-level import statement ends (an
+  # import can span several lines), else at the top.
   defp add_js_import(source) do
-    lines = String.split(source, "\n")
+    code = mask(source)
 
-    case last_index(lines, &Regex.match?(~r/^import\b/, &1)) do
-      nil -> @js_import <> "\n" <> source
-      index -> lines |> List.insert_at(index + 1, @js_import) |> Enum.join("\n")
+    case Regex.scan(~r/^import(?=[\s{*"'])/m, code, return: :index) |> List.last() do
+      nil ->
+        @js_import <> "\n" <> source
+
+      [{at, _length}] ->
+        at = import_end(code, at)
+
+        line_end =
+          if newline = first_match(~r/\n/, rest(code, at)),
+            do: at + elem(newline, 0),
+            else: byte_size(code)
+
+        splice(source, line_end, 0, "\n" <> @js_import)
     end
   end
+
+  # The index after the module specifier of the import at `at`: its first
+  # string, whose text the mask keeps as spaces between the quotes.
+  defp import_end(code, at) do
+    case Regex.run(~r/["']/, rest(code, at), return: :index) do
+      [{open, 1}] ->
+        quote_char = binary_part(code, at + open, 1)
+        from = at + open + 1
+
+        case :binary.match(code, quote_char, scope: {from, byte_size(code) - from}) do
+          {close, 1} -> close + 1
+          :nomatch -> byte_size(code)
+        end
+
+      nil ->
+        byte_size(code)
+    end
+  end
+
+  defp rest(code, at), do: binary_part(code, at, byte_size(code) - at)
 
   # Finds the `hooks` of the options of `new LiveSocket(...)`, and adds
   # `Kotoba` to them. Returns `{:ok, source}` (the same source when Kotoba
@@ -68,13 +105,37 @@ defmodule Kotoba.Install.Edits do
          close when is_integer(close) <- close(code, open) do
       options = binary_part(code, open + 1, close - open - 1)
 
-      case first_match(~r/(?<![\w$.])hooks\s*:\s*/, top_level(options)) do
-        nil -> {:ok, insert_hooks_key(source, open, options)}
-        {at, length} -> hooks_value(source, code, open + 1 + at + length)
+      top = top_level(options)
+
+      cond do
+        other_hooks_key?(source, open + 1, top) ->
+          :error
+
+        match = first_match(~r/(?<![\w$.])hooks\s*:\s*/, top) ->
+          hooks_at(source, code, open, match)
+
+        true ->
+          {:ok, insert_hooks_key(source, open, options)}
       end
     else
       _other -> :error
     end
+  end
+
+  defp hooks_at(source, code, open, {at, length}),
+    do: hooks_value(source, code, open + 1 + at + length)
+
+  # A quoted `"hooks":` key, or the `hooks` shorthand, at the top level of
+  # the options: the edit cannot see through it, so the person adds Kotoba.
+  defp other_hooks_key?(source, offset, top) do
+    quoted =
+      ~r/(["'])\s{5}\1\s*:/
+      |> Regex.scan(top, return: :index)
+      |> Enum.any?(fn [{at, _length} | _group] ->
+        Regex.match?(~r/^["']hooks["']/, binary_part(source, offset + at, 7))
+      end)
+
+    quoted or Regex.match?(~r/(?:^|,)\s*hooks\s*(?:,|$)/, top)
   end
 
   # The first `{` among the arguments of the call, before its `)`.
@@ -234,27 +295,21 @@ defmodule Kotoba.Install.Edits do
   @doc false
   @spec app_css(String.t()) :: result()
   def app_css(source) when is_binary(source) do
-    lines = String.split(source, "\n")
-    kotoba? = Regex.match?(~r/deps\/kotoba\/priv\/static\/kotoba\.css/, source)
-    sumi? = String.contains?(source, "kotoba-sumi.css")
+    # The Sumi line comes only with the kotoba.css import, so a person who
+    # removed it does not get it back.
+    if Regex.match?(~r/kotoba\/priv\/static\/kotoba\.css/, source) do
+      :unchanged
+    else
+      lines = String.split(source, "\n")
 
-    new =
-      cond do
-        kotoba? and sumi? ->
-          source
+      added =
+        if String.contains?(source, "kotoba-sumi.css"),
+          do: [@css_import],
+          else: [@css_import, @sumi_import]
 
-        kotoba? ->
-          index = last_index(lines, &String.contains?(&1, "kotoba/priv/static/kotoba.css"))
-          lines |> List.insert_at(index + 1, @sumi_import) |> Enum.join("\n")
-
-        true ->
-          added = if sumi?, do: [@css_import], else: [@css_import, @sumi_import]
-          at = css_insert_at(lines)
-          {head, tail} = Enum.split(lines, at)
-          Enum.join(head ++ added ++ tail, "\n")
-      end
-
-    if new == source, do: :unchanged, else: {:changed, new}
+      {head, tail} = Enum.split(lines, css_insert_at(lines))
+      {:changed, Enum.join(head ++ added ++ tail, "\n")}
+    end
   end
 
   @doc false

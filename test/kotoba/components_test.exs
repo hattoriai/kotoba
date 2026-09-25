@@ -250,7 +250,9 @@ defmodule Kotoba.ComponentsTest do
 
     test "renders again with extra nodes" do
       content = %{Content.from_markdown("Hello") | html: "<p>cached</p>"}
-      assert content_html(content: content, nodes: [{Kotoba.Nodes.Mention, "/m.js"}]) =~ "Hello"
+
+      assert content_html(content: content, nodes: [{KotobaTest.Nodes.Pointer, "/m.js"}]) =~
+               "Hello"
     end
 
     test "escapes text on a re-render" do

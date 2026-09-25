@@ -4,8 +4,11 @@ defmodule Kotoba.Nodes do
 
   The registry maps each Lexical node type to the module that reads it. It
   has the built-in nodes, the nodes in the `:nodes` key of the `:kotoba`
-  application config, and the nodes that the caller gives. A later entry
-  replaces an earlier entry with the same type:
+  application config, and the nodes that the caller gives. An app node
+  cannot have the type of a built-in node (or `"kotoba-unknown"`, see
+  `reserved_types/0`): the registry raises `ArgumentError`, as the editor
+  refuses such a node. A caller node replaces a configured node with the
+  same type:
 
       config :kotoba, nodes: [MyApp.Nodes.Pointer]
 
@@ -38,6 +41,8 @@ defmodule Kotoba.Nodes do
     Nodes.Mention
   ]
 
+  @editor_unknown "kotoba-unknown"
+
   @typedoc "A map from a node type to its module."
   @type registry :: %{String.t() => module()}
 
@@ -46,20 +51,44 @@ defmodule Kotoba.Nodes do
   def built_in, do: @built_in
 
   @doc """
+  Returns the node types that an app node cannot have: the types of the
+  built-in nodes, and `"kotoba-unknown"`, the editor's own node for a type
+  it does not know.
+  """
+  @spec reserved_types() :: [String.t()]
+  def reserved_types, do: Enum.map(@built_in, & &1.type()) ++ [@editor_unknown]
+
+  @doc """
   Returns the registry for a list of extra node modules.
 
-  Raises `ArgumentError` when a module does not use `Kotoba.Node`.
+  Raises `ArgumentError` when a module does not use `Kotoba.Node`, or when
+  the type of a configured node or of a node in `nodes` is a reserved type
+  (see `reserved_types/0`).
   """
   @spec registry([module()]) :: registry()
   def registry(nodes \\ []) when is_list(nodes) do
     configured = Application.get_env(:kotoba, :nodes, [])
+    built_in = Map.new(@built_in, &{&1.type(), &1})
 
-    Map.new(@built_in ++ configured ++ nodes, fn module ->
-      unless Kotoba.Node.node_module?(module) do
-        raise ArgumentError, "#{inspect(module)} is not a Kotoba.Node module"
-      end
-
-      {module.type(), module}
+    Enum.reduce(configured ++ nodes, built_in, fn module, registry ->
+      type = app_type!(module)
+      Map.put(registry, type, module)
     end)
+  end
+
+  defp app_type!(module) do
+    unless Kotoba.Node.node_module?(module) do
+      raise ArgumentError, "#{inspect(module)} is not a Kotoba.Node module"
+    end
+
+    type = module.type()
+
+    if type in reserved_types() do
+      raise ArgumentError,
+            "#{inspect(module)} has the type #{inspect(type)}, which is reserved for a " <>
+              "built-in node; give it another type"
+    end
+
+    type
   end
 end

@@ -93,12 +93,20 @@ defmodule Mix.Tasks.Kotoba.Gen.Node do
           to_string(Mix.Project.config()[:app] || Mix.raise("Give the app name with --app"))
       end
 
-    if Regex.match?(~r/^[a-z][a-z0-9_]*$/, app),
-      do: app,
-      else:
+    cond do
+      not Regex.match?(~r/^[a-z][a-z0-9_]*$/, app) ->
         Mix.raise(
           "The app name must be a lower-case Elixir atom such as my_app, got: #{inspect(app)}"
         )
+
+      String.starts_with?(String.replace(app, "_", "-") <> "-", "kotoba-") ->
+        Mix.raise(
+          "The node types of the app #{inspect(app)} would start with \"kotoba-\", which Kotoba reserves; give another name with --app"
+        )
+
+      true ->
+        app
+    end
   end
 
   @doc false
@@ -150,7 +158,10 @@ defmodule Mix.Tasks.Kotoba.Gen.Node do
       The `#{b.type}` node, kind `#{inspect(b.kind)}`.
 
       Its editor half is `#{b.js_path}`,
-      whose `exportJSON()` writes the JSON keys of the fields below.
+      whose `exportJSON()` writes the JSON keys of the fields below. A field
+      with more than one word takes a camelCase key, for example
+      `field :ref_id, :string, key: "refId"`, and the JavaScript uses the
+      same key.
       \"\"\"
       use Kotoba.Node, type: "#{b.type}", kind: #{inspect(b.kind)}
 
@@ -178,7 +189,9 @@ defmodule Mix.Tasks.Kotoba.Gen.Node do
     //
     // Kotoba calls this factory with the editor's copy of Lexical, so the
     // class extends the same DecoratorNode as the built-in nodes. The keys of
-    // exportJSON() are the JSON keys of the fields of the Elixir module.
+    // exportJSON() are the JSON keys of the fields of the Elixir module: a
+    // field with more than one word takes `key: "refId"` there, and the same
+    // "refId" key here.
     // decorate() returns an HTMLElement, which Kotoba puts in the editor.
     export default (lexical) =>
       class #{b.class} extends lexical.DecoratorNode {
@@ -311,8 +324,17 @@ defmodule Mix.Tasks.Kotoba.Gen.Node do
             cd: Path.expand("../assets", __DIR__)
           ]
 
-    and run it in the "assets.build" and "assets.deploy" aliases
-    ("esbuild kotoba_nodes") and in the endpoint watchers of config/dev.exs.
+    a watcher in the endpoint config of config/dev.exs:
+
+        watchers: [
+          kotoba_nodes: {Esbuild, :install_and_run, [:kotoba_nodes, ~w(--sourcemap=inline --watch)]},
+          ...
+        ]
+
+    and the profile in the aliases of mix.exs:
+
+        "assets.build": [..., "esbuild kotoba_nodes"],
+        "assets.deploy": [..., "esbuild kotoba_nodes --minify", "phx.digest"]
     """
   end
 end

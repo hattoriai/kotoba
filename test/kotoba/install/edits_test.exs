@@ -66,6 +66,52 @@ defmodule Kotoba.Install.EditsTest do
       assert Edits.app_js(source) == :unchanged
     end
 
+    test "adds the import after a last import on several lines" do
+      source =
+        ~s(import {Socket} from "phoenix"\nimport {\n  a,\n  b\n} from "x";\n\n) <>
+          socket("{hooks: {}}")
+
+      assert {:changed, new} = Edits.app_js(source)
+
+      assert new =~
+               ~s(import {\n  a,\n  b\n} from "x";\nimport { Kotoba } from "kotoba"\n\nconst liveSocket)
+
+      assert Edits.app_js(new) == :unchanged
+    end
+
+    test "adds the import after an import that ends with a semicolon" do
+      source = ~s(import "phoenix_html";\nimport {Socket} from "phoenix";\n) <> socket("{}")
+      assert {:changed, new} = Edits.app_js(source)
+      assert new =~ ~s(import {Socket} from "phoenix";\nimport { Kotoba } from "kotoba"\nconst)
+    end
+
+    test "puts the import at the top when there is no import" do
+      assert {:changed, new} = Edits.app_js(socket("{}"))
+      assert new == ~s(import { Kotoba } from "kotoba"\n) <> socket("{hooks: {Kotoba}}")
+    end
+
+    test "is not misled by an import in a comment or a string" do
+      source = ~s(// import {x} from "y"\nconst s = "\\nimport z"\n) <> socket("{}")
+      assert {:changed, new} = Edits.app_js(source)
+      assert String.starts_with?(new, ~s(import { Kotoba } from "kotoba"\n// import))
+    end
+
+    test "sees an import of Kotoba from another path" do
+      source = ~s(import {Kotoba} from "../../deps/kotoba"\n) <> socket("{}")
+      assert {:changed, new} = Edits.app_js(source)
+      assert new == ~s(import {Kotoba} from "../../deps/kotoba"\n) <> socket("{hooks: {Kotoba}}")
+    end
+
+    test "gives the lines to add for a quoted hooks key or the hooks shorthand" do
+      for options <- [~s({"hooks": Hooks}), ~s({'hooks': {}}), "{params, hooks}", "{hooks}"] do
+        assert {:manual, _text} = Edits.app_js(socket(options)), options
+      end
+
+      assert {:changed, new} = Edits.app_js(socket("{hooks: hooks}"))
+      assert new =~ "hooks: {...hooks, Kotoba}"
+      assert {:changed, _new} = Edits.app_js(socket(~s({params: {"hooks": 1}})))
+    end
+
     test "is not misled by strings and comments" do
       source =
         ~s|// new LiveSocket("/live", Socket, {hooks: {Kotoba}})\n| <>
@@ -112,12 +158,9 @@ defmodule Kotoba.Install.EditsTest do
     end
 
     test "adds only what is missing" do
+      # A person who removed the Sumi line does not get it back.
       source = ~s(@import "../../deps/kotoba/priv/static/kotoba.css";\nbody {}\n)
-      assert {:changed, new} = Edits.app_css(source)
-
-      assert new ==
-               ~s(@import "../../deps/kotoba/priv/static/kotoba.css";\n) <>
-                 ~s(/* @import "../../deps/kotoba/priv/static/kotoba-sumi.css"; */\nbody {}\n)
+      assert Edits.app_css(source) == :unchanged
 
       source = ~s(@import "../../deps/kotoba/priv/static/kotoba-sumi.css";\n)
       assert {:changed, new} = Edits.app_css(source)
