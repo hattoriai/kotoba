@@ -82,3 +82,6 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   also right after a Shift+Arrow key.
 - A development server (`mix dev`, `dev.exs`) and Playwright browser tests
   (`e2e/`, `mix test.e2e`).
+- The Hex package lists its four bundle files by name, and
+  `mix kotoba.build` empties `priv/static` first, so other build output
+  never goes into the package. The bundles have no source maps.

@@ -1,18 +1,27 @@
 import { execFileSync } from "node:child_process";
-import { resolve } from "node:path";
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join, resolve } from "node:path";
 
 import { expect, test } from "@playwright/test";
 
 const root = resolve(__dirname, "../..");
 
 test("the package can be required and imported from Node", () => {
-  const script = `
-    const cjs = Object.keys(require("kotoba")).sort().join(",");
-    import("kotoba").then((esm) => console.log(cjs + "|" + Object.keys(esm).sort().join(",")));
-  `;
-  const output = execFileSync(process.execPath, ["-e", script], {
-    cwd: root,
-    env: { ...process.env, NODE_PATH: resolve(root, "..") },
-  });
-  expect(output.toString().trim()).toBe("AttachmentNode,Kotoba,MentionNode|AttachmentNode,Kotoba,MentionNode");
+  // A project with the package in node_modules, whatever the name of the
+  // checkout directory.
+  const project = mkdtempSync(join(tmpdir(), "kotoba-package-"));
+  try {
+    mkdirSync(join(project, "node_modules"));
+    symlinkSync(root, join(project, "node_modules", "kotoba"), "dir");
+
+    const script = `
+      const cjs = Object.keys(require("kotoba")).sort().join(",");
+      import("kotoba").then((esm) => console.log(cjs + "|" + Object.keys(esm).sort().join(",")));
+    `;
+    const output = execFileSync(process.execPath, ["-e", script], { cwd: project });
+    expect(output.toString().trim()).toBe("AttachmentNode,Kotoba,MentionNode|AttachmentNode,Kotoba,MentionNode");
+  } finally {
+    rmSync(project, { recursive: true, force: true });
+  }
 });

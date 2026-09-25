@@ -62,6 +62,24 @@ test("the formdata event puts the current document in a phx-change", async ({ pa
   await expect(page.locator("#validated-text")).toHaveText("Changed text");
 });
 
+test("the hidden input holds the current document after a server patch of the form", async ({ page }) => {
+  const editable = await openEditor(page);
+  await editable.click();
+  await page.keyboard.type("Kept after the patch");
+  await expect(page.locator("#change-count")).not.toHaveText("0");
+  const typed = await readDocument(page);
+
+  // The readonly toggle renders the component again, and the patch sets the
+  // hidden input to the value that the server rendered (an empty document).
+  await page.getByRole("button", { name: "Readonly" }).click();
+  await expect(page.locator("#post_body_editor")).toHaveAttribute("data-readonly", "true");
+  await page.getByRole("button", { name: "Readonly" }).click();
+  await expect(page.locator("#post_body_editor")).toHaveAttribute("data-readonly", "false");
+
+  // No typing after the patch: the value is the hook's own write.
+  expect((await readDocument(page)).root).toEqual(typed.root);
+});
+
 test("Enter in the editor does not submit the form", async ({ page }) => {
   const editable = await openEditor(page);
   await editable.click();

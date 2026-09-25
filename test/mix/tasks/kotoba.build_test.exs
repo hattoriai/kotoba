@@ -6,7 +6,6 @@ defmodule Mix.Tasks.Kotoba.BuildTest do
   @root Path.expand("../../..", __DIR__)
   @static Path.join(@root, "priv/static")
   @files ~w(kotoba.esm.js kotoba.cjs.js kotoba.css kotoba-sumi.css)
-  @maps ~w(kotoba.esm.js.map kotoba.cjs.js.map)
   @exports ~w(AttachmentNode Kotoba MentionNode)
 
   @moduletag timeout: 600_000
@@ -16,8 +15,11 @@ defmodule Mix.Tasks.Kotoba.BuildTest do
   end
 
   setup_all do
-    # Files from an earlier build must not make the test pass.
-    for file <- @files ++ @maps, do: File.rm(Path.join(@static, file))
+    # Files from an earlier build must not make the test pass, and a stray
+    # file must be gone after the build.
+    for file <- @files, do: File.rm(Path.join(@static, file))
+    File.mkdir_p!(Path.join(@static, "stray"))
+    File.write!(Path.join(@static, "stray/leftover.js"), "")
 
     mix = System.find_executable("mix") || flunk("mix is not on the path")
 
@@ -37,11 +39,15 @@ defmodule Mix.Tasks.Kotoba.BuildTest do
   } do
     assert status == 0, "mix kotoba.build failed:\n" <> output
 
-    for file <- @files ++ @maps do
+    for file <- @files do
       path = Path.join(@static, file)
       assert File.regular?(path), "#{file} is missing"
       assert File.stat!(path).size > 0, "#{file} is empty"
     end
+  end
+
+  test "priv/static holds only the four files of the package" do
+    assert @static |> File.ls!() |> Enum.sort() == Enum.sort(@files)
   end
 
   test "the ESM bundle exports the hook and the node classes" do

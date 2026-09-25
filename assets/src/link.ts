@@ -8,7 +8,9 @@ import {
   $createRangeSelectionFromDom,
   $getNodeByKey,
   $getSelection,
+  $isElementNode,
   $isRangeSelection,
+  $isTextNode,
   $setSelection,
   COMMAND_PRIORITY_NORMAL,
   KEY_DOWN_COMMAND,
@@ -89,7 +91,8 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
   const toggle = (url: string | null): void => {
     const selection = kept;
     editor.update(() => {
-      if (selection !== null && $isAttached(selection)) $setSelection(selection.clone());
+      // Else the current selection.
+      if (selection !== null && $isValid(selection)) $setSelection(selection.clone());
       $toggleLink(url);
     });
     options.announce(url === null ? "Link removed" : "Link applied");
@@ -220,11 +223,16 @@ export function $domSelection(editor: LexicalEditor): RangeSelection | null {
   return $createRangeSelectionFromDom(dom, editor);
 }
 
-function $isAttached(selection: RangeSelection): boolean {
-  return (
-    $getNodeByKey(selection.anchor.key)?.isAttached() === true &&
-    $getNodeByKey(selection.focus.key)?.isAttached() === true
-  );
+// A kept selection is still valid when both points are in the document and
+// in range: a server push while the form is open can remove, split or
+// shorten a text node.
+function $isValid(selection: RangeSelection): boolean {
+  return [selection.anchor, selection.focus].every((point) => {
+    const node = $getNodeByKey(point.key);
+    if (node === null || !node.isAttached()) return false;
+    if (point.type === "text") return $isTextNode(node) && point.offset <= node.getTextContentSize();
+    return $isElementNode(node) && point.offset <= node.getChildrenSize();
+  });
 }
 
 // Places a floating element under the DOM selection, inside the host.

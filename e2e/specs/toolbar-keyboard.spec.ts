@@ -71,6 +71,29 @@ test("a toolbar button from the keyboard formats the kept selection", async ({ p
   await expect(page.locator("#post_body_editor .kotoba-live")).toHaveText("Italic on");
 });
 
+test("a toolbar command uses the selection that the page shows, before Lexical reads it", async ({ page }) => {
+  const editable = await openEditor(page);
+  await editable.click();
+  await page.keyboard.type("select the last word");
+  await expectNodes(page, "text", 1);
+
+  // In one task: select "word" in the DOM, then press Bold. Lexical has not
+  // had its selectionchange yet.
+  await editable.evaluate((element) => {
+    const text = element.querySelector("[data-lexical-text]")!.firstChild!;
+    const length = text.textContent!.length;
+    window.getSelection()!.setBaseAndExtent(text, length - 4, text, length);
+    (document.querySelector("#post_body_editor [data-kotoba-command=bold]") as HTMLButtonElement).click();
+  });
+
+  await expect(editable.locator("strong")).toHaveText("word");
+  const texts = await nodesOfType(page, "text");
+  expect(texts.map((node) => [node.text, node.format])).toEqual([
+    ["select the last ", 0],
+    ["word", 1],
+  ]);
+});
+
 test("a block button from the keyboard changes the block of the selection", async ({ page }) => {
   const editable = await openEditor(page);
   await editable.click();

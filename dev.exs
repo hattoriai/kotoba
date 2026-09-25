@@ -5,6 +5,14 @@
 # node (`KotobaDev.Nodes.Tag`, made with `mix kotoba.gen.node`). The browser
 # tests in e2e/ run against it.
 #
+# The node modules of dev/assets are built into tmp/dev/nodes and served at
+# /assets/nodes; they never go to priv/static, which holds only the files of
+# the package.
+#
+# The bundle and the node modules rebuild and the page reloads on a change.
+# `dev/lib` is loaded once when the server starts: restart `mix dev` after a
+# change there.
+#
 # Environment:
 #
 #   * PORT - the HTTP port (4099).
@@ -47,8 +55,8 @@ Application.put_env(:kotoba, KotobaDev.Endpoint,
   live_reload: [
     patterns: [
       ~r"priv/static/.*\.(js|css)$",
-      ~r"lib/kotoba/.*\.ex$",
-      ~r"dev/lib/.*\.ex$"
+      ~r"tmp/dev/nodes/.*\.js$",
+      ~r"lib/kotoba/.*\.ex$"
     ]
   ]
 )
@@ -211,6 +219,10 @@ defmodule KotobaDev.EditorLive do
   Query params: `sample` starts with the sample document; `uploads=reverse`
   stores the finished uploads in reverse order, so that the attachments
   reach the editor in the opposite order of their markers.
+
+  "Hold uploads" keeps the finished uploads pending (not stored) until
+  Release. "Reject next upload" makes the next upload that Release stores
+  fail, so the server removes its marker.
   """
   use Phoenix.LiveView
 
@@ -233,7 +245,9 @@ defmodule KotobaDev.EditorLive do
        changes: 0,
        validated: 0,
        validated_text: "",
-       reverse: params["uploads"] == "reverse"
+       reverse: params["uploads"] == "reverse",
+       hold: false,
+       reject_next: false
      )
      |> allow_upload(:body,
        accept: ~w(.png .jpg .jpeg .gif .webp .pdf),
@@ -284,11 +298,29 @@ defmodule KotobaDev.EditorLive do
       <button type="button" id="insert-tag" phx-click="insert_tag">Insert tag</button>
     </div>
 
+    <div class="row" role="group" aria-label="Uploads">
+      <label>
+        <input type="checkbox" id="hold-uploads" phx-click="toggle_hold" checked={@hold} />
+        Hold uploads
+      </label>
+      <label>
+        <input type="checkbox" id="reject-next" phx-click="toggle_reject" checked={@reject_next} />
+        Reject next upload
+      </label>
+      <button type="button" id="release-uploads" phx-click="release">Release</button>
+    </div>
+
+    <p :if={message = Phoenix.Flash.get(@flash, :error)} id="flash-error" role="alert">
+      {message}
+    </p>
+
     <dl>
       <dt>Changes</dt>
       <dd id="change-count">{@changes}</dd>
       <dt>Form changes</dt>
       <dd id="validate-count">{@validated}</dd>
+      <dt>Finished uploads, not stored</dt>
+      <dd id="held-count">{Enum.count(@uploads.body.entries, & &1.done?)}</dd>
       <dt>Text in the last form change</dt>
       <dd id="validated-text">{@validated_text}</dd>
     </dl>
@@ -311,12 +343,13 @@ defmodule KotobaDev.EditorLive do
       |> update(:validated, &(&1 + 1))
       |> assign(validated_text: posted_text(params))
 
-    {:noreply, if(socket.assigns.reverse, do: socket, else: consume(socket))}
+    {:noreply,
+     if(socket.assigns.reverse or socket.assigns.hold, do: socket, else: consume(socket))}
   end
 
   def handle_event("save", %{"post" => %{"body" => body}}, socket) do
     case Kotoba.Content.cast(body) do
-      {:ok, content} -> {:noreply, assign(socket, stored: content)}
+      {:ok, content} -> {:noreply, socket |> clear_flash() |> assign(stored: content)}
       :error -> {:noreply, put_flash(socket, :error, "The document is not valid")}
     end
   end
@@ -339,6 +372,15 @@ defmodule KotobaDev.EditorLive do
   def handle_event("focus", _params, socket),
     do: {:noreply, Kotoba.Live.focus(socket, @editor)}
 
+  def handle_event("toggle_hold", _params, socket),
+    do: {:noreply, update(socket, :hold, &(not &1))}
+
+  def handle_event("toggle_reject", _params, socket),
+    do: {:noreply, update(socket, :reject_next, &(not &1))}
+
+  def handle_event("release", _params, socket),
+    do: {:noreply, socket |> assign(hold: false) |> release()}
+
   def handle_event("insert_tag", _params, socket),
     do:
       {:noreply, Kotoba.Live.insert_node(socket, @editor, %KotobaDev.Nodes.Tag{label: "urgent"})}
@@ -354,12 +396,32 @@ defmodule KotobaDev.EditorLive do
   defp posted_text(_params), do: ""
 
   defp handle_progress(:body, %{done?: true}, socket) do
-    {:noreply, if(socket.assigns.reverse, do: consume_reversed(socket), else: consume(socket))}
+    cond do
+      socket.assigns.hold -> {:noreply, socket}
+      socket.assigns.reverse -> {:noreply, consume_reversed(socket)}
+      true -> {:noreply, consume(socket)}
+    end
   end
 
   defp handle_progress(:body, _entry, socket), do: {:noreply, socket}
 
   defp consume(socket), do: Kotoba.Live.consume_uploads(socket, :body, @editor)
+
+  # Stores the held uploads in the order of their entries. With "Reject next
+  # upload", the key function gives no key for the first of them, so it is
+  # not stored and its marker is removed (`Kotoba.Live.consume_uploads/4`).
+  defp release(socket) do
+    reject =
+      with true <- socket.assigns.reject_next,
+           %{ref: ref} <- Enum.find(socket.assigns.uploads.body.entries, & &1.done?),
+           do: ref
+
+    key = fn entry, type -> if entry.ref != reject, do: Storage.key(entry.client_name, type) end
+
+    socket
+    |> assign(reject_next: socket.assigns.reject_next and reject == nil)
+    |> Kotoba.Live.consume_uploads(:body, @editor, key: key)
+  end
 
   # Waits for every entry, then stores them last first. Each attachment
   # carries its entry's ref, so it still takes the place of its own marker.
@@ -558,7 +620,8 @@ defmodule KotobaDev.Endpoint do
     plug(Phoenix.CodeReloader)
   end
 
-  # The editor bundle, its style sheets and the node modules.
+  # The node modules, then the editor bundle and its style sheets.
+  plug(Plug.Static, at: "/assets/nodes", from: Path.expand("tmp/dev/nodes", __DIR__))
   plug(Plug.Static, at: "/assets", from: Path.expand("priv/static", __DIR__))
   plug(Plug.Static, at: "/vendor/phoenix", from: {:phoenix, "priv/static"})
   plug(Plug.Static, at: "/vendor/phoenix_live_view", from: {:phoenix_live_view, "priv/static"})

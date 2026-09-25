@@ -3,7 +3,9 @@ import { defineConfig, devices } from "@playwright/test";
 // The browser tests run against the development server (`mix dev`, see
 // dev.exs). The web server command builds the bundle and the dev node
 // modules first, and starts the server without watchers or live reload.
-const port = Number(process.env.PORT ?? 4099);
+// It has its own port (4098, or E2E_PORT), so that a `mix dev` with
+// watchers on 4099 is never the server of a run.
+const port = Number(process.env.E2E_PORT ?? 4098);
 const baseURL = `http://127.0.0.1:${port}`;
 
 export default defineConfig({

@@ -246,9 +246,10 @@ built files are not in the repository; the Hex package includes them.
 for another port). It runs `dev.exs`: a Phoenix endpoint with the editor in
 a form, the `@` prompt, uploads to `tmp/uploads`, an app node made with
 `mix kotoba.gen.node` (in `dev/`), and buttons that send each server event.
-esbuild watchers rebuild the bundle and the node modules, and the page
-reloads when they change. Run `mix kotoba.build` once before the first
-`mix dev`, for the style sheets.
+esbuild watchers rebuild the bundle and the node modules (into
+`tmp/dev/nodes`, not into the package), and the page reloads when they
+change. Restart `mix dev` after a change in `dev/lib`. Run
+`mix kotoba.build` once before the first `mix dev`, for the style sheets.
 
 The browser tests in `e2e/` use Playwright with Chromium. Install the
 browser once:
@@ -259,8 +260,9 @@ cd e2e && npm ci && npx playwright install chromium
 
 Then run them from the repository root with `mix test.e2e`. It runs
 `npm ci` in `e2e/` when `e2e/node_modules` is missing, and `npm test`,
-which builds the bundle and starts the development server on port 4099
-(or uses a server that already runs there).
+which builds the bundle and starts its own development server, without
+watchers, on port 4098 (set `E2E_PORT` for another port). A `mix dev` on
+port 4099 can keep running.
 
 ## License
 

@@ -40,10 +40,15 @@ export async function settle(page: Page): Promise<void> {
   await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => setTimeout(resolve, 0))));
 }
 
+/** Moves the caret to the end of the document: Cmd+Down on macOS, Ctrl+End elsewhere. */
+export async function documentEnd(page: Page): Promise<void> {
+  await page.keyboard.press(process.platform === "darwin" ? "Meta+ArrowDown" : "Control+End");
+}
+
 /** Focuses the end of the editor. */
 export async function focusEnd(page: Page, editable: Locator): Promise<void> {
   await editable.focus();
-  await page.keyboard.press(`${MOD}+End`);
+  await documentEnd(page);
 }
 
 /** Reads the document from the hidden input. */
@@ -83,6 +88,8 @@ export async function selectBack(page: Page, count: number): Promise<void> {
 
 /** Pastes plain text into the focused editor with a real paste event. */
 export async function pasteText(page: Page, editable: Locator, text: string): Promise<void> {
+  // A paste event right after Shift+Arrow would race Lexical's selectionchange.
+  await settle(page);
   await editable.evaluate((element, value) => {
     const data = new DataTransfer();
     data.setData("text/plain", value);

@@ -13,11 +13,16 @@ defmodule Mix.Tasks.Kotoba.Build do
 
     1. Runs `npm ci` in `assets/` when `assets/node_modules` is missing or
        `assets/package-lock.json` changed since the last install.
-    2. Runs esbuild (the `esbuild` Mix package) with the `:kotoba_esm` and
+    2. Empties `priv/static`, so that it holds only the files of this
+       build.
+    3. Runs esbuild (the `esbuild` Mix package) with the `:kotoba_esm` and
        `:kotoba_cjs` profiles, which write `priv/static/kotoba.esm.js` and
-       `priv/static/kotoba.cjs.js` with their source maps.
-    3. Copies `assets/css/kotoba.css` and `assets/css/kotoba-sumi.css` to
+       `priv/static/kotoba.cjs.js`.
+    4. Copies `assets/css/kotoba.css` and `assets/css/kotoba-sumi.css` to
        `priv/static/`.
+
+  After the task, `priv/static` holds exactly these four files, which are
+  the files of the Hex package.
 
   It needs `npm` on the path and the `:esbuild` dependency, which is
   available in the `:dev` environment.
@@ -47,6 +52,7 @@ defmodule Mix.Tasks.Kotoba.Build do
     {:ok, _apps} = Application.ensure_all_started(:esbuild)
 
     install_packages()
+    File.rm_rf!(@static)
     File.mkdir_p!(@static)
     Enum.each(@profiles, &bundle/1)
     Enum.each(@stylesheets, &copy_stylesheet/1)

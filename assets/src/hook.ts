@@ -478,6 +478,11 @@ class Instance {
   // document after each patch; the input then gets the current document
   // again. (The server replaces the document with `set_content`, not
   // through the input.)
+  //
+  // The `formdata` listener of `watchForm` is the guaranteed path: every
+  // phx-change, phx-submit, form recovery and native submit builds its data
+  // with `new FormData(form)`. `phx:update` is not a documented LiveView
+  // event; it serves only code that reads `input.value` directly.
   private watchPatches(): void {
     const input = this.config.input;
     if (input === null) return;

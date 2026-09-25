@@ -277,15 +277,22 @@ function registerListTab(editor: LexicalEditor): () => void {
     (event: KeyboardEvent) => {
       const selection = $getSelection();
       if (!$isRangeSelection(selection)) return false;
-      const item = $getNearestNodeOfType(selection.anchor.getNode(), ListItemNode);
-      if (item === null) return false;
 
-      const indent = item.getIndent();
-      if (event.shiftKey && indent === 0) return false;
+      // Every selected block must be in a list item: a selection from a list
+      // into a paragraph is left to the browser.
+      const items = new Set<ListItemNode>();
+      for (const node of [selection.anchor.getNode(), ...selection.getNodes()]) {
+        const item = $getNearestNodeOfType(node, ListItemNode);
+        if (item === null) return false;
+        items.add(item);
+      }
+      const indents = [...items].map((item) => item.getIndent());
+
+      if (event.shiftKey && Math.min(...indents) === 0) return false;
 
       event.preventDefault();
       if (event.shiftKey) return editor.dispatchCommand(OUTDENT_CONTENT_COMMAND, undefined);
-      if (indent >= MAX_LIST_INDENT) return true;
+      if (Math.max(...indents) >= MAX_LIST_INDENT) return true;
       return editor.dispatchCommand(INDENT_CONTENT_COMMAND, undefined);
     },
     COMMAND_PRIORITY_EDITOR,

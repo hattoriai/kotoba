@@ -66,8 +66,22 @@ defmodule Kotoba.MixProject do
       name: "kotoba",
       licenses: ["Apache-2.0"],
       links: %{"GitHub" => @source_url},
-      files:
-        ~w(lib priv/static package.json mix.exs .formatter.exs README.md CHANGELOG.md LICENSE NOTICE)
+      # The four bundle files by name: other build output in priv/static
+      # never goes into the package.
+      files: ~w(
+        lib
+        priv/static/kotoba.esm.js
+        priv/static/kotoba.cjs.js
+        priv/static/kotoba.css
+        priv/static/kotoba-sumi.css
+        package.json
+        mix.exs
+        .formatter.exs
+        README.md
+        CHANGELOG.md
+        LICENSE
+        NOTICE
+      )
     ]
   end
 

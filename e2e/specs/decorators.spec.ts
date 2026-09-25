@@ -2,7 +2,10 @@ import { expect, test } from "@playwright/test";
 
 import { expectNodes, openEditor, png, sendFiles, settle } from "./support";
 
-test("Backspace selects a mention and then deletes it", async ({ page }) => {
+// In Lexical 0.51 an inline decorator next to the caret goes with one key
+// press; a block decorator is selected first (a click, or an arrow key),
+// then deleted.
+test("Backspace deletes a mention before the caret", async ({ page }) => {
   const editable = await openEditor(page);
   await editable.click();
   await page.keyboard.type("Hi @grace");
@@ -10,22 +13,20 @@ test("Backspace selects a mention and then deletes it", async ({ page }) => {
   await page.keyboard.press("Enter");
   await expectNodes(page, "mention", 1);
 
-  // The space after the mention, then the mention.
+  // The space after the mention.
   await settle(page);
   await page.keyboard.press("Backspace");
+  await expect(editable.locator(".kotoba-mention")).toHaveCount(1);
+
+  // Then the mention.
   await settle(page);
   await page.keyboard.press("Backspace");
-  const mention = editable.locator(".kotoba-mention");
-  if ((await mention.count()) === 1) {
-    await expect(mention).toHaveClass(/kotoba-selected/);
-    await page.keyboard.press("Backspace");
-  }
-  await expect(mention).toHaveCount(0);
+  await expect(editable.locator(".kotoba-mention")).toHaveCount(0);
   await expectNodes(page, "mention", 0);
   await expect(editable).toHaveText("Hi ");
 });
 
-test("Delete removes an inline app node after the caret", async ({ page }) => {
+test("Delete deletes an inline app node after the caret", async ({ page }) => {
   const editable = await openEditor(page);
   await editable.click();
   await page.keyboard.type("A ");
@@ -38,11 +39,10 @@ test("Delete removes an inline app node after the caret", async ({ page }) => {
   await page.keyboard.press("ArrowRight");
   await settle(page);
   await page.keyboard.press("Delete");
-  const tag = editable.locator(".dev-tag");
-  if ((await tag.count()) === 1) await page.keyboard.press("Delete");
 
-  await expect(tag).toHaveCount(0);
+  await expect(editable.locator(".dev-tag")).toHaveCount(0);
   await expectNodes(page, "dev-tag", 0);
+  await expect(editable).toHaveText("A ");
 });
 
 test("a clicked attachment is selected and Backspace deletes it", async ({ page }) => {
