@@ -2,7 +2,7 @@
 // selected text. Enter applies the URL, an empty URL removes the link, and
 // Escape closes the form.
 
-import { $isLinkNode, TOGGLE_LINK_COMMAND } from "@lexical/link";
+import { $isLinkNode, $toggleLink } from "@lexical/link";
 import { $findMatchingParent } from "@lexical/utils";
 import {
   $getSelection,
@@ -13,7 +13,7 @@ import {
   type LexicalEditor,
 } from "lexical";
 
-import { isLinkUrl } from "./editor";
+import { isAllowedLinkUrl, normalizeUrl } from "./links";
 
 export interface LinkForm {
   open(): void;
@@ -22,6 +22,7 @@ export interface LinkForm {
 
 interface LinkOptions {
   host: HTMLElement;
+  linkSchemes: readonly string[];
   idPrefix: string;
   announce(message: string): void;
 }
@@ -32,14 +33,6 @@ export function $selectedLinkUrl(): string | null {
   if (!$isRangeSelection(selection)) return null;
   const link = $findMatchingParent(selection.anchor.getNode(), $isLinkNode);
   return $isLinkNode(link) ? link.getURL() : null;
-}
-
-/** Adds a scheme to a URL typed without one: "example.com" is "https://example.com". */
-export function normalizeUrl(input: string): string {
-  const url = input.trim();
-  if (url === "" || isLinkUrl(url)) return url;
-  if (/^[^\s@/]+@[^\s@/]+\.[^\s@/]+$/.test(url)) return `mailto:${url}`;
-  return `https://${url.replace(/^\/+/, "")}`;
 }
 
 export function createLinkForm(editor: LexicalEditor, options: LinkOptions): LinkForm {
@@ -83,9 +76,11 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
     editor.focus();
   };
 
+  // `$toggleLink` directly: TOGGLE_LINK_COMMAND takes only absolute URLs
+  // (its check also guards paste-to-link), and the form takes relative ones.
   const toggle = (url: string | null): void => {
     editor.update(() => {
-      editor.dispatchCommand(TOGGLE_LINK_COMMAND, url);
+      $toggleLink(url);
     });
     options.announce(url === null ? "Link removed" : "Link applied");
     close();
@@ -117,10 +112,10 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
     const url = normalizeUrl(input.value);
     if (url === "") {
       toggle(null);
-    } else if (isLinkUrl(url)) {
+    } else if (isAllowedLinkUrl(url, options.linkSchemes)) {
       toggle(url);
     } else {
-      options.announce("Enter an http, https or mailto URL");
+      options.announce(`Enter a relative URL or a URL that starts with ${options.linkSchemes.join(", ")}`);
       input.focus();
     }
   };

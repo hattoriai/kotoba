@@ -62,6 +62,7 @@ import { AttachmentNode } from "./nodes/attachment";
 import { registerDecorators } from "./nodes/decorator";
 import { UnknownNode, UploadMarkerNode } from "./nodes/internal";
 import { MentionNode } from "./nodes/mention";
+import { isAbsoluteLinkUrl, isAllowedLinkUrl } from "./links";
 import { UNKNOWN_TYPE, UPLOAD_MARKER_TYPE } from "./protocol";
 
 // Every import above has run, so the editor's Prism and its grammars are
@@ -205,21 +206,6 @@ export const MARKDOWN_TRANSFORMERS: Transformer[] = [
   ...TEXT_MATCH_TRANSFORMERS,
 ];
 
-const LINK_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
-
-/** Returns `true` for an absolute http, https or mailto URL. */
-export function isLinkUrl(url: string): boolean {
-  try {
-    return LINK_PROTOCOLS.has(new URL(url.trim()).protocol);
-  } catch {
-    return false;
-  }
-}
-
-function $unwrapUnsafeLink(node: LinkNode): void {
-  if (!isLinkUrl(node.getURL())) $unwrapNode(node);
-}
-
 export interface EditorOptions {
   namespace: string;
   nodes: readonly Klass<LexicalNode>[];
@@ -269,8 +255,20 @@ export function registeredTypes(editor: LexicalEditor): Set<string> {
   return types;
 }
 
+export interface PluginOptions {
+  /** The allowed link schemes, as `Kotoba.Sanitizer` has them. */
+  linkSchemes: readonly string[];
+}
+
 /** Registers the rich text plugins. Returns a function that removes them. */
-export function registerPlugins(editor: LexicalEditor): () => void {
+export function registerPlugins(editor: LexicalEditor, options: PluginOptions): () => void {
+  const { linkSchemes } = options;
+  // A link from a markdown shortcut, pasted HTML or the server that the
+  // server would not keep becomes its text.
+  const $unwrapUnsafeLink = (node: LinkNode): void => {
+    if (!isAllowedLinkUrl(node.getURL(), linkSchemes)) $unwrapNode(node);
+  };
+
   return mergeRegister(
     registerRichText(editor),
     registerHistory(editor, createEmptyHistoryState(), 300),
@@ -279,14 +277,15 @@ export function registerPlugins(editor: LexicalEditor): () => void {
     // Tab indents list items only, so that Tab still moves the focus out of
     // the editor everywhere else. Code blocks handle Tab themselves.
     registerTabIndentation(editor, 6, (node) => $isListItemNode(node)),
-    registerLink(editor, namedSignals({ validateUrl: isLinkUrl, attributes: undefined })),
+    registerLink(
+      editor,
+      namedSignals({ validateUrl: (url: string) => isAbsoluteLinkUrl(url, linkSchemes), attributes: undefined }),
+    ),
     registerAutoLink(editor, {
       changeHandlers: [],
       excludeParents: [(parent) => $isCodeNode(parent)],
       matchers: [autoLinkUrlMatcher, autoLinkEmailMatcher],
     }),
-    // A link from a markdown shortcut or pasted HTML skips validateUrl; a
-    // link whose URL is not allowed becomes its text.
     editor.registerNodeTransform(LinkNode, $unwrapUnsafeLink),
     editor.registerNodeTransform(AutoLinkNode, $unwrapUnsafeLink),
     registerMarkdownShortcuts(editor, MARKDOWN_TRANSFORMERS),

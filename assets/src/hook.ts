@@ -15,6 +15,8 @@
 //   * `data-prompts` - JSON: trigger character → prompt name.
 //   * `data-upload` - the id of the LiveView file input.
 //   * `data-debounce` - milliseconds between `kotoba:change` pushes (300).
+//   * `data-link-schemes` - comma-separated allowed link schemes
+//     ("http,https,mailto"); the same list as the server's sanitizer.
 //
 // The hook pushes (every message has `v: 1`):
 //
@@ -46,6 +48,7 @@ import {
 
 import { createKotobaEditor, registerPlugins, registeredTypes } from "./editor";
 import { createLinkForm, type LinkForm } from "./link";
+import { parseLinkSchemes } from "./links";
 import { loadNodes } from "./nodes/custom";
 import { createPrompts, parseTriggers, type Prompts } from "./prompts";
 import {
@@ -84,6 +87,7 @@ export interface Config {
   prompts: Map<string, string>;
   upload: HTMLInputElement | null;
   debounce: number;
+  linkSchemes: string[];
 }
 
 /** Reads the hook's configuration from the data attributes of its element. */
@@ -102,6 +106,7 @@ export function readConfig(el: HTMLElement): Config {
     prompts: parseTriggers(data.prompts),
     upload: inputById(data.upload),
     debounce: Number.isFinite(debounce) && debounce >= 0 ? debounce : 300,
+    linkSchemes: parseLinkSchemes(data.linkSchemes),
   };
 }
 
@@ -240,9 +245,14 @@ class Instance {
     surface.append(editable, placeholder);
     this.el.append(surface, this.live);
 
-    this.cleanups.push(registerPlugins(editor));
+    this.cleanups.push(registerPlugins(editor, { linkSchemes: this.config.linkSchemes }));
 
-    this.link = createLinkForm(editor, { host: surface, idPrefix: this.id, announce: this.announce });
+    this.link = createLinkForm(editor, {
+      host: surface,
+      linkSchemes: this.config.linkSchemes,
+      idPrefix: this.id,
+      announce: this.announce,
+    });
     this.uploads = createUploads(editor, { host: this.el, target: this.config.upload, announce: this.announce });
 
     const existing =

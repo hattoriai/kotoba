@@ -106,4 +106,4 @@ built files are not in the repository; the Hex package includes them.
 Kotoba is released under the Apache License, Version 2.0. See `LICENSE` for
 the full text.
 
-The toolbar icons are from Lucide (https://lucide.dev), ISC licence.
+The toolbar icons are from Lucide (https://lucide.dev), ISC licence. See `NOTICE`.
