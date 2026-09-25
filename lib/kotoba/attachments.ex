@@ -3,17 +3,31 @@ defmodule Kotoba.Attachments do
   Server-side checks of an uploaded file, before it becomes an attachment
   node.
 
-  The browser's content type is a claim. `describe/2` reads the start of
-  the file:
+  The browser's content type is a claim. `describe/2` keeps only a type
+  that the bytes of the file prove, from a short allow-list of passive
+  types:
 
-    * A PNG, JPEG, GIF or WebP image gets the type that its bytes show, and
-      its width and height when the header has them.
-    * A file that the browser calls an image, but whose bytes are not one
-      of these four formats (an SVG, say), becomes
-      `application/octet-stream`, so that it renders as a download link
-      and not as an image.
-    * Any other file keeps the browser's type when it is a well-formed
-      media type, else it becomes `application/octet-stream`.
+    * PNG, JPEG, GIF and WebP images, from their signatures, with their
+      width and height when the header has them. The browser's claim does
+      not matter: a PNG sent as `text/html` is a PNG.
+    * PDF, from `%PDF-`.
+    * ZIP files (`PK\\x03\\x04`): the Office Open XML and OpenDocument
+      types when the browser claims one of them, else `application/zip`.
+    * The older Office files (the OLE2 signature): `application/msword`,
+      `application/vnd.ms-excel` or `application/vnd.ms-powerpoint` when the
+      browser claims one of them.
+    * `text/plain`, only when the browser claims it and the start of the
+      file is valid UTF-8 with no NUL byte.
+
+  Every other file becomes `application/octet-stream`: `text/html`,
+  `application/xhtml+xml`, `image/svg+xml`, JavaScript, and any type that
+  is not in the list. Such a file renders as a download link, and its
+  storage key ends in `.bin`.
+
+  `extension/1` gives the file extension of each checked type, and
+  `inline?/1` tells which types a browser can show in the page (the
+  images and PDF). Serve every other file with
+  `Content-Disposition: attachment`.
   """
 
   import Bitwise
@@ -23,7 +37,39 @@ defmodule Kotoba.Attachments do
   @octet "application/octet-stream"
   @head 65_536
   @max_name 200
-  @media_type ~r/\A[a-z0-9][a-z0-9!#$&^_.+\-]{0,62}\/[a-z0-9][a-z0-9!#$&^_.+\-]{0,62}\z/
+
+  @extensions %{
+    "image/png" => ".png",
+    "image/jpeg" => ".jpg",
+    "image/gif" => ".gif",
+    "image/webp" => ".webp",
+    "application/pdf" => ".pdf",
+    "text/plain" => ".txt",
+    "application/zip" => ".zip",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => ".docx",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" => ".xlsx",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation" => ".pptx",
+    "application/vnd.oasis.opendocument.text" => ".odt",
+    "application/vnd.oasis.opendocument.spreadsheet" => ".ods",
+    "application/vnd.oasis.opendocument.presentation" => ".odp",
+    "application/msword" => ".doc",
+    "application/vnd.ms-excel" => ".xls",
+    "application/vnd.ms-powerpoint" => ".ppt",
+    @octet => ".bin"
+  }
+
+  @zip_types [
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.oasis.opendocument.text",
+    "application/vnd.oasis.opendocument.spreadsheet",
+    "application/vnd.oasis.opendocument.presentation"
+  ]
+
+  @ole_types ["application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint"]
+
+  @inline ["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf"]
 
   @typedoc "What `describe/2` finds."
   @type description :: %{
@@ -44,12 +90,65 @@ defmodule Kotoba.Attachments do
       {content_type, width, height} =
         case image(head) do
           {type, width, height} -> {type, width, height}
-          nil -> {other_type(client_type), nil, nil}
+          nil -> {other_type(head, claim(client_type)), nil, nil}
         end
 
       {:ok, %{content_type: content_type, bytes: bytes, width: width, height: height}}
     end
   end
+
+  @doc """
+  Returns the file extension of a checked content type. A type that is
+  not in the allow-list gives `".bin"`.
+
+  ## Examples
+
+      iex> Kotoba.Attachments.extension("image/jpeg")
+      ".jpg"
+
+      iex> Kotoba.Attachments.extension("text/html")
+      ".bin"
+
+  """
+  @spec extension(String.t()) :: String.t()
+  def extension(content_type), do: Map.get(@extensions, content_type, ".bin")
+
+  @doc """
+  Returns the checked content type for a file extension (as `extension/1`
+  gives it), or `"application/octet-stream"`.
+
+  ## Examples
+
+      iex> Kotoba.Attachments.content_type(".pdf")
+      "application/pdf"
+
+      iex> Kotoba.Attachments.content_type(".svg")
+      "application/octet-stream"
+
+  """
+  @spec content_type(String.t()) :: String.t()
+  def content_type(extension) do
+    extension = String.downcase(extension)
+
+    Enum.find_value(@extensions, @octet, fn {type, ext} -> if ext == extension, do: type end)
+  end
+
+  @doc """
+  Returns `true` for a checked type that a browser can show in the page:
+  the images and PDF. Serve every other type with
+  `Content-Disposition: attachment`.
+
+  ## Examples
+
+      iex> Kotoba.Attachments.inline?("application/pdf")
+      true
+
+      iex> Kotoba.Attachments.inline?("text/plain")
+      false
+
+  """
+  @spec inline?(String.t()) :: boolean()
+  def inline?(content_type), do: content_type in @inline
 
   @doc """
   Builds an attachment node for a stored file.
@@ -68,13 +167,17 @@ defmodule Kotoba.Attachments do
   end
 
   @doc """
-  Returns a file name for display: control characters removed, at most
+  Returns a file name for display: control and format characters (bidi
+  controls included) removed, at most
   #{@max_name} characters, and `"file"` when nothing is left.
 
   ## Examples
 
       iex> Kotoba.Attachments.clean_name("cat\\u0000.png")
       "cat.png"
+
+      iex> Kotoba.Attachments.clean_name("a\\u202Egnp.exe")
+      "agnp.exe"
 
   """
   @spec clean_name(term()) :: String.t()
@@ -85,7 +188,7 @@ defmodule Kotoba.Attachments do
         else: name |> String.codepoints() |> Enum.filter(&String.valid?/1) |> Enum.join()
 
     name
-    |> String.replace(~r/[\x{0000}-\x{001F}\x{007F}-\x{009F}]/u, "")
+    |> String.replace(~r/[\p{Cc}\p{Cf}]/u, "")
     |> String.trim()
     |> String.slice(0, @max_name)
     |> case do
@@ -105,17 +208,36 @@ defmodule Kotoba.Attachments do
     end
   end
 
-  defp other_type(type) when is_binary(type) do
-    type = type |> String.trim() |> String.downcase()
-
-    cond do
-      String.starts_with?(type, "image/") -> @octet
-      Regex.match?(@media_type, type) -> type
-      true -> @octet
-    end
+  # The browser's type, without parameters, in lower case.
+  defp claim(type) when is_binary(type) do
+    type |> String.split(";", parts: 2) |> hd() |> String.trim() |> String.downcase()
   end
 
-  defp other_type(_type), do: @octet
+  defp claim(_type), do: ""
+
+  defp other_type(<<"%PDF-", _rest::binary>>, _claim), do: "application/pdf"
+
+  defp other_type(<<"PK", 3, 4, _rest::binary>>, claim),
+    do: if(claim in @zip_types, do: claim, else: "application/zip")
+
+  defp other_type(<<0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, _rest::binary>>, claim),
+    do: if(claim in @ole_types, do: claim, else: @octet)
+
+  defp other_type(head, "text/plain") do
+    if text?(head), do: "text/plain", else: @octet
+  end
+
+  defp other_type(_head, _claim), do: @octet
+
+  # The head can end inside a UTF-8 sequence: up to three bytes at the end
+  # may be cut off.
+  defp text?(head) do
+    not String.contains?(head, <<0>>) and
+      Enum.any?(0..min(3, byte_size(head)), fn cut ->
+        String.valid?(binary_part(head, 0, byte_size(head) - cut)) and
+          (cut == 0 or byte_size(head) == @head)
+      end)
+  end
 
   # PNG: the IHDR chunk comes first.
   defp image(<<0x89, "PNG\r\n", 0x1A, "\n", _length::32, "IHDR", w::32, h::32, _rest::binary>>),

@@ -3,19 +3,29 @@ defmodule Kotoba.Storage.Local do
   A `Kotoba.Storage` adapter that keeps files in a directory on the local
   disk.
 
+      # config/config.exs
       config :kotoba, storage: Kotoba.Storage.Local
 
+      # config/runtime.exs
       config :kotoba, Kotoba.Storage.Local,
-        root: "priv/uploads/kotoba",
+        root: System.get_env("KOTOBA_UPLOADS", "/var/lib/my_app/uploads"),
         url_prefix: "/uploads/kotoba"
 
-    * `:root` - the directory for the files (required). A relative path is
-      relative to the current working directory.
+    * `:root` - the directory for the files (required). Give an absolute
+      path outside the release, from `config/runtime.exs`: a relative path
+      is relative to the current working directory, and in a release the
+      files would go into the release directory and be lost on the next
+      deploy.
     * `:url_prefix` - the path at which the files are served. The default
-      is `"/uploads/kotoba"`.
+      is `"/uploads/kotoba"`. When `Kotoba.Storage.Local.Plug` serves the
+      files, this is a path, not a full URL: the plug matches requests
+      under it.
 
-  Serve the files with `Kotoba.Storage.Local.Plug` (or with the host's own
-  static plug). A key is always a relative path under the root: a key that
+  Serve the files with `Kotoba.Storage.Local.Plug`. Any other way to serve
+  them must send `X-Content-Type-Options: nosniff`, a content type from the
+  allow-list of `Kotoba.Attachments`, and `Content-Disposition: attachment`
+  for every type that is not an image or a PDF, as the plug does. A key is
+  always a relative path under the root: a key that
   `Kotoba.Storage.valid_key?/1` refuses gives `{:error, :invalid_key}`, so
   a key cannot reach a file outside the root.
   """

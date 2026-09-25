@@ -131,6 +131,49 @@ defmodule Kotoba.Content do
   defp cast_decoded(%{"root" => _root} = envelope), do: parse(envelope)
   defp cast_decoded(_other), do: :error
 
+  @doc """
+  Returns the document envelope of anything that `cast/1` accepts, with the
+  same checks, but without rendering `:html` and `:text`.
+
+  `Kotoba.Components.kotoba/1` uses it for the hidden input on every
+  render.
+
+  ## Examples
+
+      iex> {:ok, doc} = Kotoba.Content.to_doc(~s({"type": "root", "children": []}))
+      iex> doc["kotoba"]
+      1
+
+      iex> Kotoba.Content.to_doc(42)
+      :error
+
+  """
+  @spec to_doc(term()) :: {:ok, map()} | :error
+  def to_doc(%__MODULE__{doc: doc}), do: {:ok, doc}
+  def to_doc(nil), do: parse_doc(wrap(%{"type" => "root"}))
+  def to_doc(""), do: to_doc(nil)
+
+  def to_doc(json) when is_binary(json) do
+    case JSON.decode(json) do
+      {:ok, decoded} -> to_doc_decoded(decoded)
+      {:error, _reason} -> :error
+    end
+  end
+
+  def to_doc(%{} = map), do: to_doc_decoded(map)
+  def to_doc(_other), do: :error
+
+  defp to_doc_decoded(%{"type" => "root"} = root), do: parse_doc(wrap(root))
+  defp to_doc_decoded(%{"root" => _root} = envelope), do: parse_doc(envelope)
+  defp to_doc_decoded(_other), do: :error
+
+  defp parse_doc(envelope) do
+    case Document.parse(envelope) do
+      {:ok, doc} -> {:ok, Document.to_json(doc)}
+      {:error, _messages} -> :error
+    end
+  end
+
   @impl Ecto.Type
   def dump(%__MODULE__{} = content) do
     {:ok,

@@ -3,8 +3,9 @@ defmodule KotobaTest.EditorLive do
   A LiveView with a Kotoba editor, prompts and uploads, for the
   `Kotoba.Live` tests.
 
-  The query param `storage=failing` stores through
-  `KotobaTest.FailingStorage`.
+  The query param `storage` picks the adapter: `failing` for
+  `KotobaTest.FailingStorage`, `unsafe` for `KotobaTest.UnsafeStorage`,
+  `broken` for `KotobaTest.BrokenStorage`.
   """
   use Phoenix.LiveView
 
@@ -17,7 +18,12 @@ defmodule KotobaTest.EditorLive do
   @impl true
   def mount(params, _session, socket) do
     storage =
-      if params["storage"] == "failing", do: KotobaTest.FailingStorage, else: Kotoba.Storage.Local
+      case params["storage"] do
+        "failing" -> KotobaTest.FailingStorage
+        "unsafe" -> KotobaTest.UnsafeStorage
+        "broken" -> KotobaTest.BrokenStorage
+        _other -> Kotoba.Storage.Local
+      end
 
     {:ok,
      socket
@@ -104,6 +110,34 @@ defmodule KotobaTest.FailingStorage do
 
   @impl true
   def url(key), do: "/failing/" <> key
+
+  @impl true
+  def delete(_key), do: :ok
+end
+
+defmodule KotobaTest.UnsafeStorage do
+  @moduledoc "A `Kotoba.Storage` adapter that returns a URL that is not a safe link."
+  @behaviour Kotoba.Storage
+
+  @impl true
+  def put(_key, _path, _meta), do: {:ok, "javascript:alert(1)"}
+
+  @impl true
+  def url(_key), do: "javascript:alert(1)"
+
+  @impl true
+  def delete(_key), do: :ok
+end
+
+defmodule KotobaTest.BrokenStorage do
+  @moduledoc "A `Kotoba.Storage` adapter whose `put/3` breaks its contract."
+  @behaviour Kotoba.Storage
+
+  @impl true
+  def put(_key, _path, _meta), do: {:ok, nil}
+
+  @impl true
+  def url(key), do: key
 
   @impl true
   def delete(_key), do: :ok

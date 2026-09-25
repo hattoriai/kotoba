@@ -71,6 +71,10 @@ defmodule Kotoba.Components do
       `uploads` is given. The toolbar's attach button, a drop and a paste
       of files hand the files to it.
 
+  The editor always has an accessible name: `aria-labelledby` with
+  `label_id` (the id of a visible label, the best choice), else
+  `aria-label` with `label`, else the field name in words.
+
   Attributes that are not declared (`phx-target`, `aria-describedby`, …) go
   on the editor element. In a LiveComponent, give `phx-target={@myself}`,
   so that the editor's events go to the component.
@@ -87,7 +91,13 @@ defmodule Kotoba.Components do
 
   attr :label_id, :string,
     default: nil,
-    doc: "the id of the element that labels the editor (`aria-labelledby`)"
+    doc:
+      "the id of the element that labels the editor (`aria-labelledby`). Without it, the editor gets `aria-label` from `label`"
+
+  attr :label, :string,
+    default: nil,
+    doc:
+      "the accessible name when there is no `label_id` (`aria-label`). The default is the field name in words, for example \"Body\""
 
   attr :placeholder, :string, default: nil, doc: "the text of an empty editor"
 
@@ -124,6 +134,7 @@ defmodule Kotoba.Components do
         node_urls: node_urls(assigns.nodes),
         triggers: triggers_json(assigns.prompts),
         link_schemes: Enum.join(Sanitizer.allowed_schemes(), ","),
+        aria_label: aria_label(assigns, field),
         upload_id: assigns.uploads && assigns.uploads.ref
       )
 
@@ -143,6 +154,7 @@ defmodule Kotoba.Components do
         data-debounce={@debounce}
         data-link-schemes={@link_schemes}
         aria-labelledby={@label_id}
+        aria-label={@aria_label}
         {@rest}
       >
         {render_slot(@toolbar)}
@@ -155,12 +167,20 @@ defmodule Kotoba.Components do
     """
   end
 
+  # The editor always has an accessible name: the element of `label_id`, an
+  # `aria-label` in the other attributes, `label`, or the field name.
+  defp aria_label(%{label_id: id}, _field) when is_binary(id) and id != "", do: nil
+
+  defp aria_label(assigns, field) do
+    if Map.has_key?(assigns.rest, :"aria-label"),
+      do: nil,
+      else: assigns.label || Phoenix.Naming.humanize(field.field)
+  end
+
+  # No rendering here: this runs on every render of the form.
   defp field_json(value) do
-    doc =
-      case Content.cast(value) do
-        {:ok, %Content{doc: doc}} -> doc
-        :error -> Content.empty().doc
-      end
+    {:ok, doc} =
+      with :error <- Content.to_doc(value), do: Content.to_doc(nil)
 
     JSON.encode!(doc)
   end

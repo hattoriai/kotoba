@@ -150,10 +150,12 @@ The files go to a `Kotoba.Storage` adapter. The local adapter keeps them on
 disk, and `Kotoba.Storage.Local.Plug` serves them:
 
 ```elixir
+# config/config.exs
 config :kotoba, storage: Kotoba.Storage.Local
 
+# config/runtime.exs: an absolute path outside the release
 config :kotoba, Kotoba.Storage.Local,
-  root: "priv/uploads/kotoba",
+  root: System.get_env("KOTOBA_UPLOADS", "/var/lib/my_app/uploads"),
   url_prefix: "/uploads/kotoba"
 ```
 
@@ -161,6 +163,13 @@ config :kotoba, Kotoba.Storage.Local,
 # In the endpoint, before the router:
 plug Kotoba.Storage.Local.Plug
 ```
+
+Kotoba keeps only a content type that the bytes of the file prove (images,
+PDF, plain text, ZIP and Office files); every other file is stored as
+`application/octet-stream` with a `.bin` key. Serve uploads with
+`X-Content-Type-Options: nosniff` and `Content-Disposition: attachment` for
+everything that is not an image or a PDF, as `Kotoba.Storage.Local.Plug`
+does.
 
 For S3 or another store, write a module with the three `Kotoba.Storage`
 callbacks (`put/3`, `url/1`, `delete/1`) and set `config :kotoba, storage:`

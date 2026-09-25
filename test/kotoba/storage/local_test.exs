@@ -20,7 +20,7 @@ defmodule Kotoba.Storage.LocalTest do
   end
 
   test "put/3 copies the file under the key and returns its URL", %{root: root, source: source} do
-    key = Kotoba.Storage.key("notes.txt")
+    key = Kotoba.Storage.key("notes.txt", "text/plain")
 
     assert {:ok, url} = Local.put(key, source, %{name: "notes.txt"})
     assert url == "/files/" <> key

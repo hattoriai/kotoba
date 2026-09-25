@@ -32,8 +32,8 @@ export interface Uploads {
   enabled: boolean;
   open(): void;
   /**
-   * Puts a node in place of the upload marker for the entry `ref`, else of the
-   * oldest upload marker, else at the selection.
+   * Puts a node in place of the upload marker for the entry `ref` (or, with no
+   * `ref`, of the oldest upload marker), else at the selection.
    */
   $insert(node: LexicalNode, ref?: string): void;
   /** Removes the upload marker for the entry `ref`. */
@@ -157,7 +157,9 @@ export function createUploads(editor: LexicalEditor, options: UploadOptions): Up
       picker.click();
     },
     $insert(node: LexicalNode, ref?: string) {
-      const marker = (ref === undefined ? null : $takeMarker(ref)) ?? $takeMarker(undefined);
+      // With a ref, only that upload's marker: when the user removed it, the
+      // node goes to the selection, and another upload keeps its marker.
+      const marker = $takeMarker(ref);
       if (marker === null) {
         $insertAtSelection(node);
       } else if (node.isInline()) {

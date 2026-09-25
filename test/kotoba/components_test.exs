@@ -83,6 +83,19 @@ defmodule Kotoba.ComponentsTest do
       assert attr(html, editor, "data-upload") == nil
       assert attr(html, editor, "data-debounce") == nil
       assert attr(html, editor, "aria-labelledby") == nil
+      assert attr(html, editor, "aria-label") == "Body"
+    end
+
+    test "always has an accessible name" do
+      assert attr(html(field: field(nil), label: "Post body"), "[phx-hook]", "aria-label") ==
+               "Post body"
+
+      html = html(field: field(nil), label_id: "l", label: "Ignored")
+      assert attr(html, "[phx-hook]", "aria-labelledby") == "l"
+      assert attr(html, "[phx-hook]", "aria-label") == nil
+
+      html = html(field: field(nil), "aria-label": "From rest")
+      assert find(html, "[phx-hook]") |> LazyHTML.attribute("aria-label") == ["From rest"]
     end
 
     test "renders every attribute that is given" do

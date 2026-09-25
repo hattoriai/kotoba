@@ -2,6 +2,7 @@ defmodule Kotoba.LiveTest do
   # The local storage root is application config.
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureLog
   import Phoenix.ConnTest
   import Phoenix.LiveViewTest
 
@@ -190,21 +191,36 @@ defmodule Kotoba.LiveTest do
       })
 
       refute Map.has_key?(node, "width")
+      assert node["name"] == "fake.png"
+      assert String.ends_with?(node["key"], "-fake.bin")
     end
 
-    test "removes the marker when the storage fails" do
-      {:ok, view, _html} = live(build_conn(), "/editor?storage=failing")
+    for {storage, reason} <- [
+          {"failing", ":disk_full"},
+          {"unsafe", "unsafe_url"},
+          {"broken", "invalid_storage_result"}
+        ] do
+      test "logs and removes the marker when the #{storage} storage gives no valid attachment" do
+        {:ok, view, _html} = live(build_conn(), "/editor?storage=#{unquote(storage)}")
 
-      upload =
-        file_input(view, "#post-form", :attachments, [
-          %{name: "notes.txt", content: "hello", type: "text/plain"}
-        ])
+        upload =
+          file_input(view, "#post-form", :attachments, [
+            %{name: "notes.txt", content: "hello", type: "text/plain"}
+          ])
 
-      [entry_ref] = entry_refs(upload)
-      render_upload(upload, "notes.txt")
+        [entry_ref] = entry_refs(upload)
 
-      assert_push_event(view, "remove_marker", %{id: @editor, ref: ^entry_ref})
-      refute_push_event(view, "insert_node", %{})
+        log =
+          capture_log(fn ->
+            render_upload(upload, "notes.txt")
+            assert_push_event(view, "remove_marker", %{id: @editor, ref: ^entry_ref})
+          end)
+
+        assert log =~ ~s(the upload "notes.txt" was not stored)
+        assert log =~ unquote(reason)
+        refute_push_event(view, "insert_node", %{})
+        assert Process.alive?(view.pid)
+      end
     end
 
     test "cancels an entry that fails validation and removes its marker", %{view: view} do

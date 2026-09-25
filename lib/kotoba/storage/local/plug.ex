@@ -23,12 +23,14 @@ defmodule Kotoba.Storage.Local.Plug do
 
   ## Responses
 
-    * The content type comes from the file extension.
+    * The content type comes from the file extension, through the allow-list
+      of `Kotoba.Attachments.content_type/1`: an extension that is not in it
+      (`.html`, `.svg`, …) is sent as `application/octet-stream`.
     * `Cache-Control: private, max-age=…`, `X-Content-Type-Options: nosniff`
       and `Content-Security-Policy: default-src 'none'; sandbox`, so a file
       cannot run a script on the app's origin.
-    * PNG, JPEG, GIF and WebP images are served inline; every other file
-      has `Content-Disposition: attachment`.
+    * PNG, JPEG, GIF and WebP images and PDF files are served inline;
+      every other file has `Content-Disposition: attachment`.
     * A path with a segment that is not a valid key segment (`..`, `.`, or
       a character other than ASCII letters, digits, `.`, `-` and `_`) gives
       `400`. A key with no regular file (a directory or a symbolic link
@@ -39,10 +41,8 @@ defmodule Kotoba.Storage.Local.Plug do
 
   import Plug.Conn
 
-  alias Kotoba.Storage
+  alias Kotoba.{Attachments, Storage}
   alias Kotoba.Storage.Local
-
-  @inline ~w(image/png image/jpeg image/gif image/webp)
 
   @impl Plug
   def init(opts), do: Keyword.validate!(opts, [:at, :root, max_age: 3600])
@@ -79,7 +79,7 @@ defmodule Kotoba.Storage.Local.Plug do
   defp send_regular_file(conn, path, opts) do
     case File.lstat(path) do
       {:ok, %File.Stat{type: :regular}} ->
-        type = MIME.from_path(path)
+        type = Attachments.content_type(Path.extname(path))
 
         conn
         |> put_resp_content_type(type, nil)
@@ -98,8 +98,7 @@ defmodule Kotoba.Storage.Local.Plug do
   defp send_body(%Plug.Conn{method: "HEAD"} = conn, _path), do: send_resp(conn, 200, "")
   defp send_body(conn, path), do: send_file(conn, 200, path)
 
-  defp disposition(type) when type in @inline, do: "inline"
-  defp disposition(_type), do: "attachment"
+  defp disposition(type), do: if(Attachments.inline?(type), do: "inline", else: "attachment")
 
   defp halt_with(conn, status), do: conn |> send_resp(status, "") |> halt()
 end

@@ -50,8 +50,13 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `[{"@", :people, &search/1}]`) and their result items.
 - `Kotoba.Storage` (a behaviour for file stores), `Kotoba.Storage.Local` (files
   on disk) and `Kotoba.Storage.Local.Plug` (serves them, read only).
-- `Kotoba.Attachments`: checks the content type of an uploaded file from its
-  bytes, and reads the size of PNG, JPEG, GIF and WebP images.
+- `Kotoba.Attachments`: keeps only the content types that the bytes of an
+  uploaded file prove (PNG, JPEG, GIF, WebP, PDF, UTF-8 plain text, ZIP and
+  Office files); every other file is `application/octet-stream`. It reads
+  the size of the images, and removes control and bidi characters from
+  file names.
+- Storage keys take their extension from the checked content type, never
+  from the client's file name.
 - The hook sends the editor id with `kotoba:change` and `kotoba:prompt`,
   handles `remove_marker`, puts an attachment in place of its own upload
   marker (`insert_node` with a `ref`), and reads a new `data-readonly` from a

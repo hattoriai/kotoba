@@ -56,9 +56,12 @@ defmodule Kotoba.Live do
   checked again on the server (see `Kotoba.Attachments`).
   """
 
+  require Logger
+
   import Phoenix.LiveView, only: [push_event: 3, cancel_upload: 3, consume_uploaded_entry: 3]
 
-  alias Kotoba.{Attachments, Content, Document, Prompts, Storage}
+  alias Kotoba.{Attachments, Content, Document, Prompts, Sanitizer, Storage}
+  alias Kotoba.Nodes.Attachment
   alias Phoenix.LiveView.{Socket, UploadConfig, UploadEntry}
 
   @v 1
@@ -179,11 +182,13 @@ defmodule Kotoba.Live do
 
     * An entry that is done is consumed (`Phoenix.LiveView.consume_uploaded_entry/3`).
       Its file is checked (`Kotoba.Attachments.describe/2`), stored under a
-      new key (`Kotoba.Storage.key/1`) through the storage adapter, and an
-      attachment node with the URL from the adapter is pushed with
-      `insert_node/4` (with the entry's `ref`, so it takes the place of that
-      file's marker). When the check or the adapter fails, the marker is
-      removed with `remove_marker/3`.
+      new key (`Kotoba.Storage.key/2`, with the extension of the checked
+      type) through the storage adapter, and an attachment node with the
+      URL from the adapter is pushed with `insert_node/4` (with the entry's
+      `ref`, so it takes the place of that file's marker). When the check
+      fails, or the adapter gives an error or a result that does not make
+      a valid attachment (a URL that is not a safe link, say), a warning is
+      logged and the marker is removed with `remove_marker/3`.
     * An entry with an error (too large, a type that is not accepted) is
       cancelled, and its marker is removed. Read `upload_errors/2` before
       this call to show the error.
@@ -193,14 +198,15 @@ defmodule Kotoba.Live do
 
     * `:storage` - the storage adapter. The default is
       `Kotoba.Storage.adapter/0`.
-    * `:key` - a function from the upload entry to a storage key. The
-      default is `Kotoba.Storage.key(entry.client_name)`.
+    * `:key` - a function of the upload entry and the checked content
+      type that returns a storage key. The default is
+      `&Kotoba.Storage.key(&1.client_name, &2)`.
   """
   @spec consume_uploads(Socket.t(), atom() | String.t(), String.t(), keyword()) :: Socket.t()
   def consume_uploads(%Socket{} = socket, upload_name, editor_id, opts \\ [])
       when is_binary(editor_id) do
     storage = Keyword.get_lazy(opts, :storage, &Storage.adapter/0)
-    key_fun = Keyword.get(opts, :key, &Storage.key(&1.client_name))
+    key_fun = Keyword.get(opts, :key, &Storage.key(&1.client_name, &2))
     entries = entries(socket, upload_name)
 
     socket = Enum.reduce(entries.invalid, socket, &drop_invalid(&2, upload_name, editor_id, &1))
@@ -209,8 +215,15 @@ defmodule Kotoba.Live do
       result = consume_uploaded_entry(socket, entry, &store(&1, entry, storage, key_fun))
 
       case result do
-        {:ok, attachment} -> insert_node(socket, editor_id, attachment, ref: entry.ref)
-        {:error, _reason} -> remove_marker(socket, editor_id, entry.ref)
+        {:ok, attachment} ->
+          insert_node(socket, editor_id, attachment, ref: entry.ref)
+
+        {:error, reason} ->
+          Logger.warning(
+            "Kotoba: the upload #{inspect(entry.client_name)} was not stored: #{inspect(reason)}"
+          )
+
+          remove_marker(socket, editor_id, entry.ref)
       end
     end)
   end
@@ -238,18 +251,40 @@ defmodule Kotoba.Live do
   # stored is still consumed (its temporary file is removed), and the
   # result says what happened.
   defp store(%{path: path}, entry, storage, key_fun) do
+    name = Attachments.clean_name(entry.client_name)
+
     with {:ok, description} <- Attachments.describe(path, entry.client_type),
-         key when is_binary(key) <- key_fun.(entry),
-         meta = %{
-           name: entry.client_name,
-           content_type: description.content_type,
-           bytes: description.bytes
-         },
-         {:ok, url} <- storage.put(key, path, meta) do
-      {:ok, {:ok, Attachments.node(description, key: key, url: url, name: entry.client_name)}}
+         {:ok, key} <- key(key_fun, entry, description.content_type),
+         meta = %{name: name, content_type: description.content_type, bytes: description.bytes},
+         {:ok, url} <- put(storage, key, path, meta),
+         node = Attachments.node(description, key: key, url: url, name: name),
+         :ok <- check_node(node) do
+      {:ok, {:ok, node}}
     else
       {:error, reason} -> {:ok, {:error, reason}}
-      other -> {:ok, {:error, {:invalid_key, other}}}
+    end
+  end
+
+  defp key(key_fun, entry, content_type) do
+    case key_fun.(entry, content_type) do
+      key when is_binary(key) -> {:ok, key}
+      other -> {:error, {:invalid_key, other}}
+    end
+  end
+
+  defp put(storage, key, path, meta) do
+    case storage.put(key, path, meta) do
+      {:ok, url} when is_binary(url) -> {:ok, url}
+      {:error, reason} -> {:error, reason}
+      other -> {:error, {:invalid_storage_result, other}}
+    end
+  end
+
+  defp check_node(node) do
+    cond do
+      (errors = Attachment.validate(node)) != :ok -> {:error, {:invalid_attachment, errors}}
+      Sanitizer.link_url(node.url) == nil -> {:error, {:unsafe_url, node.url}}
+      true -> :ok
     end
   end
 

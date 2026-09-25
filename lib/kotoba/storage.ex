@@ -13,9 +13,20 @@ defmodule Kotoba.Storage do
   ## Keys
 
   A key is a relative path with segments of ASCII letters, digits, `.`, `-`
-  and `_`, separated by `/`. A segment is never `.` or `..`. `key/1` makes
-  a new key in the form `yyyy/mm/<uuid>-<safe name>`. An adapter refuses a
-  key that `valid_key?/1` refuses.
+  and `_`, separated by `/`. A segment is never `.` or `..`. `key/2` makes
+  a new key in the form `yyyy/mm/<uuid>-<safe name><extension>`. The
+  extension comes from the checked content type (`Kotoba.Attachments.extension/1`),
+  never from the client's file name, so a key never ends in `.html` or
+  `.svg`. An adapter refuses a key that `valid_key?/1` refuses.
+
+  ## Serving the files
+
+  An uploaded file is content from a user. Serve it with
+  `X-Content-Type-Options: nosniff`, with its checked content type, and
+  with `Content-Disposition: attachment` for every type that is not an
+  image or a PDF (see `Kotoba.Attachments.inline?/1`).
+  `Kotoba.Storage.Local.Plug` does this for the local adapter; the example
+  below does it for S3.
 
   ## Another store
 
@@ -31,9 +42,15 @@ defmodule Kotoba.Storage do
 
         @impl true
         def put(key, path, meta) do
+          disposition =
+            if Kotoba.Attachments.inline?(meta.content_type), do: "inline", else: "attachment"
+
           path
           |> ExAws.S3.Upload.stream_file()
-          |> ExAws.S3.upload(@bucket, key, content_type: meta.content_type)
+          |> ExAws.S3.upload(@bucket, key,
+            content_type: meta.content_type,
+            content_disposition: disposition
+          )
           |> ExAws.request()
           |> case do
             {:ok, _response} -> {:ok, url(key)}
@@ -66,8 +83,10 @@ defmodule Kotoba.Storage do
   @type key :: String.t()
 
   @typedoc """
-  What Kotoba knows about the file: `:name` (the client's file name),
-  `:content_type` (checked on the server) and `:bytes`.
+  What Kotoba knows about the file: `:name` (the client's file name, for
+  display only, with control and format characters removed),
+  `:content_type` (checked on the server, see `Kotoba.Attachments`) and
+  `:bytes`.
   """
   @type meta :: %{
           optional(:name) => String.t(),
@@ -101,61 +120,65 @@ defmodule Kotoba.Storage do
   def adapter, do: Application.get_env(:kotoba, :storage, Kotoba.Storage.Local)
 
   @doc """
-  Returns a new key for a file name: `yyyy/mm/<uuid>-<safe name>`, with the
-  year and month of now (UTC) and a random UUID.
+  Returns a new key for a file: `yyyy/mm/<uuid>-<safe name><extension>`,
+  with the year and month of now (UTC), a random UUID, and the extension
+  of the checked content type (see `safe_name/2`).
 
   ## Examples
 
-      iex> key = Kotoba.Storage.key("My cat (1).png")
+      iex> key = Kotoba.Storage.key("My cat (1).png", "image/png")
       iex> [_year, _month, file] = String.split(key, "/")
       iex> String.slice(file, 37..-1//1)
       "My_cat_1_.png"
 
+      iex> "evil.svg" |> Kotoba.Storage.key("application/octet-stream") |> Path.extname()
+      ".bin"
+
   """
-  @spec key(String.t()) :: key()
-  def key(name) when is_binary(name) do
+  @spec key(String.t(), String.t()) :: key()
+  def key(name, content_type) when is_binary(name) and is_binary(content_type) do
     now = DateTime.utc_now()
     year = now.year |> Integer.to_string() |> String.pad_leading(4, "0")
     month = now.month |> Integer.to_string() |> String.pad_leading(2, "0")
-    "#{year}/#{month}/#{uuid()}-#{safe_name(name)}"
+    "#{year}/#{month}/#{uuid()}-#{safe_name(name, content_type)}"
   end
 
   @doc """
-  Returns a safe file name: ASCII letters, digits, `.`, `-` and `_`, at
-  most #{@max_name} characters, with the extension kept.
+  Returns a safe file name for a key: the client's name without its
+  extension, with only ASCII letters, digits, `.`, `-` and `_`, then the
+  extension of the checked content type. At most #{@max_name} characters.
 
   Every run of other characters becomes one `_`, and a run of dots becomes
   one dot. A name with nothing left is `"file"`.
 
   ## Examples
 
-      iex> Kotoba.Storage.safe_name("../../etc/passwd")
-      "._._etc_passwd"
-
-      iex> Kotoba.Storage.safe_name("résumé 2026.pdf")
+      iex> Kotoba.Storage.safe_name("résumé 2026.pdf", "application/pdf")
       "r_sum_2026.pdf"
 
-      iex> Kotoba.Storage.safe_name("")
-      "file"
+      iex> Kotoba.Storage.safe_name("photo.html", "image/png")
+      "photo.png"
+
+      iex> Kotoba.Storage.safe_name("../../etc/passwd", "application/octet-stream")
+      "._._etc_passwd.bin"
+
+      iex> Kotoba.Storage.safe_name("", "text/plain")
+      "file.txt"
 
   """
-  @spec safe_name(String.t()) :: String.t()
-  def safe_name(name) when is_binary(name) do
-    safe =
+  @spec safe_name(String.t(), String.t()) :: String.t()
+  def safe_name(name, content_type) when is_binary(name) and is_binary(content_type) do
+    ext = Kotoba.Attachments.extension(content_type)
+
+    base =
       name
+      |> Path.rootname()
       |> String.replace(~r/[^A-Za-z0-9._\-]+/, "_")
       |> String.replace(~r/\.{2,}/, ".")
+      |> String.trim_trailing(".")
 
-    safe = if safe in ["", ".", "_"], do: "file", else: safe
-    truncate(safe)
-  end
-
-  defp truncate(name) when byte_size(name) <= @max_name, do: name
-
-  defp truncate(name) do
-    ext = Path.extname(name)
-    ext = if byte_size(ext) <= 16, do: ext, else: ""
-    binary_part(name, 0, @max_name - byte_size(ext)) <> ext
+    base = if base in ["", "_"], do: "file", else: base
+    binary_part(base, 0, min(byte_size(base), @max_name - byte_size(ext))) <> ext
   end
 
   @doc """

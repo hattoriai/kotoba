@@ -12,6 +12,10 @@ defmodule Kotoba.Storage.Local.PlugTest do
     File.mkdir_p!(Path.join(root, "2026/09"))
     File.write!(Path.join(root, "2026/09/cat.png"), "png bytes")
     File.write!(Path.join(root, "2026/09/page.html"), "<script>alert(1)</script>")
+    File.write!(Path.join(root, "2026/09/logo.svg"), "<svg onload=alert(1)/>")
+    File.write!(Path.join(root, "2026/09/run.js"), "alert(1)")
+    File.write!(Path.join(root, "2026/09/doc.pdf"), "%PDF-1.7")
+    File.write!(Path.join(root, "2026/09/notes.txt"), "notes")
     File.write!(Path.join(Path.dirname(root), "secret.txt"), "secret")
     on_exit(fn -> File.rm_rf!(base) end)
 
@@ -33,11 +37,23 @@ defmodule Kotoba.Storage.Local.PlugTest do
     assert get_resp_header(conn, "content-disposition") == ["inline"]
   end
 
-  test "serves a file that is not an image as a download", %{opts: opts} do
-    conn = call("/files/2026/09/page.html", opts)
+  test "sends an active type as application/octet-stream, as a download", %{opts: opts} do
+    for name <- ["page.html", "logo.svg", "run.js"] do
+      conn = call("/files/2026/09/#{name}", opts)
 
-    assert conn.status == 200
-    assert get_resp_header(conn, "content-type") == ["text/html"]
+      assert conn.status == 200
+      assert get_resp_header(conn, "content-type") == ["application/octet-stream"]
+      assert get_resp_header(conn, "content-disposition") == ["attachment"]
+    end
+  end
+
+  test "serves a PDF inline and a text file as a download", %{opts: opts} do
+    conn = call("/files/2026/09/doc.pdf", opts)
+    assert get_resp_header(conn, "content-type") == ["application/pdf"]
+    assert get_resp_header(conn, "content-disposition") == ["inline"]
+
+    conn = call("/files/2026/09/notes.txt", opts)
+    assert get_resp_header(conn, "content-type") == ["text/plain"]
     assert get_resp_header(conn, "content-disposition") == ["attachment"]
   end
 

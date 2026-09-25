@@ -45,19 +45,81 @@ defmodule Kotoba.AttachmentsTest do
     assert %{content_type: "image/webp", width: 40, height: 49} = describe_bytes(dir, webp_l, "")
   end
 
-  test "an image type with other bytes becomes application/octet-stream", %{dir: dir} do
-    assert %{content_type: "application/octet-stream", width: nil} =
-             describe_bytes(dir, "<svg/>", "image/svg+xml")
+  @png <<0x89, "PNG\r\n", 0x1A, "\n", 13::32, "IHDR", 2::32, 3::32, 8, 6, 0, 0, 0>>
+
+  test "active and unknown claims become application/octet-stream", %{dir: dir} do
+    for {bytes, claim} <- [
+          {"<html><script>alert(1)</script></html>", "text/html"},
+          {"<html><script>alert(1)</script></html>", "TEXT/HTML; charset=utf-8"},
+          {"<html xmlns=\"http://www.w3.org/1999/xhtml\"/>", "application/xhtml+xml"},
+          {"alert(1)", "text/javascript"},
+          {"alert(1)", "application/javascript"},
+          {"<svg xmlns=\"http://www.w3.org/2000/svg\" onload=\"alert(1)\"/>", "image/svg+xml"},
+          {"<svg/>", "image/png"},
+          {"<?xml version=\"1.0\"?><x/>", "text/xml"},
+          {"a,b", "text/csv"},
+          {"anything", "application/x-custom"},
+          {"", nil}
+        ] do
+      assert %{content_type: "application/octet-stream", width: nil} =
+               describe_bytes(dir, bytes, claim),
+             "#{inspect(claim)} was kept"
+    end
   end
 
-  test "another file keeps a well-formed type", %{dir: dir} do
+  test "a PDF is proven by its bytes", %{dir: dir} do
     assert %{content_type: "application/pdf", bytes: 8} =
-             describe_bytes(dir, "%PDF-1.7", "Application/PDF")
+             describe_bytes(dir, "%PDF-1.7", "application/octet-stream")
 
     assert %{content_type: "application/octet-stream"} =
-             describe_bytes(dir, "x", "text/html; charset=utf-8")
+             describe_bytes(dir, "not a pdf", "application/pdf")
+  end
 
-    assert %{content_type: "application/octet-stream"} = describe_bytes(dir, "", nil)
+  test "a renamed PNG is a PNG, whatever the claim", %{dir: dir} do
+    for claim <- ["text/html", "image/svg+xml", "application/pdf", nil] do
+      assert %{content_type: "image/png", width: 2, height: 3} = describe_bytes(dir, @png, claim)
+    end
+  end
+
+  test "text/plain needs the claim and valid UTF-8 with no NUL", %{dir: dir} do
+    assert %{content_type: "text/plain"} = describe_bytes(dir, "héllo", "text/plain")
+
+    assert %{content_type: "text/plain"} =
+             describe_bytes(dir, "héllo", "text/plain; charset=utf-8")
+
+    assert %{content_type: "application/octet-stream"} = describe_bytes(dir, "héllo", nil)
+
+    assert %{content_type: "application/octet-stream"} =
+             describe_bytes(dir, <<"a", 0, "b">>, "text/plain")
+
+    assert %{content_type: "application/octet-stream"} =
+             describe_bytes(dir, <<0xFF, 0xFE>>, "text/plain")
+  end
+
+  test "a long text file may cut a character at the end of the head", %{dir: dir} do
+    text = String.duplicate("a", 65_535) <> "é" <> "more"
+    assert %{content_type: "text/plain"} = describe_bytes(dir, text, "text/plain")
+  end
+
+  test "ZIP and Office files by their signatures", %{dir: dir} do
+    docx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    zip = <<"PK", 3, 4, "rest">>
+    ole = <<0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1, "rest">>
+
+    assert %{content_type: ^docx} = describe_bytes(dir, zip, docx)
+    assert %{content_type: "application/zip"} = describe_bytes(dir, zip, "text/html")
+    assert %{content_type: "application/msword"} = describe_bytes(dir, ole, "application/msword")
+    assert %{content_type: "application/octet-stream"} = describe_bytes(dir, ole, "text/html")
+    assert %{content_type: "application/octet-stream"} = describe_bytes(dir, "no", docx)
+  end
+
+  test "every checked type has an extension, and content_type/1 reverses it" do
+    for type <- ["image/png", "application/pdf", "text/plain", "application/zip"] do
+      assert type |> Attachments.extension() |> Attachments.content_type() == type
+    end
+
+    assert Attachments.content_type(".PNG") == "image/png"
+    assert Attachments.content_type(".html") == "application/octet-stream"
   end
 
   test "describe/2 gives an error for a missing file" do
@@ -81,5 +143,6 @@ defmodule Kotoba.AttachmentsTest do
     assert Attachments.clean_name("\u0000") == "file"
     assert Attachments.clean_name(<<0xFF, "a">>) == "a"
     assert Attachments.clean_name(nil) == "file"
+    assert Attachments.clean_name("a\u200Eb\u2066c\u2069\uFEFF.pdf") == "abc.pdf"
   end
 end

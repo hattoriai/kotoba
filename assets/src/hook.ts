@@ -28,8 +28,8 @@
 //
 //   * `set_content` `{doc}` - replaces the document.
 //   * `insert_node` `{node, ref?}` - inserts a node in place of the upload
-//     marker of the LiveView upload entry `ref`, else in place of the oldest
-//     upload marker, else at the selection.
+//     marker of the LiveView upload entry `ref` (with no `ref`, of the oldest
+//     upload marker), else at the selection.
 //   * `remove_marker` `{ref}` - removes the upload marker of the LiveView
 //     upload entry `ref` (an upload that failed).
 //   * `set_readonly` `{readonly}`
