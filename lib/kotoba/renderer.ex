@@ -24,6 +24,7 @@ defmodule Kotoba.Renderer do
   | link, autolink     | `a` with `rel="noopener nofollow"`, or the text when the URL is not safe |
   | attachment         | `figure.kotoba-attachment` with an `img`, or a download link, and a `figcaption` |
   | mention            | `span.kotoba-mention` with `data-kind` and `data-id`   |
+  | tab                | a tab character, escaped                               |
   | unknown            | `span.kotoba-unknown` with `data-type`                 |
 
   ## Options
@@ -39,6 +40,8 @@ defmodule Kotoba.Renderer do
 
     * `:policy` - the policy map from `Kotoba.Sanitizer.policy/1`.
     * `:parent` - the parent node, or `nil` for the root node.
+    * `:index` - the position of the node among the children of its
+      parent, or `nil` for the root node.
 
   A node gives the same `opts` to `html_children/2`, `text_children/2` and
   `markdown_children/3`.
@@ -98,7 +101,14 @@ defmodule Kotoba.Renderer do
   @spec html_children(Kotoba.Node.t(), keyword()) :: Phoenix.HTML.safe()
   def html_children(node, opts) do
     opts = prepare(opts)
-    {:safe, Enum.map(children(node), &render(&1, node, :html, opts))}
+
+    html =
+      node
+      |> children()
+      |> Enum.with_index()
+      |> Enum.map(fn {child, index} -> render(child, node, :html, indexed(opts, index)) end)
+
+    {:safe, html}
   end
 
   @doc """
@@ -141,7 +151,13 @@ defmodule Kotoba.Renderer do
   @spec markdown_each(Kotoba.Node.t(), keyword()) :: [{Kotoba.Node.t(), String.t()}]
   def markdown_each(node, opts) do
     opts = prepare(opts)
-    Enum.map(children(node), &{&1, render(&1, node, :markdown, opts)})
+
+    node
+    |> children()
+    |> Enum.with_index()
+    |> Enum.map(fn {child, index} ->
+      {child, render(child, node, :markdown, indexed(opts, index))}
+    end)
   end
 
   @doc """
@@ -225,14 +241,22 @@ defmodule Kotoba.Renderer do
   defp segments(node, format, opts) do
     node
     |> children()
-    |> Enum.chunk_by(&level(&1, node))
-    |> Enum.flat_map(fn [first | _rest] = chunk ->
-      case level(first, node) do
-        :inline -> [{:inline, Enum.map_join(chunk, &render(&1, node, format, opts))}]
-        level -> Enum.map(chunk, &{level, render(&1, node, format, opts)})
-      end
-    end)
+    |> Enum.with_index()
+    |> Enum.chunk_by(fn {child, _index} -> level(child, node) end)
+    |> Enum.flat_map(&segment_chunk(&1, node, format, opts))
   end
+
+  defp segment_chunk([{first, _index} | _rest] = chunk, node, format, opts) do
+    case level(first, node) do
+      :inline -> [{:inline, Enum.map_join(chunk, &render_indexed(&1, node, format, opts))}]
+      level -> Enum.map(chunk, &{level, render_indexed(&1, node, format, opts)})
+    end
+  end
+
+  defp render_indexed({child, index}, node, format, opts),
+    do: render(child, node, format, indexed(opts, index))
+
+  defp indexed(opts, index), do: Keyword.put(opts, :index, index)
 
   defp level(%Unknown{}, %Root{}), do: :decorator
   defp level(%Unknown{}, _parent), do: :inline

@@ -22,7 +22,7 @@ defmodule Kotoba.NodesTest do
 
     assert Map.keys(registry) |> Enum.sort() ==
              Enum.sort(
-               ~w(root paragraph heading quote list listitem text linebreak link autolink code
+               ~w(root paragraph heading quote list listitem text tab linebreak link autolink code
                           code-highlight horizontalrule attachment mention)
              )
 

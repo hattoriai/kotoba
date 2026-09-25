@@ -17,7 +17,7 @@ defmodule Kotoba.Document do
   """
 
   alias Kotoba.Nodes
-  alias Kotoba.Nodes.{Attachment, CodeHighlight, LineBreak, Mention, Root, Text, Unknown}
+  alias Kotoba.Nodes.{Attachment, CodeHighlight, LineBreak, Mention, Root, Tab, Text, Unknown}
 
   @version 1
 
@@ -236,7 +236,7 @@ defmodule Kotoba.Document do
   def empty?(%__MODULE__{} = doc) do
     reduce(doc, true, fn
       _node, false -> false
-      %text{text: value}, true when text in [Text, CodeHighlight] -> String.trim(value) == ""
+      %text{text: value}, true when text in [Text, CodeHighlight, Tab] -> String.trim(value) == ""
       %LineBreak{}, true -> true
       %Unknown{}, true -> false
       %module{}, true -> module.element?()
@@ -246,33 +246,12 @@ defmodule Kotoba.Document do
   @doc """
   Returns the plain text of the document.
 
-  Text runs in a block are joined. A line break gives `"\\n"`. A mention
-  gives its label. Blocks are separated by `"\\n"`. Other nodes give no text.
+  Delegates to `Kotoba.Renderer.to_text/2`, so the two always agree: a
+  root-level decorator with no text (for example a horizontal rule) gives
+  no blank line.
   """
   @spec text(t()) :: String.t()
-  def text(%__MODULE__{root: root}), do: node_text(root)
-
-  defp node_text(%text{text: value}) when text in [Text, CodeHighlight], do: value
-  defp node_text(%LineBreak{}), do: "\n"
-  defp node_text(%Mention{label: label}), do: label
-  defp node_text(%{children: children}) when is_list(children), do: children_text(children)
-  defp node_text(_node), do: ""
-
-  # Consecutive inline nodes make one segment; each block child is a segment.
-  defp children_text(children) do
-    children
-    |> Enum.chunk_by(&block?/1)
-    |> Enum.flat_map(fn
-      [first | _rest] = chunk ->
-        if block?(first),
-          do: Enum.map(chunk, &node_text/1),
-          else: [Enum.map_join(chunk, &node_text/1)]
-    end)
-    |> Enum.join("\n")
-  end
-
-  defp block?(%Unknown{}), do: false
-  defp block?(%module{}), do: module.kind() == :block
+  def text(%__MODULE__{} = doc), do: Kotoba.Renderer.to_text(doc)
 
   @doc """
   Returns the mention nodes of the document, in document order.

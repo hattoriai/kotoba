@@ -173,6 +173,13 @@ defmodule Kotoba.RendererTest do
                "<p>a<br>b</p><hr>"
     end
 
+    test "tab, in a paragraph and in a code block" do
+      assert html([paragraph([text("a"), tab(), text("b")])]) == "<p>a\tb</p>"
+
+      assert html([code([highlight("a"), tab(), highlight("b")])]) ==
+               "<pre><code>a\tb</code></pre>"
+    end
+
     test "link" do
       assert html([paragraph([link("https://example.com", [text("x")])])]) ==
                ~s(<p><a href="https://example.com" rel="noopener nofollow">x</a></p>)
@@ -361,9 +368,36 @@ defmodule Kotoba.RendererTest do
                  ~s(<span class="kotoba-unknown" data-type="paragraph"></span></li></ul>)
     end
 
-    test "a code block holds only code highlight, text and line breaks" do
+    test "a list item holds only one nested list even when a second list is identical to the first" do
+      nested = list("bullet", [item([text("b")])])
+      input = [list("bullet", [item([nested, nested])])]
+
+      assert html(input) ==
+               "<ul><li><ul><li>b</li></ul>" <>
+                 ~s(<span class="kotoba-unknown" data-type="list"></span></li></ul>)
+    end
+
+    test "a code block holds only code highlight, text, line breaks and tabs" do
       input = [code([highlight("x"), link("https://a.b", [text("l")]), mention("p", "1", "A")])]
       assert html(input) == "<pre><code>x</code></pre>"
+    end
+
+    test "a horizontal rule and an attachment are valid only under the root or a list item" do
+      input = [paragraph([hr(), attachment()])]
+
+      assert html(input) ==
+               ~s(<p><span class="kotoba-unknown" data-type="horizontalrule"></span>) <>
+                 ~s(<span class="kotoba-unknown" data-type="attachment"></span></p>)
+
+      assert html([list("bullet", [item([hr(), attachment()])])]) ==
+               ~s(<ul><li><hr><figure class="kotoba-attachment">) <>
+                 ~s(<img src="/uploads/k/cat.png" alt="cat.png" width="640" height="480">) <>
+                 "<figcaption>cat.png</figcaption></figure></li></ul>"
+    end
+
+    test "a list item outside a list renders as unknown" do
+      assert html([item([text("x")])]) ==
+               ~s(<span class="kotoba-unknown" data-type="listitem"></span>)
     end
 
     test "a paragraph holds no blocks and a link holds no link" do

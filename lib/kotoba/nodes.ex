@@ -20,6 +20,7 @@ defmodule Kotoba.Nodes do
     Nodes.List,
     Nodes.ListItem,
     Nodes.Text,
+    Nodes.Tab,
     Nodes.LineBreak,
     Nodes.Link,
     Nodes.AutoLink,

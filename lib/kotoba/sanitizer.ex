@@ -14,11 +14,16 @@ defmodule Kotoba.Sanitizer do
       `Kotoba.Nodes.CodeHighlight` node and the `style` of a text node are
       not attributes; they have no limit. The URL of a link is checked by
       `link_url/2`.
-    * **Nesting.** A list holds only list items. A list item holds inline
-      nodes, decorators and one nested list. A code block holds only
-      code highlight, text and line break nodes. A paragraph, a heading, a
-      quote and a link hold only inline nodes and decorators, and a link
-      holds no other link. A decorator has no children.
+    * **Nesting.** A list holds only list items, and a list item is valid
+      only inside a list. A list item holds inline nodes, decorators and
+      one nested list (by position: a second list at the same level
+      renders as unknown, even when it repeats the first). A code block
+      holds only code highlight, text, line break and tab nodes. A
+      paragraph, a heading, a quote and a link hold only inline nodes and
+      decorators, and a link holds no other link. A decorator has no
+      children. `horizontalrule` and `attachment` (block decorators) are
+      valid only under the root or a list item; elsewhere they render as
+      unknown.
     * **Links.** `link_url/2` accepts a URL with an allowed scheme, or a
       relative URL. A link with a URL that is not safe renders as its text.
       An attachment with a URL that is not safe fails the check.
@@ -155,7 +160,7 @@ defmodule Kotoba.Sanitizer do
          :ok <- check_strings(module, node),
          :ok <- check_children(module, node),
          :ok <- check_url(node, opts) do
-      check_parent(node, parent)
+      check_parent(node, parent, opts)
     end
   end
 
@@ -182,7 +187,8 @@ defmodule Kotoba.Sanitizer do
   end
 
   defp check_string(module, field, _value)
-       when module in [Nodes.Text, Nodes.CodeHighlight] and field.name in [:text, :style],
+       when module in [Nodes.Text, Nodes.CodeHighlight, Nodes.Tab] and
+              field.name in [:text, :style],
        do: :ok
 
   # `link_url/2` checks the URL of a link; a link with a bad URL keeps its text.
@@ -223,28 +229,49 @@ defmodule Kotoba.Sanitizer do
       else: :ok
   end
 
-  defp check_parent(_node, nil), do: :ok
-  defp check_parent(%Nodes.ListItem{}, %Nodes.List{}), do: :ok
-  defp check_parent(_node, %Nodes.List{}), do: {:error, "a list holds only list items"}
+  # A list item is valid only directly inside a list (M-3).
+  defp check_parent(%Nodes.ListItem{}, %Nodes.List{}, _opts), do: :ok
 
-  defp check_parent(%Nodes.List{} = node, %Nodes.ListItem{children: children}) do
-    case Enum.find(children, &match?(%Nodes.List{}, &1)) do
-      ^node -> :ok
+  defp check_parent(%Nodes.ListItem{}, _other_parent, _opts),
+    do: {:error, "a list item must be inside a list"}
+
+  defp check_parent(_node, nil, _opts), do: :ok
+  defp check_parent(_node, %Nodes.List{}, _opts), do: {:error, "a list holds only list items"}
+
+  # One nested list per list item, by position: two lists at the same
+  # level render as unknown even when they are identical (M-2).
+  defp check_parent(%Nodes.List{}, %Nodes.ListItem{children: children}, opts) do
+    index = Keyword.get(opts, :index)
+
+    case Enum.find_index(children, &match?(%Nodes.List{}, &1)) do
+      ^index -> :ok
       _other -> {:error, "a list item holds only one nested list"}
     end
   end
 
-  defp check_parent(%module{}, %Nodes.Code{}) do
-    if module in [Nodes.CodeHighlight, Nodes.Text, Nodes.LineBreak],
+  defp check_parent(%module{}, %Nodes.Code{}, _opts) do
+    if module in [Nodes.CodeHighlight, Nodes.Text, Nodes.LineBreak, Nodes.Tab],
       do: :ok,
-      else: {:error, "a code block holds only code, text and line breaks"}
+      else: {:error, "a code block holds only code, text, line breaks and tabs"}
   end
 
-  defp check_parent(%link{}, %parent{})
+  # Block decorators are valid only under the root or a list item (M-1). The
+  # children of the root node have the root struct as their parent, not
+  # `nil` (only the root node's own check has a `nil` parent).
+  defp check_parent(%module{}, parent, _opts)
+       when module in [Nodes.HorizontalRule, Nodes.Attachment] do
+    case parent do
+      %Nodes.Root{} -> :ok
+      %Nodes.ListItem{} -> :ok
+      _other -> {:error, "a #{module.type()} node is valid only under the root or a list item"}
+    end
+  end
+
+  defp check_parent(%link{}, %parent{}, _opts)
        when link in [Nodes.Link, Nodes.AutoLink] and parent in [Nodes.Link, Nodes.AutoLink],
        do: {:error, "a link holds no other link"}
 
-  defp check_parent(%module{}, %parent{})
+  defp check_parent(%module{}, %parent{}, _opts)
        when parent in [
               Nodes.ListItem,
               Nodes.Paragraph,
@@ -258,5 +285,5 @@ defmodule Kotoba.Sanitizer do
       else: :ok
   end
 
-  defp check_parent(_node, _parent), do: :ok
+  defp check_parent(_node, _parent, _opts), do: :ok
 end

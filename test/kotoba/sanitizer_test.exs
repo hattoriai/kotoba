@@ -149,5 +149,44 @@ defmodule Kotoba.SanitizerTest do
       assert {:error, "a link holds no other link"} =
                Sanitizer.check(%Nodes.Link{url: "/a"}, %Nodes.AutoLink{url: "/b"})
     end
+
+    test "a tab is allowed in a code block (I-1)" do
+      assert :ok = Sanitizer.check(%Nodes.Tab{}, %Nodes.Code{})
+    end
+
+    test "a horizontal rule and an attachment are valid only under the root or a list item (M-1)" do
+      attachment = %Nodes.Attachment{key: "k", url: "/a", name: "a", content_type: "t", bytes: 1}
+      rule = %Nodes.HorizontalRule{}
+
+      assert :ok = Sanitizer.check(rule, nil)
+      assert :ok = Sanitizer.check(attachment, nil)
+      assert :ok = Sanitizer.check(rule, %Nodes.ListItem{})
+      assert :ok = Sanitizer.check(attachment, %Nodes.ListItem{})
+
+      for parent <- [%Nodes.Paragraph{}, %Nodes.Heading{tag: "h1"}, %Nodes.Quote{}] do
+        assert {:error, _reason} = Sanitizer.check(rule, parent)
+        assert {:error, _reason} = Sanitizer.check(attachment, parent)
+      end
+    end
+
+    test "a list item holds only one nested list, by position, even when the lists are identical (M-2)" do
+      inner = %Nodes.List{list_type: "bullet", tag: "ul", children: [%Nodes.ListItem{}]}
+      item = %Nodes.ListItem{children: [inner, inner]}
+
+      assert :ok = Sanitizer.check(inner, item, index: 0)
+
+      assert {:error, "a list item holds only one nested list"} =
+               Sanitizer.check(inner, item, index: 1)
+    end
+
+    test "a list item outside a list is refused (M-3)" do
+      assert {:error, "a list item must be inside a list"} =
+               Sanitizer.check(%Nodes.ListItem{}, nil)
+
+      assert {:error, "a list item must be inside a list"} =
+               Sanitizer.check(%Nodes.ListItem{}, %Nodes.Paragraph{})
+
+      assert :ok = Sanitizer.check(%Nodes.ListItem{}, %Nodes.List{list_type: "bullet", tag: "ul"})
+    end
   end
 end

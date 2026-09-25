@@ -360,15 +360,28 @@ defmodule Kotoba.DocumentTest do
           node -> node
         end)
 
-      assert Document.text(upcased) == "HI Ada!\n\nITEM\nMORE\nGrace"
+      assert Document.text(upcased) == "HI Ada!\ncat.png\nITEM\nMORE\nGrace"
     end
 
     test "map/2 with the identity function gives the same document", %{doc: doc} do
       assert Document.map(doc, & &1) == doc
     end
 
-    test "text/1 joins the text of the blocks", %{doc: doc} do
-      assert Document.text(doc) == "Hi Ada!\n\nitem\nmore\nGrace"
+    test "text/1 joins the text of the blocks and agrees with Renderer.to_text/2 (M-6)", %{
+      doc: doc
+    } do
+      assert Document.text(doc) == "Hi Ada!\ncat.png\nitem\nmore\nGrace"
+      assert Document.text(doc) == Kotoba.Renderer.to_text(doc)
+    end
+
+    test "text/1 gives no blank line for a root decorator with no text (M-6)" do
+      doc =
+        parse!(
+          envelope(root([paragraph([text("a")]), %{"type" => "horizontalrule", "version" => 1}]))
+        )
+
+      assert Document.text(doc) == "a"
+      assert Document.text(doc) == Kotoba.Renderer.to_text(doc)
     end
 
     test "mentions/1 and attachments/1 return the nodes in document order", %{doc: doc} do
@@ -391,6 +404,20 @@ defmodule Kotoba.DocumentTest do
                  )
                )
              )
+    end
+
+    test "is true for a lone tab (I-1)" do
+      tab = %{
+        "detail" => 2,
+        "format" => 0,
+        "mode" => "normal",
+        "style" => "",
+        "text" => "\t",
+        "type" => "tab",
+        "version" => 1
+      }
+
+      assert Document.empty?(parse!(envelope(root([paragraph([tab])]))))
     end
 
     test "is false for text, decorators and unknown nodes" do

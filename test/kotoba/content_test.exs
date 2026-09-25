@@ -1,0 +1,297 @@
+defmodule Kotoba.ContentTest do
+  use ExUnit.Case, async: false
+
+  import Kotoba.TestJSON
+
+  alias Ecto.Changeset
+  alias Kotoba.Content
+  alias KotobaTest.Post
+
+  doctest Kotoba.Content
+
+  defmodule Chip do
+    use Kotoba.Node, type: "chip", kind: :decorator
+    field :label, :string, required: true
+
+    @impl Kotoba.Node
+    def render_html(node, _opts), do: Phoenix.HTML.html_escape("[" <> node.label <> "]")
+
+    @impl Kotoba.Node
+    def render_text(node, _opts), do: "[#{node.label}]"
+  end
+
+  defmodule Broken do
+    use Kotoba.Node, type: "broken", kind: :decorator
+    field :ref, :string, required: true
+
+    @impl Kotoba.Node
+    def render_html(_node, _opts), do: {:safe, ""}
+
+    @impl Kotoba.Node
+    def render_text(_node, _opts), do: ""
+  end
+
+  defp chip(label), do: %{"type" => "chip", "version" => 1, "label" => label}
+
+  describe "cast/1" do
+    test "a JSON string, as the form posts it" do
+      json = envelope([paragraph([text("hi")])]) |> JSON.encode!()
+
+      assert {:ok, %Content{} = content} = Content.cast(json)
+      assert content.html == "<p>hi</p>"
+      assert content.text == "hi"
+      assert content.version == 1
+    end
+
+    test "a document envelope" do
+      assert {:ok, content} = Content.cast(envelope([paragraph([text("hi")])]))
+      assert content.html == "<p>hi</p>"
+    end
+
+    test "a bare Lexical root, wrapped in an envelope" do
+      assert {:ok, content} = Content.cast(root([paragraph([text("hi")])]))
+      assert content.doc == envelope([paragraph([text("hi")])])
+      assert content.html == "<p>hi</p>"
+    end
+
+    test "a %Kotoba.Content{} passes through unchanged" do
+      {:ok, content} = Content.cast(root([paragraph([text("hi")])]))
+      assert Content.cast(content) == {:ok, content}
+    end
+
+    test "nil and the empty string cast to empty/0" do
+      assert Content.cast(nil) == {:ok, Content.empty()}
+      assert Content.cast("") == {:ok, Content.empty()}
+    end
+
+    test "invalid JSON is an error" do
+      assert Content.cast("{not json") == :error
+    end
+
+    test "a map with no type and no root is an error" do
+      assert Content.cast(%{"hello" => "world"}) == :error
+    end
+
+    test "a document that fails Kotoba.Document.parse/2 validation is an error" do
+      assert Content.cast(root([%{"type" => "attachment", "version" => 1}])) == :error
+    end
+
+    test "a value of another type is an error" do
+      assert Content.cast(1) == :error
+      assert Content.cast([]) == :error
+    end
+  end
+
+  describe "dump/1 and load/1" do
+    test "dump/1 returns a map with string keys" do
+      {:ok, content} = Content.cast(root([paragraph([text("hi")])]))
+
+      assert {:ok, dumped} = Content.dump(content)
+
+      assert dumped == %{
+               "doc" => content.doc,
+               "html" => content.html,
+               "text" => content.text,
+               "version" => 1
+             }
+    end
+
+    test "dump/1 refuses a value that is not a Kotoba.Content" do
+      assert Content.dump(%{}) == :error
+    end
+
+    test "load/1 rebuilds the struct from a complete map" do
+      {:ok, content} = Content.cast(root([paragraph([text("hi")])]))
+      {:ok, dumped} = Content.dump(content)
+
+      assert Content.load(dumped) == {:ok, content}
+    end
+
+    test "load/1 re-renders html and text when they are missing" do
+      {:ok, content} = Content.cast(root([paragraph([text("hi")])]))
+
+      assert Content.load(%{"doc" => content.doc}) == {:ok, content}
+      assert Content.load(%{"doc" => content.doc, "html" => nil, "text" => nil}) == {:ok, content}
+    end
+
+    test "load/1 refuses a map with no doc key, or a value of another type" do
+      assert Content.load(%{"html" => "x"}) == :error
+      assert Content.load("not a map") == :error
+    end
+  end
+
+  describe "equal?/2" do
+    test "compares the doc field only" do
+      {:ok, a} = Content.cast(root([paragraph([text("hi")])]))
+      b = %{a | html: "different", text: "different"}
+
+      assert Content.equal?(a, b)
+      refute Content.equal?(a, Content.empty())
+    end
+
+    test "a value that is not a Kotoba.Content is never equal" do
+      refute Content.equal?(Content.empty(), %{})
+    end
+  end
+
+  test "embed_as/1 is :dump" do
+    assert Content.embed_as(:json) == :dump
+  end
+
+  test "type/0 is :map" do
+    assert Content.type() == :map
+  end
+
+  describe "empty/0" do
+    test "has an empty root, and no html or text" do
+      content = Content.empty()
+      assert content.html == ""
+      assert content.text == ""
+      assert content.doc == envelope([])
+    end
+  end
+
+  describe "rerender/2" do
+    test "with a registry change, an unknown node becomes known" do
+      {:ok, content} = Content.cast(envelope([chip("VIP")]))
+      assert content.html =~ "kotoba-unknown"
+      refute content.html =~ "VIP"
+
+      rerendered = Content.rerender(content, nodes: [Chip])
+      assert rerendered.html =~ "[VIP]"
+      assert rerendered.text == "[VIP]"
+      assert rerendered.doc == content.doc
+    end
+
+    test "with a policy change, only html changes" do
+      {:ok, content} = Content.cast(envelope([attachment()]))
+      assert content.html =~ "<figure"
+
+      untrusted = Content.rerender(content, policy: :untrusted)
+      refute untrusted.html =~ "<figure"
+      assert untrusted.doc == content.doc
+      assert untrusted.text == content.text
+    end
+
+    test "keeps the content unchanged when the doc no longer parses" do
+      {:ok, content} = Content.cast(envelope([%{"type" => "broken", "version" => 1}]))
+      assert Content.rerender(content, nodes: [Broken]) == content
+    end
+  end
+
+  describe "from_markdown/2" do
+    test "a paragraph" do
+      assert Content.from_markdown("Hello there.").text == "Hello there."
+    end
+
+    test "a multi-line paragraph becomes one block with line breaks" do
+      assert Content.from_markdown("Line one\nLine two").text == "Line one\nLine two"
+    end
+
+    test "a heading" do
+      content = Content.from_markdown("## Section")
+      assert content.text == "Section"
+      assert content.html == "<h2>Section</h2>"
+    end
+
+    test "a bullet list" do
+      content = Content.from_markdown("- one\n- two")
+      assert content.text == "one\ntwo"
+      assert content.html == "<ul><li>one</li><li>two</li></ul>"
+    end
+
+    test "a numbered list" do
+      content = Content.from_markdown("1. one\n2. two")
+      assert content.text == "one\ntwo"
+      assert content.html == "<ol><li>one</li><li>two</li></ol>"
+    end
+
+    test "a fenced code block, with a language" do
+      content = Content.from_markdown("```elixir\ndef f do\nend\n```")
+      assert content.text == "def f do\nend"
+      assert content.html == ~s(<pre><code class="language-elixir">def f do\nend</code></pre>)
+    end
+
+    test "bold, italic and inline code" do
+      assert Content.from_markdown("**bold**").html == "<p><strong>bold</strong></p>"
+      assert Content.from_markdown("_italic_").html == "<p><em>italic</em></p>"
+      assert Content.from_markdown("`code`").html == "<p><code>code</code></p>"
+    end
+
+    test "a link" do
+      content = Content.from_markdown("See [Kotoba](https://kotoba.dev) here.")
+      assert content.text == "See Kotoba here."
+      assert content.html =~ ~s(<a href="https://kotoba.dev" rel="noopener nofollow">Kotoba</a>)
+    end
+
+    test "an empty string gives an empty document" do
+      assert Content.from_markdown("").text == ""
+      assert Content.from_markdown("").doc == envelope([])
+    end
+  end
+
+  describe "Ecto.Type.dump/2 and Ecto.Type.load/2" do
+    test "a content value round trips" do
+      {:ok, content} = Content.cast(root([paragraph([text("hi")])]))
+
+      assert {:ok, dumped} = Ecto.Type.dump(Content, content)
+      assert {:ok, loaded} = Ecto.Type.load(Content, dumped)
+      assert loaded == content
+    end
+  end
+
+  describe "KotobaTest.Post changeset" do
+    test "casts the form's JSON string" do
+      json = envelope([paragraph([text("hi")])]) |> JSON.encode!()
+      changeset = Post.changeset(%Post{}, %{"body" => json})
+
+      assert changeset.valid?
+      assert Changeset.get_change(changeset, :body).html == "<p>hi</p>"
+    end
+
+    test "casts a map" do
+      changeset = Post.changeset(%Post{}, %{"body" => root([paragraph([text("hi")])])})
+
+      assert changeset.valid?
+      assert Changeset.get_change(changeset, :body).html == "<p>hi</p>"
+    end
+
+    test "an empty string casts to empty content" do
+      changeset = Post.changeset(%Post{}, %{"body" => ""})
+
+      assert changeset.valid?
+      assert Changeset.get_change(changeset, :body) == Content.empty()
+    end
+
+    test "invalid JSON gives an 'is invalid' changeset error" do
+      changeset = Post.changeset(%Post{}, %{"body" => "{not json"})
+
+      refute changeset.valid?
+      assert errors_on(changeset)[:body] == ["is invalid"]
+    end
+
+    test "dump/load round trip through the changeset's cast value" do
+      changeset = Post.changeset(%Post{}, %{"body" => root([paragraph([text("hi")])])})
+      content = Changeset.get_change(changeset, :body)
+
+      {:ok, dumped} = Ecto.Type.dump(Content, content)
+      assert Ecto.Type.load(Content, dumped) == {:ok, content}
+    end
+
+    test "rerender/2 with a registry change, on the cast value" do
+      changeset = Post.changeset(%Post{}, %{"body" => envelope([chip("VIP")])})
+      content = Changeset.get_change(changeset, :body)
+
+      assert content.html =~ "kotoba-unknown"
+      assert Content.rerender(content, nodes: [Chip]).html =~ "[VIP]"
+    end
+  end
+
+  defp errors_on(changeset) do
+    Changeset.traverse_errors(changeset, fn {message, opts} ->
+      Enum.reduce(opts, message, fn {key, value}, acc ->
+        String.replace(acc, "%{#{key}}", to_string(value))
+      end)
+    end)
+  end
+end

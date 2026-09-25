@@ -58,6 +58,18 @@ defmodule Kotoba.TestJSON do
 
   def linebreak, do: %{"type" => "linebreak", "version" => 1}
 
+  def tab do
+    %{
+      "detail" => 2,
+      "format" => 0,
+      "mode" => "normal",
+      "style" => "",
+      "text" => "\t",
+      "type" => "tab",
+      "version" => 1
+    }
+  end
+
   def hr, do: %{"type" => "horizontalrule", "version" => 1}
 
   def link(url, children, attrs \\ %{}) do
