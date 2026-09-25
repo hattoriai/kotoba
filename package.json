@@ -1,0 +1,15 @@
+{
+  "name": "kotoba",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "module": "./priv/static/kotoba.esm.js",
+  "main": "./priv/static/kotoba.cjs.js",
+  "exports": {
+    "import": "./priv/static/kotoba.esm.js",
+    "require": "./priv/static/kotoba.cjs.js"
+  },
+  "files": [
+    "priv/static"
+  ]
+}

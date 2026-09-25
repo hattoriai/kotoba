@@ -1,0 +1,10 @@
+/_build
+/deps
+/doc
+/cover
+/priv/plts
+assets/node_modules
+e2e/node_modules
+demo/_build
+demo/deps
+demo/priv/uploads
