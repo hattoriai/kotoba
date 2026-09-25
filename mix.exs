@@ -10,6 +10,7 @@ defmodule Kotoba.MixProject do
       version: @version,
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
+      test_ignore_filters: [&String.starts_with?(&1, "test/fixtures/")],
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
@@ -61,7 +62,8 @@ defmodule Kotoba.MixProject do
       name: "kotoba",
       licenses: ["Apache-2.0"],
       links: %{"GitHub" => @source_url},
-      files: ~w(lib priv/static package.json mix.exs README.md CHANGELOG.md LICENSE NOTICE)
+      files:
+        ~w(lib priv/static package.json mix.exs .formatter.exs README.md CHANGELOG.md LICENSE NOTICE)
     ]
   end
 

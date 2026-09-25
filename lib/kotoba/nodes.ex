@@ -8,6 +8,13 @@ defmodule Kotoba.Nodes do
   replaces an earlier entry with the same type:
 
       config :kotoba, nodes: [MyApp.Nodes.Pointer]
+
+  `Kotoba.Document.parse/2`, `Kotoba.Content.rerender/2` and
+  `Kotoba.Components.kotoba_content/1` take the caller's nodes as a
+  `nodes` option. `Kotoba.Content.cast/1` uses the built-in and the
+  configured nodes only, so put a node that stored content uses in the
+  config. `mix kotoba.gen.node` writes a new node module and its editor
+  half.
   """
 
   alias Kotoba.Nodes

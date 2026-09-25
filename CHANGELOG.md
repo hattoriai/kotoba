@@ -61,3 +61,13 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   handles `remove_marker`, puts an attachment in place of its own upload
   marker (`insert_node` with a `ref`), and reads a new `data-readonly` from a
   LiveView patch.
+- `mix kotoba.gen.node`: writes an app node (the `Kotoba.Node` module, the
+  editor's JavaScript module in the default factory form, and a test), with
+  an app-prefixed type, and prints the config and component lines.
+- `mix kotoba.install`: adds the hook to `assets/js/app.js`, the style sheet
+  to `assets/css/app.css` and the storage config to `config/config.exs`.
+  It is idempotent, prints the lines to add when it cannot edit a file, and
+  has `--dry-run`.
+- `Kotoba.Renderer.escape_markdown/1`, for the Markdown of app nodes.
+- `.formatter.exs` exports `field/2` and `field/3` without parentheses, for
+  `import_deps: [:kotoba]`.

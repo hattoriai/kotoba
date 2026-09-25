@@ -23,9 +23,13 @@ def deps do
 end
 ```
 
-Run `mix deps.get`.
+Run `mix deps.get`, then `mix kotoba.install`. The installer adds the hook
+to `assets/js/app.js`, the style sheet to `assets/css/app.css` and the
+storage adapter to `config/config.exs`, and prints what it changed. Run it
+with `--dry-run` to see the changes first. It changes nothing that is
+already there, so you can run it again.
 
-Import the editor hook in `assets/js/app.js` and add it to your hooks:
+To make the same changes by hand, import the editor hook in `assets/js/app.js` and add it to your hooks:
 
 ```js
 import { Kotoba } from "kotoba"
@@ -174,6 +178,50 @@ does.
 For S3 or another store, write a module with the three `Kotoba.Storage`
 callbacks (`put/3`, `url/1`, `delete/1`) and set `config :kotoba, storage:`
 to it. The `Kotoba.Storage` docs have an example.
+
+### Custom nodes
+
+An app can add its own nodes to the editor. A node has two halves: a
+`Kotoba.Node` module, which reads, checks and renders the node on the
+server, and a JavaScript module with the Lexical node for the editor.
+`mix kotoba.gen.node` writes both, and a test:
+
+```sh
+mix kotoba.gen.node Callout                # a decorator (the default)
+mix kotoba.gen.node StatusChip --kind inline
+```
+
+For an app `:my_app`, `mix kotoba.gen.node Callout` writes
+`lib/my_app/kotoba/nodes/callout.ex` (`MyApp.Kotoba.Nodes.Callout`, type
+`"my-app-callout"`), `assets/js/kotoba/nodes/callout.js` and
+`test/my_app/kotoba/nodes/callout_test.exs`. Register the node for parsing
+and rendering, and give the editor its JavaScript module:
+
+```elixir
+# config/config.exs
+config :kotoba, nodes: [MyApp.Kotoba.Nodes.Callout]
+```
+
+```heex
+<.kotoba
+  field={@form[:body]}
+  nodes={[{MyApp.Kotoba.Nodes.Callout, ~p"/assets/kotoba/nodes/callout.js"}]}
+/>
+```
+
+The editor loads the module with `import()`, so serve it as an ES module,
+for example with an esbuild profile
+(`js/kotoba/nodes/*.js --bundle --format=esm --outdir=../priv/static/assets/kotoba/nodes`).
+The module exports a factory, `export default (lexical) => class ...`, so
+the node class extends the editor's own copy of Lexical. The editor refuses
+a node type that is the same as a built-in type.
+
+Put the node in `config :kotoba, nodes:`: `Kotoba.Content` renders its
+cache when it casts, with the configured nodes. A node that is not
+configured stays in the document as an unknown node, and renders as an
+empty `span.kotoba-unknown` until the content is rendered again with
+`Kotoba.Content.rerender(content, nodes: [...])`, or through
+`<.kotoba_content nodes={...}>`.
 
 ### Render component
 

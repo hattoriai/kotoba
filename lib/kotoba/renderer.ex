@@ -200,6 +200,19 @@ defmodule Kotoba.Renderer do
   end
 
   @doc """
+  Escapes the Markdown characters in a plain string, for a
+  `c:Kotoba.Node.render_markdown/2` callback.
+
+  ## Examples
+
+      iex> Kotoba.Renderer.escape_markdown("*not* [a link]")
+      "\\\\*not\\\\* \\\\[a link\\\\]"
+
+  """
+  @spec escape_markdown(String.t()) :: String.t()
+  def escape_markdown(text) when is_binary(text), do: Kotoba.Markdown.escape(text)
+
+  @doc """
   Returns the safe HTML of an unknown node of `type`.
   """
   @spec unknown_html(String.t()) :: Phoenix.HTML.safe()
