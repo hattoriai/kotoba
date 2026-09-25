@@ -1,4 +1,6 @@
 defmodule Kotoba.ContentTest do
+  # async: false because "cast/1 uses the configured node registry" changes
+  # the shared application config with Application.put_env/2.
   use ExUnit.Case, async: false
 
   import Kotoba.TestJSON
@@ -68,6 +70,15 @@ defmodule Kotoba.ContentTest do
       assert Content.cast("{not json") == :error
     end
 
+    test "a JSON null is an error, not empty/0" do
+      assert Content.cast("null") == :error
+    end
+
+    test "a double-encoded JSON string is an error, not decoded twice" do
+      double_encoded = envelope([paragraph([text("hi")])]) |> JSON.encode!() |> JSON.encode!()
+      assert Content.cast(double_encoded) == :error
+    end
+
     test "a map with no type and no root is an error" do
       assert Content.cast(%{"hello" => "world"}) == :error
     end
@@ -79,6 +90,17 @@ defmodule Kotoba.ContentTest do
     test "a value of another type is an error" do
       assert Content.cast(1) == :error
       assert Content.cast([]) == :error
+    end
+  end
+
+  describe "cast/1 uses the configured node registry" do
+    test "an unknown node becomes known through config :kotoba, nodes:" do
+      Application.put_env(:kotoba, :nodes, [Chip])
+      on_exit(fn -> Application.delete_env(:kotoba, :nodes) end)
+
+      assert {:ok, content} = Content.cast(envelope([chip("VIP")]))
+      assert content.html =~ "[VIP]"
+      assert content.text == "[VIP]"
     end
   end
 
@@ -118,6 +140,20 @@ defmodule Kotoba.ContentTest do
       assert Content.load(%{"html" => "x"}) == :error
       assert Content.load("not a map") == :error
     end
+
+    test "load/1 refuses a map whose doc is not itself a map, cache or not" do
+      assert Content.load(%{"doc" => "x", "html" => "y", "text" => "z"}) == :error
+      assert Content.load(%{"doc" => "x"}) == :error
+    end
+
+    test "load/1 keeps a row with no cache whose doc no longer parses, with an empty cache" do
+      bad_doc = envelope([%{"type" => "attachment", "version" => 1}])
+
+      assert {:ok, content} = Content.load(%{"doc" => bad_doc})
+      assert content.doc == bad_doc
+      assert content.html == ""
+      assert content.text == ""
+    end
   end
 
   describe "equal?/2" do
@@ -129,8 +165,10 @@ defmodule Kotoba.ContentTest do
       refute Content.equal?(a, Content.empty())
     end
 
-    test "a value that is not a Kotoba.Content is never equal" do
+    test "falls back to == for anything else, so nil equals nil" do
+      assert Content.equal?(nil, nil)
       refute Content.equal?(Content.empty(), %{})
+      refute Content.equal?(Content.empty(), nil)
     end
   end
 
@@ -224,6 +262,36 @@ defmodule Kotoba.ContentTest do
       assert content.html =~ ~s(<a href="https://kotoba.dev" rel="noopener nofollow">Kotoba</a>)
     end
 
+    test "a link URL keeps one level of balanced parentheses" do
+      content = Content.from_markdown("[x](https://en.wikipedia.org/wiki/A_(b))")
+      assert content.html =~ ~s[href="https://en.wikipedia.org/wiki/A_(b)"]
+    end
+
+    test "_ is emphasis only around non-word characters, so a snake_case name is not italic" do
+      assert Content.from_markdown("snake_case_name").html == "<p>snake_case_name</p>"
+      assert Content.from_markdown("Hello _world_ there.").html =~ "<em>world</em>"
+    end
+
+    test "a white-space-only line is blank, like an empty line" do
+      content = Content.from_markdown("para\n   \npara2")
+      assert content.text == "para\npara2"
+      assert content.html == "<p>para</p><p>para2</p>"
+    end
+
+    test "a link with no text gives no node, not an empty <a>" do
+      content = Content.from_markdown("[](https://example.com)")
+      assert content.html == "<p></p>"
+      assert content.text == ""
+    end
+
+    test "a blank line in a fenced code block gives no empty text node" do
+      content = Content.from_markdown("```\na\n\nb\n```")
+      assert content.text == "a\n\nb"
+
+      %{"root" => %{"children" => [%{"children" => children}]}} = content.doc
+      refute Enum.any?(children, &match?(%{"type" => "text", "text" => ""}, &1))
+    end
+
     test "an empty string gives an empty document" do
       assert Content.from_markdown("").text == ""
       assert Content.from_markdown("").doc == envelope([])
@@ -256,8 +324,18 @@ defmodule Kotoba.ContentTest do
       assert Changeset.get_change(changeset, :body).html == "<p>hi</p>"
     end
 
-    test "an empty string casts to empty content" do
+    test "with Ecto's defaults, an empty or blank string is dropped before it reaches Kotoba.Content.cast/1" do
       changeset = Post.changeset(%Post{}, %{"body" => ""})
+      assert changeset.valid?
+      refute Changeset.get_change(changeset, :body)
+
+      changeset = Post.changeset(%Post{}, %{"body" => "   "})
+      assert changeset.valid?
+      refute Changeset.get_change(changeset, :body)
+    end
+
+    test "changeset_with_empty_values/2 opts in, so an empty string casts to empty content" do
+      changeset = Post.changeset_with_empty_values(%Post{}, %{"body" => ""})
 
       assert changeset.valid?
       assert Changeset.get_change(changeset, :body) == Content.empty()

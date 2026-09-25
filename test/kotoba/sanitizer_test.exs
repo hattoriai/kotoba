@@ -150,16 +150,19 @@ defmodule Kotoba.SanitizerTest do
                Sanitizer.check(%Nodes.Link{url: "/a"}, %Nodes.AutoLink{url: "/b"})
     end
 
-    test "a tab is allowed in a code block (I-1)" do
+    test "a tab is allowed in a code block" do
       assert :ok = Sanitizer.check(%Nodes.Tab{}, %Nodes.Code{})
     end
 
-    test "a horizontal rule and an attachment are valid only under the root or a list item (M-1)" do
+    test "a horizontal rule and an attachment are valid only under the root or a list item" do
       attachment = %Nodes.Attachment{key: "k", url: "/a", name: "a", content_type: "t", bytes: 1}
       rule = %Nodes.HorizontalRule{}
 
-      assert :ok = Sanitizer.check(rule, nil)
-      assert :ok = Sanitizer.check(attachment, nil)
+      # The children of the root node have the root struct as their
+      # parent, not `nil` (only the root node's own check has a `nil`
+      # parent) — see `Kotoba.RendererTest` for the end-to-end HTML check.
+      assert :ok = Sanitizer.check(rule, %Nodes.Root{})
+      assert :ok = Sanitizer.check(attachment, %Nodes.Root{})
       assert :ok = Sanitizer.check(rule, %Nodes.ListItem{})
       assert :ok = Sanitizer.check(attachment, %Nodes.ListItem{})
 
@@ -169,7 +172,7 @@ defmodule Kotoba.SanitizerTest do
       end
     end
 
-    test "a list item holds only one nested list, by position, even when the lists are identical (M-2)" do
+    test "a list item holds only one nested list, by position, even when the lists are identical" do
       inner = %Nodes.List{list_type: "bullet", tag: "ul", children: [%Nodes.ListItem{}]}
       item = %Nodes.ListItem{children: [inner, inner]}
 
@@ -179,7 +182,7 @@ defmodule Kotoba.SanitizerTest do
                Sanitizer.check(inner, item, index: 1)
     end
 
-    test "a list item outside a list is refused (M-3)" do
+    test "a list item outside a list is refused" do
       assert {:error, "a list item must be inside a list"} =
                Sanitizer.check(%Nodes.ListItem{}, nil)
 

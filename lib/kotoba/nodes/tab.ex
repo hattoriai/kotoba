@@ -12,7 +12,7 @@ defmodule Kotoba.Nodes.Tab do
   """
   use Kotoba.Node, type: "tab", kind: :inline
 
-  field :text, :string, default: "\t", required: true
+  field :text, :string, default: "\t", required: true, in: ["\t"]
   field :format, :integer, default: 0
   field :style, :string, default: ""
   field :mode, :string, default: "normal", in: ~w(normal token segmented)

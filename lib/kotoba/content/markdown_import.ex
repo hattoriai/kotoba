@@ -10,12 +10,19 @@ defmodule Kotoba.Content.MarkdownImport do
   @fence ~r/\A```(\w*)\s*\z/
   @bullet ~r/\A[-*]\s+(.*)\z/
   @numbered ~r/\A\d+\.\s+(.*)\z/
+
+  # `italic` requires a non-word character (or a string edge) on each side,
+  # so `snake_case_name` is not read as emphasis. `url` allows one level of
+  # balanced parentheses, so a Wikipedia-style URL is not cut at the first
+  # `)`.
   @inline ~r/
     `(?<code>[^`]+)`
     |\*\*(?<bold>[^*]+)\*\*
-    |_(?<italic>[^_]+)_
-    |\[(?<text>[^\]]*)\]\((?<url>[^)\s]+)\)
+    |(?<!\w)_(?<italic>[^_]+)_(?!\w)
+    |\[(?<text>[^\]]*)\]\((?<url>(?:[^()\s]|\([^()\s]*\))+)\)
   /x
+
+  @inline_names Regex.names(@inline)
 
   @doc "Returns the root node JSON for a Markdown string."
   @spec root(String.t()) :: map()
@@ -25,9 +32,16 @@ defmodule Kotoba.Content.MarkdownImport do
   end
 
   defp blocks([], acc), do: Enum.reverse(acc)
-  defp blocks(["" | rest], acc), do: blocks(rest, acc)
 
   defp blocks([line | rest] = lines, acc) do
+    if String.trim(line) == "" do
+      blocks(rest, acc)
+    else
+      dispatch_block(lines, acc)
+    end
+  end
+
+  defp dispatch_block([line | rest] = lines, acc) do
     cond do
       match = Regex.run(@fence, line, capture: :all_but_first) ->
         {code, rest} = code_block(rest, match)
@@ -51,7 +65,14 @@ defmodule Kotoba.Content.MarkdownImport do
   defp code_block(lines, [language]) do
     {body, rest} = Enum.split_while(lines, &(not Regex.match?(@fence, &1)))
     rest = drop_fence(rest)
-    children = body |> Enum.map(&text_node/1) |> Enum.intersperse(linebreak_node())
+
+    # A blank line in the fence gets a line break with no text node either
+    # side of it, not an empty text node.
+    children =
+      body
+      |> Enum.map(&if(&1 == "", do: [], else: [text_node(&1)]))
+      |> Enum.intersperse([linebreak_node()])
+      |> List.flatten()
 
     code = element("code", children)
     code = if language == "", do: code, else: Map.put(code, "language", language)
@@ -112,39 +133,45 @@ defmodule Kotoba.Content.MarkdownImport do
     {element("paragraph", children, %{"textFormat" => 0, "textStyle" => ""}), rest}
   end
 
-  defp plain_line?(""), do: false
-
-  defp plain_line?(line),
-    do:
-      not Regex.match?(@fence, line) and not Regex.match?(@heading, line) and not item_line?(line)
+  defp plain_line?(line) do
+    String.trim(line) != "" and not Regex.match?(@fence, line) and
+      not Regex.match?(@heading, line) and not item_line?(line)
+  end
 
   # -- inline ----------------------------------------------------------------
 
   defp inline(""), do: []
 
   defp inline(text) do
-    case Regex.run(@inline, text) do
+    case Regex.run(@inline, text, capture: [0 | @inline_names], return: :index) do
       nil ->
         [text_node(text)]
 
-      [whole | _groups] ->
-        captures = Regex.named_captures(@inline, text)
-        [before, rest] = String.split(text, whole, parts: 2)
+      [{start, len} | group_indices] ->
+        before = String.slice(text, 0, start)
+        rest = String.slice(text, (start + len)..-1//1)
+        captures = @inline_names |> Enum.zip(group_indices) |> Map.new(&capture(text, &1))
         before_nodes = if before == "", do: [], else: [text_node(before)]
-        before_nodes ++ [token(captures)] ++ inline(rest)
+        before_nodes ++ List.wrap(token(captures)) ++ inline(rest)
     end
   end
 
+  defp capture(_text, {name, {-1, 0}}), do: {name, ""}
+  defp capture(text, {name, {start, len}}), do: {name, String.slice(text, start, len)}
+
+  # A link with no text (`[](url)`) gives no node at all, rather than an
+  # empty anchor.
   defp token(%{"code" => code, "bold" => bold, "italic" => italic, "text" => text, "url" => url}) do
     cond do
       present?(code) -> text_node(code, 16)
       present?(bold) -> text_node(bold, 1)
       present?(italic) -> text_node(italic, 2)
-      true -> link_node(url, [text_node(text)])
+      present?(text) -> link_node(url, [text_node(text)])
+      true -> nil
     end
   end
 
-  defp present?(value), do: value not in [nil, ""]
+  defp present?(value), do: value != ""
 
   # -- JSON builders -----------------------------------------------------
 

@@ -367,14 +367,14 @@ defmodule Kotoba.DocumentTest do
       assert Document.map(doc, & &1) == doc
     end
 
-    test "text/1 joins the text of the blocks and agrees with Renderer.to_text/2 (M-6)", %{
+    test "text/1 joins the text of the blocks and agrees with Renderer.to_text/2", %{
       doc: doc
     } do
       assert Document.text(doc) == "Hi Ada!\ncat.png\nitem\nmore\nGrace"
       assert Document.text(doc) == Kotoba.Renderer.to_text(doc)
     end
 
-    test "text/1 gives no blank line for a root decorator with no text (M-6)" do
+    test "text/1 gives no blank line for a root decorator with no text" do
       doc =
         parse!(
           envelope(root([paragraph([text("a")]), %{"type" => "horizontalrule", "version" => 1}]))
@@ -406,7 +406,7 @@ defmodule Kotoba.DocumentTest do
              )
     end
 
-    test "is true for a lone tab (I-1)" do
+    test "is true for a lone tab" do
       tab = %{
         "detail" => 2,
         "format" => 0,

@@ -145,7 +145,11 @@ defmodule Kotoba.Sanitizer do
 
   @doc """
   Checks one node in its parent. `parent` is `nil` for the root node. The
-  `:schemes` option is the same as in `link_url/2`.
+  `:schemes` option is the same as in `link_url/2`. `:index` is the
+  position of the node among its parent's children; `Kotoba.Renderer`
+  sets it for every node it renders, and it decides whether a list nested
+  in a list item is the one allowed nested list. A direct call that
+  checks a nested list without `:index` always refuses it.
 
   Returns `:ok`, or `{:error, reason}` when the renderer must render the
   node as an unknown node.
@@ -187,9 +191,14 @@ defmodule Kotoba.Sanitizer do
   end
 
   defp check_string(module, field, _value)
-       when module in [Nodes.Text, Nodes.CodeHighlight, Nodes.Tab] and
-              field.name in [:text, :style],
+       when module in [Nodes.Text, Nodes.CodeHighlight] and field.name in [:text, :style],
        do: :ok
+
+  # Not a blanket exemption: `validate/1` (`Kotoba.Nodes.Tab`'s `in:
+  # ["\t"]`) already refuses every value but the single tab character
+  # before this check runs, so this clause only ever sees that one,
+  # harmless value.
+  defp check_string(Nodes.Tab, %{name: :text}, "\t"), do: :ok
 
   # `link_url/2` checks the URL of a link; a link with a bad URL keeps its text.
   defp check_string(module, field, _value)
@@ -229,7 +238,7 @@ defmodule Kotoba.Sanitizer do
       else: :ok
   end
 
-  # A list item is valid only directly inside a list (M-3).
+  # A list item is valid only directly inside a list.
   defp check_parent(%Nodes.ListItem{}, %Nodes.List{}, _opts), do: :ok
 
   defp check_parent(%Nodes.ListItem{}, _other_parent, _opts),
@@ -239,7 +248,7 @@ defmodule Kotoba.Sanitizer do
   defp check_parent(_node, %Nodes.List{}, _opts), do: {:error, "a list holds only list items"}
 
   # One nested list per list item, by position: two lists at the same
-  # level render as unknown even when they are identical (M-2).
+  # level render as unknown even when they are identical.
   defp check_parent(%Nodes.List{}, %Nodes.ListItem{children: children}, opts) do
     index = Keyword.get(opts, :index)
 
@@ -255,7 +264,7 @@ defmodule Kotoba.Sanitizer do
       else: {:error, "a code block holds only code, text, line breaks and tabs"}
   end
 
-  # Block decorators are valid only under the root or a list item (M-1). The
+  # Block decorators are valid only under the root or a list item. The
   # children of the root node have the root struct as their parent, not
   # `nil` (only the root node's own check has a `nil` parent).
   defp check_parent(%module{}, parent, _opts)

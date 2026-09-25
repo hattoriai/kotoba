@@ -244,11 +244,14 @@ defmodule Kotoba.Document do
   end
 
   @doc """
-  Returns the plain text of the document.
+  Returns the plain text of the document, with the `:default` render
+  policy.
 
   Delegates to `Kotoba.Renderer.to_text/2`, so the two always agree: a
   root-level decorator with no text (for example a horizontal rule) gives
-  no blank line.
+  no blank line, and a node that `Kotoba.Sanitizer` refuses (for example
+  a node nested where it is not valid) gives no text either, the same as
+  an unknown node.
   """
   @spec text(t()) :: String.t()
   def text(%__MODULE__{} = doc), do: Kotoba.Renderer.to_text(doc)

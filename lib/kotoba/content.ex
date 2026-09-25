@@ -23,15 +23,41 @@ defmodule Kotoba.Content do
   `dump/1` and `load/1` store and read `%{"doc", "html", "text",
   "version"}`. When a loaded map has no `"html"` or no `"text"` (an older
   row, or one written outside Kotoba), `load/1` re-renders them from
-  `"doc"`.
+  `"doc"`. When `"doc"` itself no longer parses (for example a custom
+  node lost a field it once allowed), `load/1` still succeeds, with an
+  empty cache, rather than failing the whole query; a row where `"doc"`
+  is not even a map is refused.
 
-  `equal?/2` compares the `:doc` field only, so an `Ecto.Changeset` does
-  not mark the field changed when only the cache was recomputed.
+  `equal?/2` compares the `:doc` field of two `Kotoba.Content` structs,
+  so an `Ecto.Changeset` does not mark the field changed when only the
+  cache was recomputed; it falls back to `==` for anything else, so `nil`
+  equals `nil`.
 
   Use `rerender/2` after a node registry or a render policy changes, to
   bring the cache of a stored document up to date. Use `from_markdown/2`
   to build a `Kotoba.Content` from a Markdown string, on a best-effort
   basis.
+
+  ## Forms and changesets
+
+  The Kotoba editor hook always posts a JSON document through the hidden
+  input, on every change: an empty editor posts the empty envelope (the
+  `doc` of `empty/0`), never `""` and never no param at all. So in the
+  ordinary form-submit path, `cast/1` only ever sees a JSON string, and
+  the `nil`/`""` handling above does not come into play.
+
+  `Ecto.Changeset.cast/4` has its own, separate handling of `""`: by
+  default, it treats a param of `""` (or all white space) as absent and
+  keeps the field's current value (`nil`, unless the schema gives it a
+  default) instead of calling this type's `cast/1` at all. A blank param
+  never reaches `empty/0` this way. A host that wants `""` to cast to
+  `empty/0` — a manual API call, say, rather than the editor — opts in
+  with `empty_values: []` on that field's own `cast/4` call. This turns
+  off the `""` → current-value behaviour for every field named in that
+  same `cast/4` call, not only `:body`, so give the field its own
+  `cast/4` call when the form has other string fields that should keep
+  the default. A host can instead give the field a starting document with
+  `field :body, Kotoba.Content, default: Kotoba.Content.empty()`.
 
   ## Examples
 
@@ -90,14 +116,20 @@ defmodule Kotoba.Content do
 
   def cast(json) when is_binary(json) do
     case JSON.decode(json) do
-      {:ok, decoded} -> cast(decoded)
+      {:ok, decoded} -> cast_decoded(decoded)
       {:error, _reason} -> :error
     end
   end
 
-  def cast(%{"type" => "root"} = root) when is_map(root), do: parse(wrap(root))
-  def cast(%{"root" => _root} = envelope) when is_map(envelope), do: parse(envelope)
+  def cast(%{} = map), do: cast_decoded(map)
   def cast(_other), do: :error
+
+  # Only a map from here on: a decoded JSON string that turns out to hold
+  # something other than an object (`null`, a number, another JSON string)
+  # is not cast a second time.
+  defp cast_decoded(%{"type" => "root"} = root), do: parse(wrap(root))
+  defp cast_decoded(%{"root" => _root} = envelope), do: parse(envelope)
+  defp cast_decoded(_other), do: :error
 
   @impl Ecto.Type
   def dump(%__MODULE__{} = content) do
@@ -113,25 +145,36 @@ defmodule Kotoba.Content do
   def dump(_other), do: :error
 
   @impl Ecto.Type
-  def load(%{"doc" => doc} = map) when is_map(map) do
+  def load(%{"doc" => doc} = map) when is_map(doc) do
     with html when is_binary(html) <- Map.get(map, "html"),
          text when is_binary(text) <- Map.get(map, "text") do
       {:ok,
        %__MODULE__{doc: doc, html: html, text: text, version: Map.get(map, "version", @version)}}
     else
-      _missing ->
-        case Document.parse(doc) do
-          {:ok, parsed} -> {:ok, build(parsed, [])}
-          {:error, _messages} -> :error
-        end
+      _missing -> {:ok, load_without_cache(doc, map)}
     end
   end
 
   def load(_other), do: :error
 
+  # `doc` is a map (checked above), but may still fail Document.parse/2 (a
+  # required field a removed custom node used to allow, say). A bad doc
+  # loads with an empty cache instead of failing the whole query.
+  defp load_without_cache(doc, map) do
+    case Document.parse(doc) do
+      {:ok, parsed} ->
+        build(parsed, [])
+
+      {:error, _messages} ->
+        %__MODULE__{doc: doc, html: "", text: "", version: cache_version(map)}
+    end
+  end
+
+  defp cache_version(map), do: Map.get(map, "version", @version)
+
   @impl Ecto.Type
   def equal?(%__MODULE__{doc: a}, %__MODULE__{doc: b}), do: a == b
-  def equal?(_a, _b), do: false
+  def equal?(a, b), do: a == b
 
   @impl Ecto.Type
   def embed_as(_format), do: :dump
