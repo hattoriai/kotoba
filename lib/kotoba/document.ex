@@ -147,7 +147,7 @@ defmodule Kotoba.Document do
       not module.element?() -> {:ok, []}
       not Map.has_key?(json, "children") -> {:ok, []}
       is_list(json["children"]) -> parse_list(json["children"], registry, path)
-      true -> {:error, ["#{path}: children must be a list"]}
+      true -> {:error, ["#{path} (#{module.type()}): children must be a list"]}
     end
   end
 

@@ -4,14 +4,33 @@ defmodule Kotoba.Node do
 
   A node is a struct that mirrors one Lexical node in the serialized editor
   state. `use Kotoba.Node` makes the struct and the functions of the
-  behaviour from a list of fields:
+  behaviour from a list of fields. The node module then gives the render
+  callbacks:
 
       defmodule MyApp.Nodes.Pointer do
         use Kotoba.Node, type: "pointer", kind: :inline
 
+        import Phoenix.Component, only: [sigil_H: 2]
+
         field :ref, :string, required: true
-        field :excerpt, :string
+        field :excerpt, :string, omit_nil: true
+        field :tone, :string, key: "toneName", default: "plain", in: ~w(plain loud)
+
+        @impl Kotoba.Node
+        def render_html(node, _opts) do
+          assigns = %{node: node}
+
+          ~H\"\"\"
+          <span class="pointer" data-ref={@node.ref} data-tone={@node.tone}>{@node.excerpt}</span>
+          \"\"\"
+        end
+
+        @impl Kotoba.Node
+        def render_text(node, _opts), do: "[\#{node.excerpt}]"
       end
+
+  In the JSON, the `tone` field has the key `"toneName"`. When `excerpt` is
+  `nil`, `to_json/1` does not write the `"excerpt"` key.
 
   ## Options
 
@@ -28,27 +47,47 @@ defmodule Kotoba.Node do
 
   ## Fields
 
-  `field/3` declares one attribute. See `Kotoba.Node.Field` for the options.
-  The types are `:string`, `:integer`, `:boolean`, `:map` and
-  `{:array, type}`. The names `:children`, `:extra`, `:type` and `:version`
-  are reserved.
+  `field/3` declares one attribute. The types are `:string`, `:integer`,
+  `:boolean`, `:map` and `{:array, type}`. The options are:
+
+    * `:key` - the JSON key. The default is the field name as a string.
+      Use it for the camelCase keys of Lexical, for example
+      `field :list_type, :string, key: "listType"`.
+    * `:required` - when `true`, the value must not be `nil`.
+    * `:default` - the struct default. `from_json/1` also uses it when the
+      JSON has no value for the key.
+    * `:in` - a list of the permitted values.
+    * `:omit_nil` - when `true`, `to_json/1` does not write the key when the
+      value is `nil`. When `false` (the default), it writes `null`.
+
+  The field names `:children`, `:extra`, `:type` and `:version` are
+  reserved. The JSON keys `"type"`, `"children"` and `"version"` are
+  reserved too, and two fields cannot have the same JSON key. A module that
+  breaks one of these rules does not compile.
 
   ## Generated functions
 
   `use Kotoba.Node` defines `type/0`, `kind/0`, `element?/0`, `fields/0`,
-  `validate/1`, `from_json/1` and `to_json/1`. A node can override
-  `validate/1` to add its own checks, and call `super/1` for the field
-  checks.
+  `validate/1`, `from_json/1`, `to_json/1` and a default
+  `render_markdown/2`. A node can override `validate/1` to add its own
+  checks, and call `super/1` for the field checks. It can override
+  `render_markdown/2`; the default calls `render_text/2`.
 
   `from_json/1` reads the attributes of one node. It does not read the
   children: `Kotoba.Document.parse/2` reads them with the node registry.
 
   ## Rendering
 
-  The behaviour also declares `c:render_html/2`, `c:render_text/2` and
-  `c:render_markdown/2`. They are optional callbacks of the behaviour, but
-  the renderer requires `c:render_html/2` and `c:render_text/2` for each
-  node that it outputs.
+  `Kotoba.Renderer` calls `c:render_html/2`, `c:render_text/2` and
+  `c:render_markdown/2` for each node, after `Kotoba.Sanitizer` accepts the
+  node. A node module must give `c:render_html/2` and `c:render_text/2`.
+
+  `c:render_html/2` returns safe HTML: `{:safe, iodata}` from
+  `Phoenix.HTML`, or a `~H` template. A plain string is escaped. An element
+  node renders its children with `Kotoba.Renderer.html_children/2`,
+  `Kotoba.Renderer.text_children/2` and
+  `Kotoba.Renderer.markdown_children/2`. The `opts` are described in
+  `Kotoba.Renderer`.
   """
 
   alias Kotoba.Node.Field
@@ -80,16 +119,15 @@ defmodule Kotoba.Node do
   @doc "Returns the JSON map of the node, with the JSON of its children."
   @callback to_json(node :: t()) :: map()
 
-  @doc "Renders the node as safe HTML."
-  @callback render_html(node :: t(), opts :: keyword()) :: Phoenix.HTML.safe()
+  @doc "Renders the node as safe HTML, or as a `~H` template."
+  @callback render_html(node :: t(), opts :: keyword()) ::
+              Phoenix.HTML.safe() | Phoenix.LiveView.Rendered.t()
 
   @doc "Renders the node as plain text."
   @callback render_text(node :: t(), opts :: keyword()) :: String.t()
 
   @doc "Renders the node as Markdown."
   @callback render_markdown(node :: t(), opts :: keyword()) :: String.t()
-
-  @optional_callbacks render_html: 2, render_text: 2, render_markdown: 2
 
   @kinds [:block, :inline, :decorator]
 
@@ -110,7 +148,11 @@ defmodule Kotoba.Node do
       @impl Kotoba.Node
       def validate(node) when is_struct(node, __MODULE__), do: Kotoba.Node.validate_fields(node)
 
-      defoverridable validate: 1
+      @impl Kotoba.Node
+      def render_markdown(node, opts) when is_struct(node, __MODULE__),
+        do: __MODULE__.render_text(node, opts)
+
+      defoverridable validate: 1, render_markdown: 2
     end
   end
 
@@ -171,6 +213,7 @@ defmodule Kotoba.Node do
   end
 
   @reserved [:children, :extra, :type, :version]
+  @reserved_keys ["type", "children", "version"]
 
   @doc false
   def __field__(name, type, opts) do
@@ -197,14 +240,23 @@ defmodule Kotoba.Node do
     fields =
       declared ++ element_fields ++ [Field.new(:version, :integer, default: 1, required: true)]
 
-    case fields
-         |> Enum.frequencies_by(& &1.name)
-         |> Enum.filter(fn {_name, count} -> count > 1 end) do
-      [] ->
-        fields
+    check_unique!(fields, & &1.name, &"the field #{inspect(&1)} is declared more than once")
 
-      [{name, _count} | _rest] ->
-        raise ArgumentError, "the field #{inspect(name)} is declared more than once"
+    Enum.each(declared, fn field ->
+      if field.key in @reserved_keys,
+        do: raise(ArgumentError, "the JSON key #{inspect(field.key)} is reserved")
+    end)
+
+    check_unique!(fields, & &1.key, &"the JSON key #{inspect(&1)} is used by more than one field")
+    fields
+  end
+
+  defp check_unique!(fields, by, message) do
+    case fields
+         |> Enum.frequencies_by(by)
+         |> Enum.filter(fn {_value, count} -> count > 1 end) do
+      [] -> :ok
+      [{value, _count} | _rest] -> raise ArgumentError, message.(value)
     end
   end
 

@@ -8,9 +8,20 @@ defmodule Kotoba.Nodes.AutoLink do
   """
   use Kotoba.Node, type: "autolink", kind: :inline, element: true
 
+  alias Kotoba.Nodes.Link
+
   field :url, :string, required: true
   field :rel, :string
   field :target, :string
   field :title, :string
   field :is_unlinked, :boolean, key: "isUnlinked", default: false
+
+  @impl Kotoba.Node
+  def render_html(node, opts), do: Link.html(node, opts)
+
+  @impl Kotoba.Node
+  def render_text(node, opts), do: Kotoba.Renderer.text_children(node, opts)
+
+  @impl Kotoba.Node
+  def render_markdown(node, opts), do: Link.markdown(node, opts)
 end

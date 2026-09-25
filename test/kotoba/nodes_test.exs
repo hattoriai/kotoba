@@ -9,6 +9,12 @@ defmodule Kotoba.NodesTest do
   defmodule Chip do
     use Kotoba.Node, type: "mention", kind: :decorator
     field :label, :string, required: true
+
+    @impl Kotoba.Node
+    def render_html(node, _opts), do: Phoenix.HTML.html_escape(node.label)
+
+    @impl Kotoba.Node
+    def render_text(node, _opts), do: node.label
   end
 
   test "the registry maps each built-in type to its module" do
@@ -40,7 +46,7 @@ defmodule Kotoba.NodesTest do
 
   describe "Kotoba.Nodes.Text" do
     test "formats/1 reads every bit" do
-      assert Nodes.Text.formats(255) ==
+      assert Nodes.Text.formats(2047) ==
                [
                  :bold,
                  :italic,
@@ -49,14 +55,17 @@ defmodule Kotoba.NodesTest do
                  :code,
                  :subscript,
                  :superscript,
-                 :highlight
+                 :highlight,
+                 :lowercase,
+                 :uppercase,
+                 :capitalize
                ]
 
       assert Nodes.Text.formats(0) == []
     end
 
     test "bitmask/1 is the reverse of formats/1" do
-      for bitmask <- 0..255,
+      for bitmask <- 0..2047,
           do: assert(Nodes.Text.bitmask(Nodes.Text.formats(bitmask)) == bitmask)
     end
   end

@@ -9,6 +9,12 @@ defmodule Kotoba.DocumentTest do
   defmodule Chart do
     use Kotoba.Node, type: "x-chart", kind: :decorator
     field :series, {:array, :integer}, required: true
+
+    @impl Kotoba.Node
+    def render_html(_node, _opts), do: {:safe, "<svg></svg>"}
+
+    @impl Kotoba.Node
+    def render_text(_node, _opts), do: ""
   end
 
   @fixtures Path.expand("../fixtures/lexical", __DIR__)
@@ -68,7 +74,7 @@ defmodule Kotoba.DocumentTest do
         "key" => "k/cat.png",
         "url" => "/uploads/k/cat.png",
         "name" => "cat.png",
-        "content_type" => "image/png",
+        "contentType" => "image/png",
         "bytes" => 2048,
         "width" => 640,
         "height" => 480
@@ -157,7 +163,7 @@ defmodule Kotoba.DocumentTest do
       nodes = [
         mention("u1", "Ada"),
         attachment(),
-        attachment(%{"content_type" => "application/pdf"}) |> Map.drop(["width", "height"]),
+        attachment(%{"contentType" => "application/pdf"}) |> Map.drop(["width", "height"]),
         %{"type" => "linebreak", "version" => 1},
         text("styled", 3) |> Map.put("style", "color: red")
       ]
@@ -259,7 +265,7 @@ defmodule Kotoba.DocumentTest do
                "root.children[0].children[2]: a node must be an object",
                "root.children[1] (heading): tag must be one of: h1, h2, h3, h4, h5, h6",
                "root.children[1].children[0]: type must be a string",
-               "root.children[2]: children must be a list",
+               "root.children[2] (list): children must be a list",
                "root.children[3].children[0] (mention): id must be a string"
              ]
     end

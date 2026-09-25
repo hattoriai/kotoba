@@ -17,3 +17,9 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   typed fields.
 - Built-in nodes under `Kotoba.Nodes` for each Lexical node of the editor,
   and the `attachment` and `mention` nodes.
+- `Kotoba.Renderer`: renders a document as safe HTML (through
+  `Phoenix.HTML`), as plain text, and as Markdown.
+- `Kotoba.Sanitizer`: structural checks before rendering (node attributes,
+  nesting, string limits), an allow list of link schemes
+  (`config :kotoba, allowed_link_schemes:`), and the `:default` and
+  `:untrusted` policies.

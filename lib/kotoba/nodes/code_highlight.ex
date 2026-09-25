@@ -14,4 +14,10 @@ defmodule Kotoba.Nodes.CodeHighlight do
   field :style, :string, default: ""
   field :mode, :string, default: "normal", in: ~w(normal token segmented)
   field :detail, :integer, default: 0
+
+  @impl Kotoba.Node
+  def render_html(node, _opts), do: Phoenix.HTML.html_escape(node.text)
+
+  @impl Kotoba.Node
+  def render_text(node, _opts), do: node.text
 end

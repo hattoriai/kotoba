@@ -31,7 +31,7 @@ defmodule Kotoba.DocumentGenerators do
   defp paragraph do
     gen all(
           children <- inlines(),
-          text_format <- integer(0..255),
+          text_format <- integer(0..2047),
           extra <- extra()
         ) do
       "paragraph"
@@ -97,7 +97,7 @@ defmodule Kotoba.DocumentGenerators do
   def text do
     gen all(
           text <- string(:printable, max_length: 12),
-          format <- integer(0..255),
+          format <- integer(0..2047),
           style <- member_of(["", "color: red"]),
           mode <- member_of(~w(normal token segmented))
         ) do
@@ -166,7 +166,7 @@ defmodule Kotoba.DocumentGenerators do
         "key" => "uploads/#{name}",
         "url" => "/uploads/#{name}",
         "name" => name,
-        "content_type" => if(image?, do: "image/png", else: "application/pdf"),
+        "contentType" => if(image?, do: "image/png", else: "application/pdf"),
         "bytes" => bytes
       }
 

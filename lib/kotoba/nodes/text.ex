@@ -15,6 +15,14 @@ defmodule Kotoba.Nodes.Text do
   | `:subscript`     | `32`  |
   | `:superscript`   | `64`  |
   | `:highlight`     | `128` |
+  | `:lowercase`     | `256` |
+  | `:uppercase`     | `512` |
+  | `:capitalize`    | `1024` |
+
+  In HTML, the formats become `strong`, `em`, `s`, `u`, `code`, `sub`,
+  `sup` and `mark`, and the three text transforms become `span` elements
+  with the classes `kotoba-lowercase`, `kotoba-uppercase` and
+  `kotoba-capitalize`. The `style` of the run is not rendered.
 
   `mode` is `"normal"`, `"token"` or `"segmented"`. `detail` is a bitmask
   that Lexical uses for special characters. `style` is an inline CSS text
@@ -23,6 +31,8 @@ defmodule Kotoba.Nodes.Text do
   use Kotoba.Node, type: "text", kind: :inline
 
   import Bitwise
+
+  alias Kotoba.{Markdown, Renderer}
 
   field :text, :string, required: true
   field :format, :integer, default: 0
@@ -40,6 +50,9 @@ defmodule Kotoba.Nodes.Text do
           | :subscript
           | :superscript
           | :highlight
+          | :lowercase
+          | :uppercase
+          | :capitalize
 
   @formats [
     bold: 1,
@@ -49,7 +62,10 @@ defmodule Kotoba.Nodes.Text do
     code: 16,
     subscript: 32,
     superscript: 64,
-    highlight: 128
+    highlight: 128,
+    lowercase: 256,
+    uppercase: 512,
+    capitalize: 1024
   ]
 
   @doc """
@@ -102,5 +118,52 @@ defmodule Kotoba.Nodes.Text do
   @spec bitmask([format()]) :: non_neg_integer()
   def bitmask(formats) when is_list(formats) do
     formats |> Enum.map(&Keyword.fetch!(@formats, &1)) |> Enum.reduce(0, &bor/2)
+  end
+
+  @html [
+    bold: {"strong", nil},
+    italic: {"em", nil},
+    strikethrough: {"s", nil},
+    underline: {"u", nil},
+    code: {"code", nil},
+    subscript: {"sub", nil},
+    superscript: {"sup", nil},
+    highlight: {"mark", nil},
+    lowercase: {"span", "kotoba-lowercase"},
+    uppercase: {"span", "kotoba-uppercase"},
+    capitalize: {"span", "kotoba-capitalize"}
+  ]
+
+  @markdown [bold: "**", italic: "*", strikethrough: "~~"]
+
+  @impl Kotoba.Node
+  def render_html(%__MODULE__{text: ""}, _opts), do: {:safe, ""}
+
+  def render_html(node, _opts) do
+    node
+    |> formats()
+    |> Enum.reverse()
+    |> Enum.reduce(Phoenix.HTML.html_escape(node.text), fn format, inner ->
+      {tag, class} = Keyword.fetch!(@html, format)
+      Renderer.tag(tag, [class: class], inner)
+    end)
+  end
+
+  @impl Kotoba.Node
+  def render_text(node, _opts), do: node.text
+
+  @impl Kotoba.Node
+  def render_markdown(%__MODULE__{text: ""}, _opts), do: ""
+
+  def render_markdown(node, _opts) do
+    formats = formats(node)
+
+    text =
+      if :code in formats, do: Markdown.code_span(node.text), else: Markdown.escape(node.text)
+
+    @markdown
+    |> Enum.filter(fn {format, _marker} -> format in formats end)
+    |> Enum.reverse()
+    |> Enum.reduce(text, fn {_format, marker}, inner -> Markdown.wrap(inner, marker) end)
   end
 end

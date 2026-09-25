@@ -5,15 +5,24 @@ defmodule Kotoba.Node.Field do
   `Kotoba.Node.field/3` makes one `Kotoba.Node.Field` for each attribute.
   `c:Kotoba.Node.fields/0` returns them in the order of declaration.
 
-    * `:name` - the struct key, an atom.
-    * `:key` - the JSON key. The default is the name as a string.
+  ## Struct keys
+
+    * `:name` - the struct key of the node, an atom.
+    * `:key` - the JSON key.
     * `:type` - `:string`, `:integer`, `:boolean`, `:map` or `{:array, type}`.
-    * `:required` - when `true`, the value must not be `nil`.
+    * `:required`, `:default`, `:in` and `:omit_nil` - the values of the
+      options below.
+
+  ## Options of `field/3`
+
+    * `:key` - the JSON key. The default is the name as a string.
+    * `:required` - when `true`, the value must not be `nil`. The default is
+      `false`.
     * `:default` - the struct default. `from_json/1` also uses it when the
-      JSON has no value for the key.
+      JSON has no value for the key. The default is `nil`.
     * `:in` - when set, a list of the permitted values.
     * `:omit_nil` - when `true`, `to_json/1` does not write the key if the
-      value is `nil`. When `false`, `to_json/1` writes `null`.
+      value is `nil`. When `false` (the default), `to_json/1` writes `null`.
   """
 
   @enforce_keys [:name, :key, :type]

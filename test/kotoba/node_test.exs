@@ -2,6 +2,7 @@ defmodule Kotoba.NodeTest do
   use ExUnit.Case, async: true
 
   alias Kotoba.Node.Field
+  alias Kotoba.Nodes.CodeHighlight
 
   defmodule Pointer do
     use Kotoba.Node, type: "pointer", kind: :inline
@@ -13,6 +14,12 @@ defmodule Kotoba.NodeTest do
     field :meta, :map
     field :tags, {:array, :string}
     field :shade, :string, in: ~w(light dark)
+
+    @impl Kotoba.Node
+    def render_html(node, _opts), do: Phoenix.HTML.html_escape(inspect(node))
+
+    @impl Kotoba.Node
+    def render_text(_node, _opts), do: ""
   end
 
   defmodule Box do
@@ -26,6 +33,12 @@ defmodule Kotoba.NodeTest do
         if node.label == "forbidden", do: {:error, ["label is forbidden"]}, else: :ok
       end
     end
+
+    @impl Kotoba.Node
+    def render_html(node, _opts), do: Phoenix.HTML.html_escape(inspect(node))
+
+    @impl Kotoba.Node
+    def render_text(_node, _opts), do: ""
   end
 
   describe "use Kotoba.Node" do
@@ -58,6 +71,42 @@ defmodule Kotoba.NodeTest do
           field :children, :string
         end
       end
+    end
+
+    test "raises for a reserved JSON key" do
+      for key <- ~w(type children version) do
+        assert_raise ArgumentError, ~r/the JSON key "#{key}" is reserved/, fn ->
+          Code.compile_string("""
+          defmodule Kotoba.NodeTest.ReservedKey do
+            use Kotoba.Node, type: "reserved", kind: :inline
+            field :label, :string, key: #{inspect(key)}
+          end
+          """)
+        end
+      end
+    end
+
+    test "raises when two fields have the same JSON key" do
+      assert_raise ArgumentError, ~r/the JSON key "label" is used by more than one field/, fn ->
+        defmodule SameKey do
+          use Kotoba.Node, type: "same", kind: :inline
+          field :label, :string
+          field :caption, :string, key: "label"
+        end
+      end
+
+      assert_raise ArgumentError, ~r/the JSON key "indent" is used by more than one field/, fn ->
+        defmodule ElementKey do
+          use Kotoba.Node, type: "same", kind: :block, element: true
+          field :depth, :integer, key: "indent"
+        end
+      end
+    end
+
+    test "defines a render_markdown/2 that calls render_text/2" do
+      assert CodeHighlight.render_markdown(%CodeHighlight{text: "x"}, []) == "x"
+
+      assert Pointer.render_markdown(%Pointer{ref: "r"}, []) == ""
     end
 
     test "raises for a field type that is not supported" do
