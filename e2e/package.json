@@ -1,0 +1,14 @@
+{
+  "name": "kotoba-e2e",
+  "private": true,
+  "license": "Apache-2.0",
+  "scripts": {
+    "test": "playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.63.0",
+    "@types/node": "20.19.43",
+    "typescript": "7.0.2"
+  }
+}

@@ -5,12 +5,16 @@
 import { $isLinkNode, $toggleLink } from "@lexical/link";
 import { $findMatchingParent } from "@lexical/utils";
 import {
+  $createRangeSelectionFromDom,
+  $getNodeByKey,
   $getSelection,
   $isRangeSelection,
+  $setSelection,
   COMMAND_PRIORITY_NORMAL,
   KEY_DOWN_COMMAND,
   mergeRegister,
   type LexicalEditor,
+  type RangeSelection,
 } from "lexical";
 
 import { isAllowedLinkUrl, normalizeUrl } from "./links";
@@ -28,8 +32,7 @@ interface LinkOptions {
 }
 
 /** Reads the URL of the link at the selection, or `null`. */
-export function $selectedLinkUrl(): string | null {
-  const selection = $getSelection();
+export function $selectedLinkUrl(selection = $getSelection()): string | null {
   if (!$isRangeSelection(selection)) return null;
   const link = $findMatchingParent(selection.anchor.getNode(), $isLinkNode);
   return $isLinkNode(link) ? link.getURL() : null;
@@ -71,31 +74,40 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
   form.append(label, input, apply, remove);
   options.host.append(form);
 
+  // The selection when the form opened. The link goes on it, even when the
+  // editor's selection changed while the focus was in the form.
+  let kept: RangeSelection | null = null;
+
   const close = (): void => {
     form.hidden = true;
+    kept = null;
     editor.focus();
   };
 
   // `$toggleLink` directly: TOGGLE_LINK_COMMAND takes only absolute URLs
   // (its check also guards paste-to-link), and the form takes relative ones.
   const toggle = (url: string | null): void => {
+    const selection = kept;
     editor.update(() => {
+      if (selection !== null && $isAttached(selection)) $setSelection(selection.clone());
       $toggleLink(url);
     });
     options.announce(url === null ? "Link removed" : "Link applied");
     close();
   };
 
-  const open = (): void => {
-    if (!editor.isEditable()) return;
+  // Reads the selection for the form, in an update. The link goes on this
+  // selection when the user applies the URL.
+  const $readSelection = (): { collapsed: boolean; url: string | null } | null => {
+    const selection = $domSelection(editor) ?? $getSelection();
+    if (!$isRangeSelection(selection)) return null;
+    kept = selection.clone();
+    return { collapsed: selection.isCollapsed(), url: $selectedLinkUrl(selection) };
+  };
 
-    const state = editor.getEditorState().read(() => {
-      const selection = $getSelection();
-      if (!$isRangeSelection(selection)) return null;
-      return { collapsed: selection.isCollapsed(), url: $selectedLinkUrl() };
-    });
-
+  const show = (state: { collapsed: boolean; url: string | null } | null): void => {
     if (state === null || (state.collapsed && state.url === null)) {
+      kept = null;
       options.announce("Select text to make a link");
       return;
     }
@@ -106,6 +118,19 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
     position(form, options.host);
     input.focus();
     input.select();
+  };
+
+  // From the toolbar: outside an update.
+  const open = (): void => {
+    if (!editor.isEditable()) return;
+    let state = null as { collapsed: boolean; url: string | null } | null;
+    editor.update(
+      () => {
+        state = $readSelection();
+      },
+      { discrete: true },
+    );
+    show(state);
   };
 
   const submit = (): void => {
@@ -160,7 +185,8 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
           return false;
         }
         event.preventDefault();
-        open();
+        // A command handler runs in an update, so the selection is read here.
+        if (editor.isEditable()) show($readSelection());
         return true;
       },
       COMMAND_PRIORITY_NORMAL,
@@ -180,6 +206,25 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
       form.remove();
     },
   };
+}
+
+// Lexical reads a change of the DOM selection a moment after it happens, so
+// a key press that comes at once (Shift+Arrow, then Cmd+K) would see the
+// selection before the change. This reads the DOM selection when it is in
+// the editor. It does not set the editor's selection: that would move the
+// DOM selection, and the focus, back to the editor.
+export function $domSelection(editor: LexicalEditor): RangeSelection | null {
+  const dom = window.getSelection();
+  const root = editor.getRootElement();
+  if (dom === null || root === null || dom.anchorNode === null || !root.contains(dom.anchorNode)) return null;
+  return $createRangeSelectionFromDom(dom, editor);
+}
+
+function $isAttached(selection: RangeSelection): boolean {
+  return (
+    $getNodeByKey(selection.anchor.key)?.isAttached() === true &&
+    $getNodeByKey(selection.focus.key)?.isAttached() === true
+  );
 }
 
 // Places a floating element under the DOM selection, inside the host.

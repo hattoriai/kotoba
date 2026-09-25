@@ -71,3 +71,14 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `Kotoba.Renderer.escape_markdown/1`, for the Markdown of app nodes.
 - `.formatter.exs` exports `field/2` and `field/3` without parentheses, for
   `import_deps: [:kotoba]`.
+- `mix kotoba.gen.node` takes `--module` (the module name; the Elixir files
+  follow it) and `--out` (the directory for the files).
+- Tab indents a list item and Shift+Tab outdents it, wherever the caret is
+  in the item. Outside a list and a code block, Tab moves the focus out of
+  the editor, and so does Shift+Tab in a list item that is not indented.
+- The hidden input keeps the current document after a LiveView patch of the
+  form.
+- The link form and the toolbar act on the selection that the page shows,
+  also right after a Shift+Arrow key.
+- A development server (`mix dev`, `dev.exs`) and Playwright browser tests
+  (`e2e/`, `mix test.e2e`).

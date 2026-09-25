@@ -29,6 +29,12 @@ defmodule Mix.Tasks.Kotoba.Gen.Node do
       document root.
     * `--app` - the application name. The default is the `:app` of the
       Mix project.
+    * `--module` - the name of the Elixir module, for example
+      `MyApp.Content.Callout`. Its last part must be the node name. The
+      default is `<App>.Kotoba.Nodes.<Name>`. The Elixir file and the test
+      follow the module name (`lib/my_app/content/callout.ex`).
+    * `--out` - the directory to write the files in, for an app that is not
+      at the root of the working directory. The default is `.`.
     * `--force` - replaces files that exist. Without it, the task stops
       when one of the files exists.
   """
@@ -40,9 +46,15 @@ defmodule Mix.Tasks.Kotoba.Gen.Node do
   @impl Mix.Task
   def run(argv) do
     {opts, args} =
-      OptionParser.parse!(argv, strict: [kind: :string, app: :string, force: :boolean])
+      OptionParser.parse!(argv,
+        strict: [kind: :string, app: :string, module: :string, out: :string, force: :boolean]
+      )
 
-    assigns = opts |> app() |> assigns(name(args), kind(opts))
+    assigns =
+      opts
+      |> app()
+      |> assigns(name(args), kind(opts), Keyword.take(opts, [:module, :out]))
+
     files = files(assigns)
 
     existing = for {path, _content} <- files, File.exists?(path), do: path
@@ -110,27 +122,62 @@ defmodule Mix.Tasks.Kotoba.Gen.Node do
   end
 
   @doc false
-  @spec assigns(String.t(), String.t(), :decorator | :inline | :block) :: map()
-  def assigns(app, name, kind) do
+  @spec assigns(String.t(), String.t(), :decorator | :inline | :block, keyword()) :: map()
+  def assigns(app, name, kind, opts \\ []) do
     file = Macro.underscore(name)
-    base = Macro.camelize(app)
+    out = Keyword.get(opts, :out)
+
+    {module, ex_path, test_path} =
+      case Keyword.fetch(opts, :module) do
+        {:ok, module} ->
+          module = module!(module, name)
+          path = Macro.underscore(module)
+          {module, Path.join(["lib", path <> ".ex"]), Path.join(["test", path <> "_test.exs"])}
+
+        :error ->
+          {"#{Macro.camelize(app)}.Kotoba.Nodes.#{name}",
+           Path.join(["lib", app, "kotoba", "nodes", file <> ".ex"]),
+           Path.join(["test", app, "kotoba", "nodes", file <> "_test.exs"])}
+      end
 
     %{
       app: app,
       name: name,
       kind: kind,
       file: file,
-      module: "#{base}.Kotoba.Nodes.#{name}",
-      test_module: "#{base}.Kotoba.Nodes.#{name}Test",
+      module: module,
+      test_module: module <> "Test",
       type: String.replace(app, "_", "-") <> "-" <> String.replace(file, "_", "-"),
       class: name <> "Node",
       inline: kind == :inline,
       tag: if(kind == :inline, do: "span", else: "div"),
-      ex_path: Path.join(["lib", app, "kotoba", "nodes", file <> ".ex"]),
-      js_path: Path.join(["assets", "js", "kotoba", "nodes", file <> ".js"]),
-      test_path: Path.join(["test", app, "kotoba", "nodes", file <> "_test.exs"]),
+      ex_path: under(out, ex_path),
+      js_path: under(out, Path.join(["assets", "js", "kotoba", "nodes", file <> ".js"])),
+      test_path: under(out, test_path),
       url: "/assets/kotoba/nodes/#{file}.js"
     }
+  end
+
+  defp under(nil, path), do: path
+  defp under(out, path), do: Path.join(out, path)
+
+  defp module!(module, name) do
+    valid? = Regex.match?(~r/^[A-Z][A-Za-z0-9]*(\.[A-Z][A-Za-z0-9]*)*$/, module)
+
+    cond do
+      not valid? ->
+        Mix.raise(
+          "--module must be a module name such as MyApp.Nodes.#{name}, got: #{inspect(module)}"
+        )
+
+      module |> String.split(".") |> List.last() != name ->
+        Mix.raise(
+          "The last part of --module must be the node name #{name}, got: #{inspect(module)}"
+        )
+
+      true ->
+        module
+    end
   end
 
   @doc false

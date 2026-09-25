@@ -13,7 +13,6 @@ import {
   HorizontalRuleNode,
   INSERT_HORIZONTAL_RULE_COMMAND,
   namedSignals,
-  registerTabIndentation,
 } from "@lexical/extension";
 import { createEmptyHistoryState, registerHistory } from "@lexical/history";
 import {
@@ -25,7 +24,6 @@ import {
   registerLink,
 } from "@lexical/link";
 import {
-  $isListItemNode,
   ListItemNode,
   ListNode,
   registerCheckList,
@@ -45,11 +43,14 @@ import {
   type Transformer,
 } from "@lexical/markdown";
 import { HeadingNode, QuoteNode, registerRichText } from "@lexical/rich-text";
-import { $insertNodeToNearestRoot, $unwrapNode } from "@lexical/utils";
+import { $getNearestNodeOfType, $insertNodeToNearestRoot, $unwrapNode } from "@lexical/utils";
 import {
   $getSelection,
   $isRangeSelection,
   COMMAND_PRIORITY_EDITOR,
+  INDENT_CONTENT_COMMAND,
+  KEY_TAB_COMMAND,
+  OUTDENT_CONTENT_COMMAND,
   createEditor,
   mergeRegister,
   type EditorThemeClasses,
@@ -260,6 +261,37 @@ export interface PluginOptions {
   linkSchemes: readonly string[];
 }
 
+/** The deepest list nesting that Tab makes. */
+export const MAX_LIST_INDENT = 6;
+
+/**
+ * Tab indents a list item and Shift+Tab outdents it, wherever the caret is
+ * in the item. Everywhere else Tab is left to the browser, so it moves the
+ * focus out of the editor, and so does Shift+Tab in a list item that is not
+ * indented. Code blocks handle Tab themselves (it inserts a tab), at a
+ * higher priority.
+ */
+function registerListTab(editor: LexicalEditor): () => void {
+  return editor.registerCommand(
+    KEY_TAB_COMMAND,
+    (event: KeyboardEvent) => {
+      const selection = $getSelection();
+      if (!$isRangeSelection(selection)) return false;
+      const item = $getNearestNodeOfType(selection.anchor.getNode(), ListItemNode);
+      if (item === null) return false;
+
+      const indent = item.getIndent();
+      if (event.shiftKey && indent === 0) return false;
+
+      event.preventDefault();
+      if (event.shiftKey) return editor.dispatchCommand(OUTDENT_CONTENT_COMMAND, undefined);
+      if (indent >= MAX_LIST_INDENT) return true;
+      return editor.dispatchCommand(INDENT_CONTENT_COMMAND, undefined);
+    },
+    COMMAND_PRIORITY_EDITOR,
+  );
+}
+
 /** Registers the rich text plugins. Returns a function that removes them. */
 export function registerPlugins(editor: LexicalEditor, options: PluginOptions): () => void {
   const { linkSchemes } = options;
@@ -274,9 +306,7 @@ export function registerPlugins(editor: LexicalEditor, options: PluginOptions): 
     registerHistory(editor, createEmptyHistoryState(), 300),
     registerList(editor),
     registerCheckList(editor),
-    // Tab indents list items only, so that Tab still moves the focus out of
-    // the editor everywhere else. Code blocks handle Tab themselves.
-    registerTabIndentation(editor, 6, (node) => $isListItemNode(node)),
+    registerListTab(editor),
     registerLink(
       editor,
       namedSignals({ validateUrl: (url: string) => isAbsoluteLinkUrl(url, linkSchemes), attributes: undefined }),

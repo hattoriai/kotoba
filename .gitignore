@@ -9,3 +9,6 @@ demo/_build
 demo/deps
 demo/priv/uploads
 /priv/static/*
+/tmp
+e2e/test-results
+e2e/playwright-report

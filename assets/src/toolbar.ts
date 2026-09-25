@@ -32,6 +32,7 @@ import {
   $getSelection,
   $isRangeSelection,
   $isRootOrShadowRoot,
+  $setSelection,
   CAN_REDO_COMMAND,
   CAN_UNDO_COMMAND,
   COMMAND_PRIORITY_LOW,
@@ -45,7 +46,7 @@ import {
 } from "lexical";
 
 import { TOOLBAR_ICONS, renderIcon } from "./icons";
-import { $selectedLinkUrl } from "./link";
+import { $domSelection, $selectedLinkUrl } from "./link";
 
 export type BlockType =
   | "paragraph"
@@ -295,8 +296,20 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
       options.onLink();
     } else if (command === "upload") {
       options.onUpload();
-    } else {
+    } else if (command === "undo" || command === "redo") {
       runCommand(editor, command, state);
+    } else {
+      // The DOM selection, when Lexical has not read its last change yet.
+      // Lexical then puts the focus back in the editor, with the selection;
+      // the toolbar keeps its tab stop on this button.
+      editor.update(() => {
+        const selection = $domSelection(editor);
+        if (selection !== null) $setSelection(selection);
+        runCommand(editor, command, $readSelectionState());
+      });
+    }
+
+    if (command !== "link" && command !== "upload") {
       const item = TOOLBAR_ITEMS.find((entry) => entry.command === command);
       if (item && (TOGGLE_FORMATS.has(command) || BLOCK_COMMANDS.has(command))) {
         const pressed = button.getAttribute("aria-pressed") !== "true";

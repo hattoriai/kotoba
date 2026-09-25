@@ -22,6 +22,8 @@
         # In the latter case `**/*.{ex,exs}` will be used.
         #
         included: [
+          "dev.exs",
+          "dev/",
           "lib/",
           "src/",
           "test/",

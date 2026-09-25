@@ -14,6 +14,8 @@ defmodule Kotoba.MixProject do
       start_permanent: Mix.env() == :prod,
       aliases: aliases(),
       deps: deps(),
+      # For the code reloader of the development server (dev.exs).
+      listeners: [Phoenix.CodeReloader],
       dialyzer: [
         plt_add_apps: [:mix, :ex_unit, :esbuild],
         plt_file: {:no_warn, "priv/plts/project.plt"}
@@ -40,6 +42,7 @@ defmodule Kotoba.MixProject do
 
   defp deps do
     [
+      {:bandit, "~> 1.5", only: :dev},
       {:credo, "~> 1.7", only: [:dev, :test], runtime: false},
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
       {:ecto, "~> 3.13"},
@@ -48,6 +51,7 @@ defmodule Kotoba.MixProject do
       {:lazy_html, "~> 0.1", only: :test},
       {:phoenix, "~> 1.8"},
       {:phoenix_html, "~> 4.1"},
+      {:phoenix_live_reload, "~> 1.6", only: :dev},
       {:phoenix_live_view, "~> 1.2"},
       {:stream_data, "~> 1.1", only: :test}
     ]
@@ -76,9 +80,18 @@ defmodule Kotoba.MixProject do
     ]
   end
 
+  # The browser tests need their npm packages; `npm ci` runs once.
+  defp e2e_deps(_args) do
+    unless File.dir?("e2e/node_modules") do
+      Mix.Task.run("cmd", ~w(--cd e2e npm ci))
+    end
+  end
+
   defp aliases do
     [
       "assets.build": ["kotoba.build"],
+      dev: "run --no-halt dev.exs",
+      "test.e2e": [&e2e_deps/1, "cmd --cd e2e npm test"],
       precommit: [
         "compile --warnings-as-errors",
         "deps.unlock --unused",

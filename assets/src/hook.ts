@@ -38,6 +38,11 @@
 //
 // A change of `data-readonly` in a LiveView patch also sets the read-only
 // state.
+//
+// The hidden input holds the current document: the hook writes it on every
+// change and again after each LiveView patch, and puts it in the form data
+// of phx-change and phx-submit. The value that the server renders into the
+// input is read once, when the editor mounts.
 
 import {
   $getRoot,
@@ -173,6 +178,7 @@ class Instance {
   private pushed = "";
   private timer: ReturnType<typeof setTimeout> | undefined;
   private destroyed = false;
+  private loaded = false;
   private readonlyAttribute: string | undefined;
   private readonly ready: Promise<void>;
 
@@ -296,6 +302,9 @@ class Instance {
 
     this.cleanups.push(
       editor.registerUpdateListener(({ editorState, dirtyElements, dirtyLeaves, tags }) => {
+        // `setRootElement` commits the empty state before the document is
+        // loaded; it must not reach the hidden input or the server.
+        if (!this.loaded) return;
         this.updatePlaceholder();
         const remote = tags.has(REMOTE_TAG);
         if (!remote && dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
@@ -326,13 +335,17 @@ class Instance {
     );
 
     this.watchForm();
+    this.watchPatches();
+    const initial = this.config.input?.value ?? "";
     editor.setRootElement(editable);
-    this.load(this.config.input?.value ?? "", false);
+    this.loaded = true;
+    this.load(initial);
   }
 
-  // Reads a document into the editor. An empty or invalid document gives an
-  // empty editor.
-  private load(value: unknown, remote: boolean): void {
+  // Reads a document into the editor (the first document, or one from
+  // `set_content`). An empty or invalid document gives an empty editor. The
+  // undo history starts after it, so Cmd/Ctrl+Z cannot undo the load.
+  private load(value: unknown): void {
     const editor = this.editor;
     if (editor === null) return;
 
@@ -354,13 +367,13 @@ class Instance {
     // Without a change of the document, the first load writes the hidden
     // input but does not push `kotoba:change`.
     editor.setEditorState(state, { tag: REMOTE_TAG });
-    if (remote) editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
+    editor.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
     this.uploads?.reset();
     this.prompts?.close();
   }
 
   private setContent(doc: unknown): void {
-    this.load(doc, true);
+    this.load(doc);
   }
 
   private insertNode(json: unknown, ref: string | undefined): void {
@@ -458,6 +471,23 @@ class Instance {
       form.removeEventListener("formdata", onFormData);
       form.removeEventListener("submit", onSubmit, true);
     });
+  }
+
+  // A LiveView patch of the form sets the hidden input back to the value
+  // that the server rendered. LiveView dispatches `phx:update` on the
+  // document after each patch; the input then gets the current document
+  // again. (The server replaces the document with `set_content`, not
+  // through the input.)
+  private watchPatches(): void {
+    const input = this.config.input;
+    if (input === null) return;
+
+    const onPatch = (): void => {
+      if (this.json !== "" && input.value !== this.json) input.value = this.json;
+    };
+
+    document.addEventListener("phx:update", onPatch);
+    this.cleanups.push(() => document.removeEventListener("phx:update", onPatch));
   }
 
   private readonly announce = (message: string): void => {

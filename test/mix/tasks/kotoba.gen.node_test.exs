@@ -224,6 +224,43 @@ defmodule Mix.Tasks.Kotoba.Gen.NodeTest do
     end
   end
 
+  test "--module names the module, and the Elixir files follow it", %{root: root} do
+    run(root, ["Flag", "--kind", "inline", "--module", "GenProbe.Content.Flag"])
+
+    source = read(root, "lib/gen_probe/content/flag.ex")
+    module = compile!(source, "flag.ex")
+    assert module == GenProbe.Content.Flag
+    assert module.type() == "gen-probe-flag"
+
+    test_source = read(root, "test/gen_probe/content/flag_test.exs")
+    assert test_source =~ "defmodule GenProbe.Content.FlagTest do"
+    assert run_generated_test!(test_source) == 2
+    assert File.exists?(Path.join(root, "assets/js/kotoba/nodes/flag.js"))
+    assert messages() =~ "config :kotoba, nodes: [GenProbe.Content.Flag]"
+  end
+
+  test "--out writes the files under a directory", %{root: root} do
+    run(root, ["Flag", "--out", "sub/app"])
+
+    assert File.exists?(Path.join(root, "sub/app/lib/gen_probe/kotoba/nodes/flag.ex"))
+    assert File.exists?(Path.join(root, "sub/app/assets/js/kotoba/nodes/flag.js"))
+    assert File.exists?(Path.join(root, "sub/app/test/gen_probe/kotoba/nodes/flag_test.exs"))
+    refute File.exists?(Path.join(root, "lib/gen_probe"))
+  end
+
+  test "refuses a --module that is not a module name or does not end in the name",
+       %{root: root} do
+    assert_raise Mix.Error, ~r/--module must be a module name/, fn ->
+      run(root, ["Flag", "--module", "gen_probe.flag"])
+    end
+
+    assert_raise Mix.Error, ~r/The last part of --module must be the node name Flag/, fn ->
+      run(root, ["Flag", "--module", "GenProbe.Nodes.Banner"])
+    end
+
+    refute File.exists?(Path.join(root, "assets"))
+  end
+
   test "refuses to replace files without --force", %{root: root} do
     run(root, ["Callout"])
     path = Path.join(root, "assets/js/kotoba/nodes/callout.js")
