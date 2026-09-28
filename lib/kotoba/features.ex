@@ -14,7 +14,7 @@ defmodule Kotoba.Features do
   | `italic` | italic text | the `italic` format |
   | `underline` | underlined text | the `underline` format |
   | `strikethrough` | struck text | the `strikethrough` format |
-  | `highlight` | highlighted text | the `highlight` format |
+  | `highlight` | highlighted text, and the color palette | the `highlight` format, a text color |
   | `subscript` | subscript text (not in the default toolbar) | the `subscript` format |
   | `superscript` | superscript text (not in the default toolbar) | the `superscript` format |
   | `inline_code` | code in a line of text | the `code` format |
@@ -204,9 +204,10 @@ defmodule Kotoba.Features do
     if list_type == "check", do: MapSet.put(acc, :check_lists), else: acc
   end
 
-  defp node_features(%module{format: format}, acc)
+  defp node_features(%module{format: format} = node, acc)
        when module in [Nodes.Text, Nodes.CodeHighlight] and is_integer(format) do
     acc = if module == Nodes.CodeHighlight, do: MapSet.put(acc, :code_blocks), else: acc
+    acc = if text_color?(node), do: MapSet.put(acc, :highlight), else: acc
 
     Enum.reduce(@formats, acc, fn {feature, name}, acc ->
       if Nodes.Text.format?(format, name), do: MapSet.put(acc, feature), else: acc
@@ -219,6 +220,10 @@ defmodule Kotoba.Features do
       :error -> acc
     end
   end
+
+  # A text color is part of the `highlight` feature (its palette).
+  defp text_color?(%Nodes.Text{} = node), do: Nodes.Text.colors(node).text != nil
+  defp text_color?(_node), do: false
 
   @doc """
   Checks that a document uses only the given features (a list for

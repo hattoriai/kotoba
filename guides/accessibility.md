@@ -49,6 +49,17 @@ a table.
 * An editor with fewer features (see `Kotoba.Features`) has only their
   buttons, and an extension's buttons join the toolbar with the same
   keyboard behaviour, `aria-pressed` and live region messages.
+* The Highlight button opens the color palette (`aria-haspopup="dialog"`
+  and `aria-expanded`): a dialog named "Color" with a group of text colors,
+  a group of highlights and "Remove color". Each color is a button with its
+  name ("Blue text", "Green highlight"), and `aria-pressed` on the colors
+  of the selection (none for a selection with mixed colors). The focus
+  goes to the pressed color, or the first one. The arrow keys, Home and End
+  move between the buttons, Enter or Space applies a color to the
+  selection and goes back to the editable area, and Escape closes the
+  palette, back to its button. The live region says "Blue text", "Green
+  highlight" or "Color removed". `Cmd/Ctrl+Shift+H` toggles the default
+  (yellow) highlight with no palette.
 * Alt+F10 in the editable area moves the focus to the toolbar's tab stop.
   It is the way to the toolbar from a table cell, where Tab and Shift+Tab
   move between the cells.

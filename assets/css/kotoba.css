@@ -22,6 +22,22 @@
   --kotoba-accent-text: #ffffff;
   --kotoba-selection: rgba(47, 91, 211, 0.16);
   --kotoba-highlight: rgba(255, 204, 0, 0.4);
+  /* The palette of text colors and highlights. A text color is mixed with
+     the text colour, so that it reads on a dark background too. */
+  --kotoba-color-red: color-mix(in oklab, #dc2626 80%, var(--kotoba-text));
+  --kotoba-color-orange: color-mix(in oklab, #d9480f 80%, var(--kotoba-text));
+  --kotoba-color-yellow: color-mix(in oklab, #b08800 80%, var(--kotoba-text));
+  --kotoba-color-green: color-mix(in oklab, #1a7f37 80%, var(--kotoba-text));
+  --kotoba-color-blue: color-mix(in oklab, #2f5bd3 80%, var(--kotoba-text));
+  --kotoba-color-purple: color-mix(in oklab, #8a2be2 80%, var(--kotoba-text));
+  --kotoba-color-gray: color-mix(in oklab, #6b6b76 80%, var(--kotoba-text));
+  --kotoba-highlight-red: rgba(239, 68, 68, 0.25);
+  --kotoba-highlight-orange: rgba(249, 115, 22, 0.28);
+  --kotoba-highlight-yellow: var(--kotoba-highlight);
+  --kotoba-highlight-green: rgba(34, 197, 94, 0.25);
+  --kotoba-highlight-blue: rgba(59, 130, 246, 0.22);
+  --kotoba-highlight-purple: rgba(168, 85, 247, 0.22);
+  --kotoba-highlight-gray: rgba(120, 120, 130, 0.22);
   --kotoba-mention-text: var(--kotoba-accent);
   --kotoba-mention-background: var(--kotoba-selection);
   --kotoba-radius: 6px;
@@ -298,6 +314,25 @@
 .kotoba-underline { text-decoration: underline; }
 .kotoba-underline.kotoba-strike { text-decoration: underline line-through; }
 .kotoba-highlight { background: var(--kotoba-highlight); color: inherit; }
+/* A highlight in a color of the palette: the editor puts the color on the
+   mark, in its style. */
+mark[style*="--kotoba-highlight-"] > .kotoba-highlight { background: transparent; }
+
+/* The colors of rendered content (`Kotoba.Nodes.Text`). */
+.kotoba-color-red { color: var(--kotoba-color-red); }
+.kotoba-color-orange { color: var(--kotoba-color-orange); }
+.kotoba-color-yellow { color: var(--kotoba-color-yellow); }
+.kotoba-color-green { color: var(--kotoba-color-green); }
+.kotoba-color-blue { color: var(--kotoba-color-blue); }
+.kotoba-color-purple { color: var(--kotoba-color-purple); }
+.kotoba-color-gray { color: var(--kotoba-color-gray); }
+mark.kotoba-highlight-red { background: var(--kotoba-highlight-red); color: inherit; }
+mark.kotoba-highlight-orange { background: var(--kotoba-highlight-orange); color: inherit; }
+mark.kotoba-highlight-yellow { background: var(--kotoba-highlight-yellow); color: inherit; }
+mark.kotoba-highlight-green { background: var(--kotoba-highlight-green); color: inherit; }
+mark.kotoba-highlight-blue { background: var(--kotoba-highlight-blue); color: inherit; }
+mark.kotoba-highlight-purple { background: var(--kotoba-highlight-purple); color: inherit; }
+mark.kotoba-highlight-gray { background: var(--kotoba-highlight-gray); color: inherit; }
 
 .kotoba-inline-code,
 .kotoba-code {
@@ -474,6 +509,7 @@ div.kotoba-unknown {
 
 .kotoba-menu[hidden],
 .kotoba-link-form[hidden],
+.kotoba-color-menu[hidden],
 .kotoba-menu-list[hidden],
 .kotoba-menu-status[hidden] {
   display: none;
@@ -510,6 +546,64 @@ div.kotoba-unknown {
   padding: var(--kotoba-space);
   color: var(--kotoba-muted);
   font-size: var(--kotoba-small);
+}
+
+.kotoba-color-menu {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--kotoba-space) / 2);
+  padding: calc(var(--kotoba-space) / 2);
+  border: 1px solid var(--kotoba-border);
+  border-radius: var(--kotoba-radius);
+  background: var(--kotoba-background);
+  box-shadow: var(--kotoba-shadow);
+}
+
+.kotoba-color-group {
+  display: flex;
+  gap: 2px;
+}
+
+.kotoba-color-swatch {
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border: 1px solid var(--kotoba-border);
+  border-radius: calc(var(--kotoba-radius) - 2px);
+  background: var(--kotoba-background);
+  font: inherit;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.kotoba-color-swatch[aria-pressed="true"] {
+  border-color: var(--kotoba-text);
+  box-shadow: inset 0 0 0 1px var(--kotoba-text);
+}
+
+.kotoba-color-swatch:focus-visible,
+.kotoba-color-remove:focus-visible {
+  outline: none;
+  box-shadow: var(--kotoba-focus-ring, 0 0 0 2px var(--kotoba-accent));
+}
+
+.kotoba-color-remove {
+  padding: 0.25rem 0.5rem;
+  border: 0;
+  border-radius: calc(var(--kotoba-radius) - 2px);
+  background: transparent;
+  color: var(--kotoba-text);
+  font: inherit;
+  font-size: var(--kotoba-small);
+  text-align: start;
+  cursor: pointer;
+}
+
+.kotoba-color-remove:hover {
+  background: var(--kotoba-surface);
 }
 
 .kotoba-link-form {

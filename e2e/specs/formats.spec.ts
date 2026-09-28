@@ -25,7 +25,7 @@ test("the default toolbar has underline and highlight, not subscript and supersc
   await expect(buttons.getByRole("button", { name: "Superscript" })).toHaveCount(0);
 });
 
-test("the buttons of an app's toolbar toggle the formats", async ({ page }) => {
+test("the buttons of an app's toolbar set the formats", async ({ page }) => {
   const editable = await openEditor(page, "/extensions", FORMATS);
   const buttons = toolbar(page, FORMATS);
   // Inline code is not a feature of this editor: its button is hidden.
@@ -53,7 +53,9 @@ test("the buttons of an app's toolbar toggle the formats", async ({ page }) => {
   await selectBack(page, 1);
   await settle(page);
   await buttons.getByRole("button", { name: "Underline" }).click();
+  // Highlight opens the palette; yellow is the default highlight.
   await buttons.getByRole("button", { name: "Highlight" }).click();
+  await page.locator(`#${FORMATS}`).getByRole("button", { name: "Yellow highlight" }).click();
   await expect(editable.locator(".kotoba-highlight")).toHaveText("x");
   await expect(editable.locator(".kotoba-underline")).toHaveText("x");
 

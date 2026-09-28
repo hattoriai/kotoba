@@ -47,6 +47,7 @@ import {
 } from "lexical";
 
 import { MARKDOWN_TRANSFORMERS, registerCodeBlocks, registerListTab, registerTables } from "./editor";
+import { $normalizeColors } from "./colors";
 import type { KotobaExtension } from "./extensions";
 import { isAbsoluteLinkUrl, isAllowedLinkUrl } from "./links";
 import { AttachmentNode } from "./nodes/attachment";
@@ -206,6 +207,7 @@ export function builtInExtensions(features: ReadonlySet<Feature>, options: Featu
         ),
         editor.registerNodeTransform(TextNode, (node) => {
           for (const format of offFormats) if (node.hasFormat(format)) node.toggleFormat(format);
+          $normalizeColors(node, features.has("highlight"));
         }),
       ),
   };
