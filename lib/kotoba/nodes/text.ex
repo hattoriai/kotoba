@@ -245,7 +245,7 @@ defmodule Kotoba.Nodes.Text do
     colors = colors(node)
 
     inner =
-      node
+      node.format
       |> formats()
       |> Enum.reverse()
       |> Enum.reduce(Phoenix.HTML.html_escape(node.text), fn format, inner ->
