@@ -85,7 +85,11 @@ end
 defmodule KotobaDev.Sample do
   @moduledoc "The sample document of the Load sample buttons."
 
-  def document(title \\ "Sample") do
+  # With `code: true`, a code block in "ex", an alias: the editor shows
+  # Elixir and keeps "ex". Only the second editor's sample has it: the editor
+  # highlights a loaded code block in an update of its own, which the main
+  # editor's "not pushed back" test would count.
+  def document(title \\ "Sample", opts \\ []) do
     %{
       "kotoba" => 1,
       "lexical" => "0.51",
@@ -112,6 +116,9 @@ defmodule KotobaDev.Sample do
             [element("listitem", [text("One")], %{"value" => 1, "checked" => nil})],
             %{"listType" => "bullet", "start" => 1, "tag" => "ul"}
           ),
+          if(opts[:code],
+            do: element("code", [text("defmodule Sample do end")], %{"language" => "ex"})
+          ),
           element(
             "table",
             [
@@ -131,7 +138,7 @@ defmodule KotobaDev.Sample do
       "direction" => nil,
       "format" => "",
       "indent" => 0,
-      "children" => children
+      "children" => Enum.reject(children, &is_nil/1)
     }
 
   defp paragraph(children),
@@ -553,6 +560,7 @@ defmodule KotobaDev.PanelComponent do
           id="b_editor"
           label_id="b-label"
           prompts={prompts()}
+          code_languages={~w(elixir erlang sql)}
           change
           phx-target={@myself}
         />
@@ -580,7 +588,9 @@ defmodule KotobaDev.PanelComponent do
     do: {:noreply, Kotoba.Live.handle_prompt(socket, params, @prompts)}
 
   def handle_event("load", _params, socket),
-    do: {:noreply, Kotoba.Live.push_content(socket, @editor, KotobaDev.Sample.document("Second"))}
+    do:
+      {:noreply,
+       Kotoba.Live.push_content(socket, @editor, KotobaDev.Sample.document("Second", code: true))}
 end
 
 defmodule KotobaDev.TwoEditorsLive do

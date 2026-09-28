@@ -225,8 +225,8 @@ export const grid2x2X: Icon = [
   ["path", { d: "m16.5 21.5 5-5" }],
 ];
 
-/** The icon of each toolbar command. */
-export const TOOLBAR_ICONS: Readonly<Record<ToolbarCommand, Icon>> = {
+/** The icon of each toolbar command that is a button (`code-language` is a select). */
+export const TOOLBAR_ICONS: Readonly<Record<Exclude<ToolbarCommand, "code-language">, Icon>> = {
   "bold": bold,
   "italic": italic,
   "strikethrough": strikethrough,

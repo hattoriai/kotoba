@@ -16,8 +16,13 @@
 // Their buttons (and an element with `data-kotoba-context="table"`, such as
 // the default toolbar's Table group) are hidden when the selection is not
 // in a table.
+//
+// `code-language` is a `<select>` (with `data-kotoba-command="code-language"`)
+// that sets the language of the code block at the selection. It (and an
+// element with `data-kotoba-context="code"`) is hidden when the selection is
+// not in a code block. The toolbar fills its options.
 
-import { $createCodeNode, $isCodeNode } from "@lexical/code-core";
+import { $createCodeNode, $isCodeNode, type CodeNode } from "@lexical/code-core";
 import { INSERT_HORIZONTAL_RULE_COMMAND } from "@lexical/extension";
 import {
   $isListNode,
@@ -62,6 +67,7 @@ import {
   COMMAND_PRIORITY_LOW,
   KEY_DOWN_COMMAND,
   FORMAT_TEXT_COMMAND,
+  SKIP_DOM_SELECTION_TAG,
   REDO_COMMAND,
   UNDO_COMMAND,
   mergeRegister,
@@ -70,6 +76,7 @@ import {
   type TextFormatType,
 } from "lexical";
 
+import { CODE_LANGUAGES, type CodeLanguage, PLAIN_TEXT, findCodeLanguage } from "./code_languages";
 import { TOOLBAR_ICONS, renderIcon } from "./icons";
 import { $domSelection, $selectedLinkUrl } from "./link";
 
@@ -99,6 +106,11 @@ export interface SelectionState {
   link: boolean;
   /** The table at the selection, or `null` when the selection is not in a table. */
   table: TableState | null;
+  /**
+   * The code block at the selection: its language as it is stored (`null`
+   * for none), or `null` when the selection is not in a code block.
+   */
+  code: { language: string | null } | null;
 }
 
 export type ToolbarCommand =
@@ -119,6 +131,7 @@ export type ToolbarCommand =
   | "rule"
   | "table"
   | "upload"
+  | "code-language"
   | "table-row-before"
   | "table-row-after"
   | "table-column-before"
@@ -160,6 +173,7 @@ export const TOOLBAR_ITEMS: readonly ToolbarItem[] = [
   { command: "rule", label: "Horizontal rule", group: "Insert" },
   { command: "table", label: "Table", group: "Insert", done: "Table inserted" },
   { command: "upload", label: "Attach a file", group: "Insert" },
+  { command: "code-language", label: "Code language", group: "Code" },
   { command: "table-row-before", label: "Insert row above", group: "Table", done: "Row inserted" },
   { command: "table-row-after", label: "Insert row below", group: "Table", done: "Row inserted" },
   { command: "table-column-before", label: "Insert column before", group: "Table", done: "Column inserted" },
@@ -185,6 +199,9 @@ const TABLE_TOGGLES = new Set<string>(["table-header-row", "table-header-column"
 /** The rows and columns of a new table. */
 export const NEW_TABLE_ROWS = 3;
 export const NEW_TABLE_COLUMNS = 3;
+
+/** The commands that are a `<select>`, not a button. */
+const SELECT_COMMANDS = new Set<string>(["code-language"]);
 
 function isCommand(value: string | undefined): value is ToolbarCommand {
   return value !== undefined && COMMANDS.has(value);
@@ -218,9 +235,26 @@ function $selectedTable(): TableNode | null {
   return cell === null ? null : $findTableNode(cell);
 }
 
-/** Reads the formats, the block type, the link and the table at the selection. */
+/** The code block at the anchor of the selection. */
+function $selectedCodeNode(): CodeNode | null {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection)) return null;
+  return $findMatchingParent(selection.anchor.getNode(), $isCodeNode) as CodeNode | null;
+}
+
+/**
+ * Sets the language of the code block at the selection: an id of
+ * `CODE_LANGUAGES`, or `PLAIN_TEXT.id` for none.
+ */
+export function $setCodeLanguage(id: string): void {
+  const code = $selectedCodeNode();
+  if (code === null) return;
+  code.setLanguage(id === PLAIN_TEXT.id ? undefined : id);
+}
+
+/** Reads the formats, the block type, the link, the table and the code block at the selection. */
 export function $readSelectionState(): SelectionState {
-  const state: SelectionState = { formats: new Set(), block: "paragraph", link: false, table: null };
+  const state: SelectionState = { formats: new Set(), block: "paragraph", link: false, table: null, code: null };
   const table = $selectedTable();
   if (table !== null) state.table = $readTableState(table);
 
@@ -253,6 +287,9 @@ export function $readSelectionState(): SelectionState {
   } else if ($isCodeNode(block)) {
     state.block = "code-block";
   }
+
+  const code = $selectedCodeNode();
+  if (code !== null) state.code = { language: code.getLanguage() ?? null };
   return state;
 }
 
@@ -324,6 +361,7 @@ export function runCommand(editor: LexicalEditor, command: ToolbarCommand, state
       return;
     case "link":
     case "upload":
+    case "code-language":
       return;
   }
 }
@@ -411,7 +449,15 @@ interface ToolbarOptions {
   onLink(): void;
   onUpload(): void;
   announce(message: string): void;
+  /** The languages of the code language picker. The default is every language. */
+  codeLanguages?: readonly CodeLanguage[];
 }
+
+/** A control of the toolbar: a button, or the `<select>` of `code-language`. */
+type Control = HTMLButtonElement | HTMLSelectElement;
+
+/** The value of the picker's option for a language that is not one of the editor's. */
+const UNKNOWN_LANGUAGE = "kotoba-unknown-language";
 
 export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): Toolbar {
   const toolbar = options.existing ?? buildToolbar(options.uploads);
@@ -421,26 +467,68 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
   if (!toolbar.hasAttribute("aria-label")) toolbar.setAttribute("aria-label", options.label);
   toolbar.classList.add("kotoba-toolbar");
 
-  const commandButtons = (): HTMLButtonElement[] =>
-    Array.from(toolbar.querySelectorAll<HTMLButtonElement>("button[data-kotoba-command]")).filter((button) =>
-      isCommand(button.dataset.kotobaCommand),
-    );
-  const buttons = (): HTMLButtonElement[] => commandButtons().filter((button) => !button.hidden);
+  const codeLanguages = options.codeLanguages ?? CODE_LANGUAGES;
 
-  let state: SelectionState = { formats: new Set(), block: "paragraph", link: false, table: null };
+  // Every control, a hidden one too, and the controls that show.
+  const commandButtons = (): Control[] =>
+    Array.from(
+      toolbar.querySelectorAll<Control>("button[data-kotoba-command], select[data-kotoba-command]"),
+    ).filter((control) =>
+      control instanceof HTMLSelectElement
+        ? SELECT_COMMANDS.has(control.dataset.kotobaCommand ?? "")
+        : isCommand(control.dataset.kotobaCommand),
+    );
+  const buttons = (): Control[] => commandButtons().filter((control) => !control.hidden);
+
+  // The options of the picker: plain text, the editor's languages, the
+  // language of the block when the editor does not offer it, and a name that
+  // is no language (kept, not highlighted). An alias shows its language, and
+  // the block keeps the alias until the person picks a language.
+  const fillLanguages = (select: HTMLSelectElement, language: string | null): void => {
+    const current = findCodeLanguage(language);
+    const offered = [...codeLanguages];
+    if (current !== null && current !== PLAIN_TEXT && !offered.includes(current)) offered.push(current);
+
+    const entries: [value: string, label: string][] = [
+      [PLAIN_TEXT.id, PLAIN_TEXT.label],
+      ...offered.map((entry): [string, string] => [entry.id, entry.label]),
+    ];
+    if (current === null) entries.push([UNKNOWN_LANGUAGE, `${language ?? ""} (not highlighted)`]);
+
+    // Rebuilt only when the options change, so that an open list stays open.
+    const key = entries.map((entry) => entry.join("=")).join("|");
+    if (select.dataset.kotobaOptions !== key) {
+      select.replaceChildren(...entries.map(([value, label]) => new Option(label, value)));
+      select.dataset.kotobaOptions = key;
+    }
+    select.value = current?.id ?? UNKNOWN_LANGUAGE;
+  };
+
+  let state: SelectionState = { formats: new Set(), block: "paragraph", link: false, table: null, code: null };
   let disabled = false;
   const history = { undo: false, redo: false };
 
   const refresh = (): void => {
     const focused = document.activeElement;
     const inTable = state.table !== null;
+    const inCode = state.code !== null;
     for (const element of toolbar.querySelectorAll<HTMLElement>('[data-kotoba-context="table"]')) {
       element.hidden = !inTable;
+    }
+    for (const element of toolbar.querySelectorAll<HTMLElement>('[data-kotoba-context="code"]')) {
+      element.hidden = !inCode;
     }
 
     for (const button of commandButtons()) {
       const command = button.dataset.kotobaCommand as ToolbarCommand;
       if (TABLE_COMMANDS.has(command)) button.hidden = !inTable;
+
+      if (button instanceof HTMLSelectElement) {
+        button.hidden = !inCode;
+        if (state.code !== null) fillLanguages(button, state.code.language);
+        button.setAttribute("aria-disabled", String(disabled));
+        continue;
+      }
 
       if (TABLE_TOGGLES.has(command)) {
         const pressed = command === "table-header-row" ? state.table?.headerRow : state.table?.headerColumn;
@@ -462,15 +550,16 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
       button.setAttribute("aria-disabled", String(unavailable));
     }
 
-    // A table control that was just hidden (the selection left the table,
-    // or the table was deleted) gives the focus back to the editor, and the
-    // toolbar keeps a tab stop.
+    // A table or code control that was just hidden (the selection left the
+    // table or the code block, or the table was deleted) gives the focus
+    // back to the editor, and the toolbar keeps a tab stop.
     const visible = buttons();
     if (!visible.some((button) => button.tabIndex === 0)) rove(undefined, false);
-    if (focused instanceof HTMLButtonElement && toolbar.contains(focused) && focused.hidden) editor.focus();
+    const control = focused instanceof HTMLButtonElement || focused instanceof HTMLSelectElement;
+    if (control && toolbar.contains(focused) && focused.hidden) editor.focus();
   };
 
-  const rove = (target: HTMLButtonElement | undefined, focus: boolean): void => {
+  const rove = (target: Control | undefined, focus: boolean): void => {
     const all = buttons();
     const current = target ?? all.find((button) => button.tabIndex === 0) ?? all[0];
     // Every button, a hidden one too: the toolbar has one tab stop.
@@ -516,6 +605,25 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
     }
   };
 
+  // The picker sets the language of the code block at the editor's
+  // selection. The focus stays on the picker, so the person can try another
+  // language, and the editor does not move the DOM selection.
+  const onChange = (event: Event): void => {
+    const select = event.target;
+    if (!(select instanceof HTMLSelectElement) || !toolbar.contains(select)) return;
+    if (select.dataset.kotobaCommand !== "code-language") return;
+    rove(select, false);
+    if (disabled || select.value === UNKNOWN_LANGUAGE) {
+      refresh();
+      return;
+    }
+
+    const value = select.value;
+    editor.update(() => $setCodeLanguage(value), { tag: SKIP_DOM_SELECTION_TAG });
+    const label = value === PLAIN_TEXT.id ? PLAIN_TEXT.label : codeLanguages.find((entry) => entry.id === value)?.label;
+    options.announce(`Code language ${label ?? value}`);
+  };
+
   // A mouse press on a button keeps the focus (and the selection) in the editor.
   const onMouseDown = (event: MouseEvent): void => {
     if ((event.target as Element | null)?.closest("button[data-kotoba-command]")) event.preventDefault();
@@ -526,9 +634,11 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
     const index = all.findIndex((button) => button === document.activeElement);
     if (index === -1) return;
 
+    // Up and Down choose an option of a select; Left and Right move on.
+    const vertical = !(all[index] instanceof HTMLSelectElement);
     let next: number | null = null;
-    if (event.key === "ArrowRight" || event.key === "ArrowDown") next = (index + 1) % all.length;
-    if (event.key === "ArrowLeft" || event.key === "ArrowUp") next = (index - 1 + all.length) % all.length;
+    if (event.key === "ArrowRight" || (vertical && event.key === "ArrowDown")) next = (index + 1) % all.length;
+    if (event.key === "ArrowLeft" || (vertical && event.key === "ArrowUp")) next = (index - 1 + all.length) % all.length;
     if (event.key === "Home") next = 0;
     if (event.key === "End") next = all.length - 1;
 
@@ -539,6 +649,7 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
   };
 
   toolbar.addEventListener("click", onClick);
+  toolbar.addEventListener("change", onChange);
   toolbar.addEventListener("mousedown", onMouseDown);
   toolbar.addEventListener("keydown", onKeyDown);
   rove(undefined, false);
@@ -590,6 +701,7 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
     dispose() {
       unregister();
       toolbar.removeEventListener("click", onClick);
+      toolbar.removeEventListener("change", onChange);
       toolbar.removeEventListener("mousedown", onMouseDown);
       toolbar.removeEventListener("keydown", onKeyDown);
       if (options.existing === null) toolbar.remove();
@@ -614,8 +726,23 @@ function buildToolbar(uploads: boolean): HTMLElement {
       if (TABLE_COMMANDS.has(item.command)) {
         group.dataset.kotobaContext = "table";
         group.hidden = true;
+      } else if (SELECT_COMMANDS.has(item.command)) {
+        group.dataset.kotobaContext = "code";
+        group.hidden = true;
       }
       toolbar.append(group);
+    }
+
+    if (SELECT_COMMANDS.has(item.command)) {
+      const select = document.createElement("select");
+      select.className = "kotoba-toolbar-select";
+      select.dataset.kotobaCommand = item.command;
+      select.setAttribute("aria-label", item.label);
+      select.title = item.label;
+      select.tabIndex = -1;
+      select.hidden = true;
+      group.append(select);
+      continue;
     }
 
     const button = document.createElement("button");
@@ -626,7 +753,7 @@ function buildToolbar(uploads: boolean): HTMLElement {
     button.title = item.shortcut ? `${item.label} (${item.shortcut})` : item.label;
     button.tabIndex = -1;
 
-    button.append(renderIcon(TOOLBAR_ICONS[item.command]));
+    button.append(renderIcon(TOOLBAR_ICONS[item.command as Exclude<ToolbarCommand, "code-language">]));
 
     group.append(button);
   }

@@ -9,6 +9,19 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A code language picker: in a code block, the toolbar has a "Code
+  language" `<select>` with plain text and 28 languages (Bash, C, C++,
+  CSS, Diff, Dockerfile, Elixir, Erlang, Go, GraphQL, HTML, Java,
+  JavaScript, JSON, Kotlin, Markdown, Objective-C, PHP, PowerShell,
+  Python, Ruby, Rust, SQL, Swift, TOML, TypeScript, XML, YAML). The
+  editor bundles the grammars of Dockerfile, Erlang, GraphQL, Kotlin,
+  PHP, Ruby, TOML and YAML too, and highlights the aliases (`ex`, `yml`,
+  `js`...). A block keeps the language name that it has until the person
+  picks one; a name that is no language shows as "(not highlighted)".
+- `Kotoba.CodeLanguages`, the table of the languages, their labels and
+  their aliases, and the `code_languages` attribute of `<.kotoba>` to
+  choose the languages of an editor's picker.
+- The `code-language` toolbar command, a `<select>` in a custom toolbar.
 - Tables. The Table button inserts a table with a header row. In a table,
   a Table group in the toolbar inserts and deletes rows and columns,
   toggles a header row and a header column, and deletes the table. Tab
@@ -38,6 +51,10 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- A code block with no language is plain text in the editor, as in the
+  HTML. Lexical highlighted it as JavaScript.
+- The editor bundle is about 25 KB larger (7 KB with gzip), for the new
+  grammars.
 - `table`, `tablerow` and `tablecell` are built-in node types now, so an
   app node cannot have one of these types.
 - The editor bundle is about 70 KB larger (20 KB with gzip), for

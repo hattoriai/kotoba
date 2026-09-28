@@ -3,10 +3,21 @@
 import { restoreHostPrism } from "./prism";
 
 import { $isCodeNode, CodeHighlightNode, CodeNode } from "@lexical/code-core";
-import { registerCodeHighlighting } from "@lexical/code-prism";
+import { PrismTokenizer, registerCodeHighlighting } from "@lexical/code-prism";
+// The grammars that @lexical/code-prism does not load (see code_languages.ts).
+// markup-templating comes before php, which needs it.
 import "prismjs/components/prism-bash";
+import "prismjs/components/prism-docker";
 import "prismjs/components/prism-elixir";
+import "prismjs/components/prism-erlang";
+import "prismjs/components/prism-graphql";
 import "prismjs/components/prism-json";
+import "prismjs/components/prism-kotlin";
+import "prismjs/components/prism-markup-templating";
+import "prismjs/components/prism-php";
+import "prismjs/components/prism-ruby";
+import "prismjs/components/prism-toml";
+import "prismjs/components/prism-yaml";
 import {
   $createHorizontalRuleNode,
   $isHorizontalRuleNode,
@@ -69,6 +80,7 @@ import {
   type LexicalNode,
 } from "lexical";
 
+import { registerCodeLanguageAliases } from "./code_languages";
 import { AttachmentNode } from "./nodes/attachment";
 import { registerDecorators } from "./nodes/decorator";
 import { UnknownNode, UploadMarkerNode } from "./nodes/internal";
@@ -77,8 +89,16 @@ import { isAbsoluteLinkUrl, isAllowedLinkUrl } from "./links";
 import { UNKNOWN_TYPE, UPLOAD_MARKER_TYPE } from "./protocol";
 
 // Every import above has run, so the editor's Prism and its grammars are
-// loaded: the host page gets its own `Prism` back.
+// loaded: the aliases join them, and the host page gets its own `Prism` back.
+registerCodeLanguageAliases((globalThis as unknown as { Prism: { languages: Record<string, unknown> } }).Prism);
 restoreHostPrism();
+
+/**
+ * Prism's tokenizer, with no default language: a code block with no
+ * language is plain text (Lexical would highlight it as JavaScript), as the
+ * server renders it.
+ */
+const TOKENIZER = { ...PrismTokenizer, defaultLanguage: null };
 
 /** The node classes that every Kotoba editor has. */
 export const BUILT_IN_NODES: readonly Klass<LexicalNode>[] = [
@@ -102,19 +122,6 @@ export const BUILT_IN_NODES: readonly Klass<LexicalNode>[] = [
 
 /** The node types that Lexical registers on every editor. */
 const CORE_TYPES = ["root", "paragraph", "text", "linebreak", "tab"];
-
-/** The code languages that the editor highlights. */
-export const CODE_LANGUAGES = [
-  "elixir",
-  "javascript",
-  "typescript",
-  "json",
-  "bash",
-  "html",
-  "css",
-  "markdown",
-  "plain",
-];
 
 export const THEME: EditorThemeClasses = {
   paragraph: "kotoba-paragraph",
@@ -368,7 +375,7 @@ export function registerPlugins(editor: LexicalEditor, options: PluginOptions): 
     editor.registerNodeTransform(LinkNode, $unwrapUnsafeLink),
     editor.registerNodeTransform(AutoLinkNode, $unwrapUnsafeLink),
     registerMarkdownShortcuts(editor, MARKDOWN_TRANSFORMERS),
-    registerCodeHighlighting(editor),
+    registerCodeHighlighting(editor, TOKENIZER),
     editor.registerCommand(
       INSERT_HORIZONTAL_RULE_COMMAND,
       () => {
