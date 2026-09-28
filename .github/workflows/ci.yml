@@ -112,8 +112,14 @@ jobs:
         env:
           MIX_ENV: test
 
+  # One job for each browser engine. The Chromium job keeps the name "e2e".
   e2e:
+    name: ${{ matrix.browser == 'chromium' && 'e2e' || format('e2e ({0})', matrix.browser) }}
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: [chromium, firefox, webkit]
 
     steps:
       - uses: actions/checkout@v4
@@ -150,7 +156,7 @@ jobs:
       - run: npm ci
         working-directory: e2e
 
-      - run: npx playwright install --with-deps chromium
+      - run: npx playwright install --with-deps ${{ matrix.browser }}
         working-directory: e2e
 
       # The Playwright web server runs `mix kotoba.build` (the real bundle),
@@ -158,11 +164,12 @@ jobs:
       - run: mix test.e2e
         env:
           CI: "true"
+          E2E_BROWSERS: ${{ matrix.browser }}
 
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.browser }}
           path: |
             e2e/test-results
             e2e/playwright-report
