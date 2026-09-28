@@ -154,9 +154,58 @@ defmodule Mix.Tasks.Kotoba.InstallTest do
     File.cd!(app, fn -> Install.install([], Path.expand("../kotoba")) end)
   end
 
-  test "package_path/1 reads the path of the dependency", %{root: root} do
+  # An umbrella child keeps its Hex dependencies in the deps directory of
+  # the umbrella, ../../deps: Kotoba there is not a path dependency.
+  test "follows the deps directory of an umbrella child", %{root: root} do
+    app = Path.join(root, "apps/web")
+    File.mkdir_p!(app)
+    for dir <- ~w(assets config), do: File.rename!(Path.join(root, dir), Path.join(app, dir))
+
+    install_umbrella_child(app)
+    output = messages([])
+
+    assert read(app, "assets/css/app.css") =~
+             ~s(@import "../../../../deps/kotoba/priv/static/kotoba.css";)
+
+    refute output =~ "path dependency"
+    assert output =~ "must resolve `kotoba` from ../../deps/."
+    assert output =~ ~S|Path.expand("../../../deps", __DIR__)|
+
+    config = read(app, "config/config.exs")
+
+    File.write!(
+      Path.join(app, "config/config.exs"),
+      String.replace(
+        config,
+        ~S|Path.expand("../deps", __DIR__)|,
+        ~S|Path.expand("../../../deps", __DIR__)|
+      )
+    )
+
+    File.write!(Path.join(app, "assets/css/app.css"), File.read!(Path.join(@fixtures, "app.css")))
+    install_umbrella_child(app)
+    assert messages([]) =~ "Your esbuild config sets NODE_PATH to ../../deps/, so"
+  end
+
+  defp install_umbrella_child(app) do
+    File.cd!(app, fn -> Install.install([], Path.expand("../../deps/kotoba"), "../../deps") end)
+  end
+
+  test "follows MIX_DEPS_PATH", %{root: root} do
+    System.put_env("MIX_DEPS_PATH", "vendor/deps")
+    output = try do: run(root), after: System.delete_env("MIX_DEPS_PATH")
+
+    assert read(root, "assets/css/app.css") =~
+             ~s(@import "../../vendor/deps/kotoba/priv/static/kotoba.css";)
+
+    refute output =~ "path dependency"
+    assert output =~ ~S|Path.expand("../vendor/deps", __DIR__)|
+  end
+
+  test "package_path/2 reads the path of the dependency", %{root: root} do
     File.cd!(root, fn ->
       assert Install.package_path(%{}) == Path.join(File.cwd!(), "deps/kotoba")
+      assert Install.package_path(%{}, "../../deps") == Path.expand("../../deps/kotoba")
       assert Install.package_path(%{kotoba: "../kotoba"}) == Path.expand("../kotoba")
     end)
   end

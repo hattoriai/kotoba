@@ -7,6 +7,14 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- `mix kotoba.install` finds the Kotoba package in the project's deps
+  directory (`Mix.Project.deps_path/0`), not in `deps/`. In an umbrella
+  child or with `MIX_DEPS_PATH`, a Hex dependency is no longer called a
+  path dependency, and the style sheet imports and the `NODE_PATH` note
+  point at the right directory.
+
 ## [0.1.0] - 2026-09-25
 
 The first release.
