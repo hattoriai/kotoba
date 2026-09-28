@@ -22,7 +22,25 @@ defmodule Kotoba.Nodes.Text do
   In HTML, the formats become `strong`, `em`, `s`, `u`, `code`, `sub`,
   `sup` and `mark`, and the three text transforms become `span` elements
   with the classes `kotoba-lowercase`, `kotoba-uppercase` and
-  `kotoba-capitalize`. The `style` of the run is not rendered.
+  `kotoba-capitalize`. The `style` of the run is not rendered, but for its
+  colors (see `colors/1`).
+
+  ## Colors
+
+  A run has a text color and a highlight color from a palette (the
+  `highlight` feature of `Kotoba.Features`): `red`, `orange`, `yellow`,
+  `green`, `blue`, `purple` and `gray` (`palette/0`). The editor stores them
+  in the `style`, as the custom properties of the theme:
+
+      color: var(--kotoba-color-red);background-color: var(--kotoba-highlight-green);
+
+  A highlight color goes with the `:highlight` format. The format with no
+  color is the default highlight, `yellow`. In HTML, a text color is a
+  `span` with the class `kotoba-color-<name>`, and a highlight color is the
+  class `kotoba-highlight-<name>` of the `mark` (the default highlight is a
+  `mark` with no class). Any other `style` is ignored: a color that is not
+  in the palette, or a declaration that is not one of these two, renders
+  nothing. `kotoba.css` has the classes.
 
   `mode` is `"normal"`, `"token"` or `"segmented"`. `detail` is a bitmask
   that Lexical uses for special characters. `style` is an inline CSS text
@@ -136,18 +154,115 @@ defmodule Kotoba.Nodes.Text do
 
   @markdown [bold: "**", italic: "*", strikethrough: "~~"]
 
+  @colors ~w(red orange yellow green blue purple gray)
+  @default_highlight "yellow"
+
+  @doc """
+  Returns the names of the palette, in order.
+
+  ## Examples
+
+      iex> "green" in Kotoba.Nodes.Text.palette()
+      true
+
+  """
+  @spec palette() :: [String.t()]
+  def palette, do: @colors
+
+  @doc """
+  Returns the colors of a text node: its text color and its highlight
+  color, each a name of `palette/0` or `nil`.
+
+  The highlight color is `nil` without the `:highlight` format, and
+  `"yellow"` (the default) for the format with no color.
+
+  ## Examples
+
+      iex> Kotoba.Nodes.Text.colors(%Kotoba.Nodes.Text{
+      ...>   text: "x",
+      ...>   format: 128,
+      ...>   style: "color: var(--kotoba-color-red);background-color: var(--kotoba-highlight-green);"
+      ...> })
+      %{text: "red", highlight: "green"}
+
+      iex> Kotoba.Nodes.Text.colors(%Kotoba.Nodes.Text{text: "x", format: 128, style: "color: red"})
+      %{text: nil, highlight: "yellow"}
+
+  """
+  @spec colors(%{
+          :format => integer(),
+          :style => String.t() | nil,
+          optional(atom()) => any()
+        }) :: %{
+          text: String.t() | nil,
+          highlight: String.t() | nil
+        }
+  def colors(%{format: format, style: style}) do
+    declarations = declarations(style)
+
+    highlight =
+      if format?(format, :highlight),
+        do: color(declarations["background-color"], "highlight") || @default_highlight
+
+    %{text: color(declarations["color"], "color"), highlight: highlight}
+  end
+
+  # The declarations of a CSS text, the last one of a property winning.
+  defp declarations(style) when is_binary(style) do
+    style
+    |> String.split(";")
+    |> Enum.reduce(%{}, fn part, acc ->
+      case String.split(part, ":", parts: 2) do
+        [property, value] ->
+          Map.put(acc, property |> String.trim() |> String.downcase(), String.trim(value))
+
+        _other ->
+          acc
+      end
+    end)
+  end
+
+  defp declarations(_style), do: %{}
+
+  @color_value %{
+    "color" => ~r/\Avar\(--kotoba-color-([a-z]+)\)\z/,
+    "highlight" => ~r/\Avar\(--kotoba-highlight-([a-z]+)\)\z/
+  }
+
+  defp color(nil, _kind), do: nil
+
+  defp color(value, kind) do
+    case Regex.run(Map.fetch!(@color_value, kind), value, capture: :all_but_first) do
+      [name] when name in @colors -> name
+      _other -> nil
+    end
+  end
+
   @impl Kotoba.Node
   def render_html(%{text: ""}, _opts), do: {:safe, ""}
 
   def render_html(node, _opts) do
-    node
-    |> formats()
-    |> Enum.reverse()
-    |> Enum.reduce(Phoenix.HTML.html_escape(node.text), fn format, inner ->
-      {tag, class} = Keyword.fetch!(@html, format)
-      Renderer.tag(tag, [class: class], inner)
-    end)
+    colors = colors(node)
+
+    inner =
+      node.format
+      |> formats()
+      |> Enum.reverse()
+      |> Enum.reduce(Phoenix.HTML.html_escape(node.text), fn format, inner ->
+        {tag, class} = Keyword.fetch!(@html, format)
+        Renderer.tag(tag, [class: class || highlight_class(format, colors.highlight)], inner)
+      end)
+
+    case colors.text do
+      nil -> inner
+      name -> Renderer.tag("span", [class: "kotoba-color-" <> name], inner)
+    end
   end
+
+  defp highlight_class(:highlight, name) when name not in [nil, @default_highlight],
+    do: "kotoba-highlight-" <> name
+
+  defp highlight_class(_format, _name), do: nil
 
   @impl Kotoba.Node
   def render_text(node, _opts), do: node.text

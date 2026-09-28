@@ -47,7 +47,9 @@ value that you set on `:root`, on an ancestor or on `.kotoba` wins:
 | `--kotoba-accent` | `#2f5bd3` | links, focus, the active option |
 | `--kotoba-accent-text` | `#ffffff` | text on the accent |
 | `--kotoba-selection` | the accent at 16% | selected nodes |
-| `--kotoba-highlight` | a light yellow | highlighted text |
+| `--kotoba-highlight` | a light yellow | highlighted text, the default highlight |
+| `--kotoba-color-<name>` | the hue, mixed with the text colour | the text colors of the palette |
+| `--kotoba-highlight-<name>` | the hue, faint | the highlights of the palette |
 | `--kotoba-mention-text` | the accent | the text of a mention |
 | `--kotoba-mention-background` | the selection | the tint behind a mention |
 | `--kotoba-focus-ring` | `0 0 0 2px` accent | the `box-shadow` of focus |
@@ -117,8 +119,9 @@ then sees the tokens that the theme reads, and puts them in the built CSS.
 
 `Kotoba.Components.kotoba_content/1` renders semantic HTML (`p`, `h1`–`h4`,
 `blockquote`, `ul`, `ol`, `li`, `pre`, `code`, `strong`, `em`, `s`, `a`,
-`hr`, `figure`) in a `div.kotoba-content`. `kotoba.css` does not style it,
-so it takes the typography of your app, for example:
+`hr`, `figure`) in a `div.kotoba-content`. `kotoba.css` does not style it
+(but for the colors, below), so it takes the typography of your app, for
+example:
 
 ```heex
 <.kotoba_content content={@post.body} class="prose" />
@@ -127,6 +130,25 @@ so it takes the typography of your app, for example:
 Check lists have `class="kotoba-check"`, mentions `span.kotoba-mention`,
 attachments `figure.kotoba-attachment`, and unknown nodes an empty
 `span.kotoba-unknown`.
+
+## Colors
+
+The palette has seven names: `red`, `orange`, `yellow`, `green`, `blue`,
+`purple` and `gray`. The editor stores a color as the name, never a CSS
+value, so a theme decides what each one looks like. A text color renders
+as `span.kotoba-color-<name>` and a highlight as `mark.kotoba-highlight-<name>`
+(the default yellow highlight is a plain `mark`). `kotoba.css` has these
+classes, the only rules it has for rendered content, and they read the
+`--kotoba-color-<name>` and `--kotoba-highlight-<name>` properties. The
+default text colors are mixed with `--kotoba-text`, so that they read on
+a dark background too; set the properties for a palette of your own:
+
+```css
+.dark {
+  --kotoba-color-red: #ff8a80;
+  --kotoba-highlight-red: rgba(255, 138, 128, 0.3);
+}
+```
 
 ## Toolbar icons
 

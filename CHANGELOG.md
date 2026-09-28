@@ -9,6 +9,16 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A color palette (#4): the Highlight button opens a palette of text
+  colors and highlights (red, orange, yellow, green, blue, purple, gray)
+  and "Remove color", from the mouse and the keyboard. A color is stored
+  as a name in the text node's `style`
+  (`color: var(--kotoba-color-red)`), and renders as a class
+  (`span.kotoba-color-red`, `mark.kotoba-highlight-green`); any other
+  style is dropped in the editor and never rendered.
+  `Kotoba.Nodes.Text.colors/1` reads them. The highlight format with no
+  color stays the default yellow highlight, so existing documents render
+  as before. A text color is part of the `highlight` feature.
 - Underline, highlight, subscript and superscript are features, with
   their keyboard shortcuts (`Cmd/Ctrl+U`, `Cmd/Ctrl+Shift+H`,
   `Cmd/Ctrl+,`, `Cmd/Ctrl+.`) and toolbar commands. The default toolbar

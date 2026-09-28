@@ -77,6 +77,7 @@ import {
   type KotobaExtension,
 } from "./extensions";
 import { type Feature, builtInExtensions, parseFeatures } from "./features";
+import { createColorMenu, type ColorMenu } from "./colors";
 import { createLinkForm, type LinkForm } from "./link";
 import { parseLinkSchemes } from "./links";
 import { loadNodes } from "./nodes/custom";
@@ -205,6 +206,7 @@ class Instance {
   private placeholder: HTMLElement | null = null;
   private toolbar: Toolbar | null = null;
   private link: LinkForm | null = null;
+  private colors: ColorMenu | null = null;
   private prompts: Prompts | null = null;
   private uploads: Uploads | null = null;
 
@@ -339,6 +341,7 @@ class Instance {
         announce: this.announce,
       });
     }
+    if (features.has("highlight")) this.colors = createColorMenu(editor, { host: surface, announce: this.announce });
     this.uploads = createUploads(editor, {
       host: this.el,
       target: features.has("attachments") ? this.config.upload : null,
@@ -356,6 +359,7 @@ class Instance {
       uploads: this.uploads.enabled,
       onLink: () => this.link?.open(),
       onUpload: () => this.uploads?.open(),
+      onColors: this.colors === null ? undefined : (button) => this.colors?.open(button),
       announce: this.announce,
       codeLanguages: this.config.codeLanguages,
       features,
@@ -597,6 +601,7 @@ class Instance {
     this.prompts?.dispose();
     this.toolbar?.dispose();
     this.link?.dispose();
+    this.colors?.dispose();
     this.uploads?.dispose();
     for (const cleanup of this.cleanups.reverse()) cleanup();
     this.editor?.setRootElement(null);

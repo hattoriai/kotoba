@@ -100,6 +100,22 @@
      blade, which a Sumi page keeps for what needs attention. */
   --kotoba-mention-text: var(--color-base-content, var(--sumi-ink, var(--kotoba-sumi-content)));
   --kotoba-mention-background: color-mix(in oklab, var(--color-base-content, var(--sumi-ink, var(--kotoba-sumi-content))) 10%, transparent);
+  /* The palette: each hue mixed with the ink, so that it reads on paper and
+     on the dark surface; the highlights are faint washes of the same hues. */
+  --kotoba-color-red: color-mix(in oklab, var(--color-error, var(--kotoba-sumi-error)) 80%, var(--kotoba-text));
+  --kotoba-color-orange: color-mix(in oklab, var(--color-sumi-ember, #ff6b3d) 70%, var(--kotoba-text));
+  --kotoba-color-yellow: color-mix(in oklab, var(--color-warning, oklch(75% 0.16 85)) 70%, var(--kotoba-text));
+  --kotoba-color-green: color-mix(in oklab, var(--color-success, var(--kotoba-sumi-success)) 80%, var(--kotoba-text));
+  --kotoba-color-blue: color-mix(in oklab, var(--color-info, var(--kotoba-sumi-info)) 80%, var(--kotoba-text));
+  --kotoba-color-purple: color-mix(in oklab, oklch(55% 0.2 300) 80%, var(--kotoba-text));
+  --kotoba-color-gray: var(--sumi-text-muted, var(--sumi-muted, var(--kotoba-sumi-muted)));
+  --kotoba-highlight-red: color-mix(in oklab, var(--color-error, var(--kotoba-sumi-error)) 25%, transparent);
+  --kotoba-highlight-orange: color-mix(in oklab, var(--color-sumi-ember, #ff6b3d) 28%, transparent);
+  --kotoba-highlight-yellow: var(--kotoba-highlight);
+  --kotoba-highlight-green: color-mix(in oklab, var(--color-success, var(--kotoba-sumi-success)) 25%, transparent);
+  --kotoba-highlight-blue: color-mix(in oklab, var(--color-info, var(--kotoba-sumi-info)) 25%, transparent);
+  --kotoba-highlight-purple: color-mix(in oklab, oklch(55% 0.2 300) 25%, transparent);
+  --kotoba-highlight-gray: color-mix(in oklab, var(--color-base-content, var(--kotoba-sumi-content)) 14%, transparent);
   /* A marker stroke: the page's warning colour, faint, under the ink. */
   --kotoba-highlight: color-mix(in oklab, var(--color-warning, oklch(84% 0.16 85)) 40%, transparent);
   --kotoba-focus-ring: 0 0 0 2px var(--kotoba-background), 0 0 0 4px var(--color-sumi-blade, var(--sumi-accent, #e84a1c));

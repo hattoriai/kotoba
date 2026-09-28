@@ -214,7 +214,8 @@ export const TOOLBAR_ITEMS: readonly ToolbarItem[] = [
 const COMMANDS = new Set<string>(TOOLBAR_ITEMS.map((item) => item.command));
 /** The text formats of the toolbar: each one is a toggle button of the same name. */
 const TOOLBAR_FORMATS = ["bold", "italic", "underline", "strikethrough", "highlight", "code", "subscript", "superscript"] as const;
-const TOGGLE_FORMATS = new Set<string>(TOOLBAR_FORMATS);
+// Highlight opens the color palette (see colors.ts): it is not a toggle.
+const TOGGLE_FORMATS = new Set<string>(TOOLBAR_FORMATS.filter((format) => format !== "highlight"));
 const BLOCK_COMMANDS = new Set<string>(["h1", "h2", "h3", "h4", "quote", "bullet", "number", "check", "code-block"]);
 /** The commands that act on the table at the selection. */
 const TABLE_COMMANDS = new Set<string>(
@@ -478,6 +479,8 @@ interface ToolbarOptions {
   uploads: boolean;
   onLink(): void;
   onUpload(): void;
+  /** Opens the color palette for the Highlight button. Without it, the button toggles the default highlight. */
+  onColors?(button: HTMLElement): void;
   announce(message: string): void;
   /** The languages of the code language picker. The default is every language. */
   codeLanguages?: readonly CodeLanguage[];
@@ -622,6 +625,9 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
         button.setAttribute("aria-pressed", String(state.block === command));
       } else if (command === "link") {
         button.setAttribute("aria-pressed", String(state.link));
+      } else if (command === "highlight" && options.onColors !== undefined) {
+        button.setAttribute("aria-haspopup", "dialog");
+        if (!button.hasAttribute("aria-expanded")) button.setAttribute("aria-expanded", "false");
       }
 
       const unavailable =
@@ -679,6 +685,8 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
 
     if (command === "link") {
       options.onLink();
+    } else if (command === "highlight" && options.onColors !== undefined) {
+      options.onColors(button);
     } else if (command === "upload") {
       options.onUpload();
     } else if (command === "undo" || command === "redo") {
@@ -694,7 +702,7 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
       });
     }
 
-    if (command !== "link" && command !== "upload") {
+    if (command !== "link" && command !== "upload" && command !== "highlight") {
       const item = TOOLBAR_ITEMS.find((entry) => entry.command === command);
       if (item && (TOGGLE_FORMATS.has(command) || BLOCK_COMMANDS.has(command) || TABLE_TOGGLES.has(command))) {
         const pressed = button.getAttribute("aria-pressed") !== "true";

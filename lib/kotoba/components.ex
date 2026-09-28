@@ -313,7 +313,8 @@ defmodule Kotoba.Components do
   `Kotoba.Features`), and the buttons of the `table-*` commands (the ones that act on the table at the selection)
   when the selection is not in a table. `code-language` renders a
   `<select>`, the code language picker: the editor fills its options, and
-  hides it when the selection is not in a code block.
+  hides it when the selection is not in a code block. `highlight` opens the
+  color palette of the editor (`aria-haspopup="dialog"`).
   """
   attr :for, :string, default: nil, doc: "the id of the editor, when the toolbar is outside it"
   attr :commands, :list, default: @command_names, doc: "the commands, when there are no buttons"
