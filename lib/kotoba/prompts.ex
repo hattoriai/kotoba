@@ -256,29 +256,30 @@ defmodule Kotoba.Prompts do
 
   defp source!(prompt, opts, async) do
     case {Keyword.fetch(opts, :search), Keyword.fetch(opts, :items)} do
-      {{:ok, fun}, :error} ->
-        unless is_function(fun, 1) or is_function(fun, 2),
-          do: invalid!(prompt, "a callback must be a function of arity 1 or 2")
-
-        if async and not is_function(fun, 1),
-          do: invalid!(prompt, "the callback of an async prompt must have arity 1")
-
-        {fun, nil}
-
-      {:error, {:ok, items}} when is_list(items) ->
-        if async, do: invalid!(prompt, "a prompt with :items is not async")
-
-        items =
-          items |> Enum.flat_map(&item/1) |> Enum.uniq_by(& &1.id) |> Enum.take(@max_local_items)
-
-        {fn query -> filter(items, query) end, items}
-
-      {:error, {:ok, _items}} ->
-        invalid!(prompt, "the items of a prompt must be a list")
-
-      _other ->
-        invalid!(prompt, "a prompt has a :search callback or :items, and not both")
+      {{:ok, fun}, :error} -> {search!(prompt, fun, async), nil}
+      {:error, {:ok, items}} -> local_items!(prompt, items, async)
+      _other -> invalid!(prompt, "a prompt has a :search callback or :items, and not both")
     end
+  end
+
+  defp search!(prompt, fun, async) do
+    unless is_function(fun, 1) or is_function(fun, 2),
+      do: invalid!(prompt, "a callback must be a function of arity 1 or 2")
+
+    if async and not is_function(fun, 1),
+      do: invalid!(prompt, "the callback of an async prompt must have arity 1")
+
+    fun
+  end
+
+  defp local_items!(prompt, items, async) do
+    unless is_list(items), do: invalid!(prompt, "the items of a prompt must be a list")
+    if async, do: invalid!(prompt, "a prompt with :items is not async")
+
+    items =
+      items |> Enum.flat_map(&item/1) |> Enum.uniq_by(& &1.id) |> Enum.take(@max_local_items)
+
+    {fn query -> filter(items, query) end, items}
   end
 
   defp label!(prompt, opts) do
