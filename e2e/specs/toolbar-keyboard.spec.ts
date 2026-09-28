@@ -100,7 +100,7 @@ test("a block button from the keyboard changes the block of the selection", asyn
   await page.keyboard.type("A heading");
   await settle(page);
   await page.keyboard.press("Shift+Tab");
-  for (let i = 0; i < 6; i += 1) await page.keyboard.press("ArrowRight");
+  for (let i = 0; i < 8; i += 1) await page.keyboard.press("ArrowRight");
 
   const h2 = toolbar(page).getByRole("button", { name: "Heading 2" });
   await expect(h2).toBeFocused();
@@ -117,7 +117,7 @@ test("the link button from the keyboard opens the form for the kept selection", 
   await selectBack(page, 6);
   await settle(page);
   await page.keyboard.press("Shift+Tab");
-  for (let i = 0; i < 4; i += 1) await page.keyboard.press("ArrowRight");
+  for (let i = 0; i < 6; i += 1) await page.keyboard.press("ArrowRight");
   await expect(toolbar(page).getByRole("button", { name: "Link" })).toBeFocused();
   await page.keyboard.press("Enter");
 
