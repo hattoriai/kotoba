@@ -151,14 +151,21 @@ defmodule Kotoba.Components do
     doc: "an upload config, for example `@uploads.attachments`"
 
   attr :upload_label, :string, default: "Attach files", doc: "the label of the file input"
-  attr :readonly, :boolean, default: false
+
+  attr :readonly, :boolean,
+    default: false,
+    doc:
+      "when `true`, the editor shows the document and cannot change it; a change in a later render reaches the editor"
 
   attr :change, :boolean,
     default: false,
     doc:
       "when `true`, the editor pushes `kotoba:change` with the document on each change, and the LiveView (or the `phx-target` component) must handle it"
 
-  attr :debounce, :integer, default: nil, doc: "milliseconds between `kotoba:change` pushes"
+  attr :debounce, :integer,
+    default: nil,
+    doc: "milliseconds between `kotoba:change` pushes; 300 when not given"
+
   attr :class, :any, default: nil, doc: "classes for the wrapper element"
   attr :rest, :global, doc: "attributes for the editor element"
 
@@ -322,8 +329,8 @@ defmodule Kotoba.Components do
   attr :for, :string, default: nil, doc: "the id of the editor, when the toolbar is outside it"
   attr :commands, :list, default: @command_names, doc: "the commands, when there are no buttons"
   attr :label, :string, default: "Formatting", doc: "the accessible name of the toolbar"
-  attr :class, :any, default: nil
-  attr :rest, :global
+  attr :class, :any, default: nil, doc: "classes for the toolbar element"
+  attr :rest, :global, doc: "attributes for the toolbar element"
 
   slot :button do
     attr :command, :string, required: true
@@ -427,8 +434,8 @@ defmodule Kotoba.Components do
     doc:
       "extra node modules, `{module, js_url}` tuples, or JavaScript module URLs (the same list as `kotoba/1`; a URL has no module to render)"
 
-  attr :class, :any, default: nil
-  attr :rest, :global
+  attr :class, :any, default: nil, doc: "classes for the wrapper, for example `\"prose\"`"
+  attr :rest, :global, doc: "attributes for the wrapper"
 
   def kotoba_content(assigns) do
     assigns =

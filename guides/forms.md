@@ -157,60 +157,28 @@ Give each editor its own `id`. Every event from an editor has its `id`,
 and every server push names the editor, so two editors on a page do not
 act on the events of the other.
 
-## Features
+## Features, code languages and the toolbar
 
-An editor has every built-in feature by default. To give a field fewer,
-list them, and check them in the changeset:
+An editor has every built-in feature by default. `features` gives a field
+fewer, and `Kotoba.Content.validate_features/3` checks them in the
+changeset; `code_languages` chooses the languages of the code language
+picker; and a `toolbar` slot with `Kotoba.Components.kotoba_toolbar/1`
+gives the editor your own toolbar:
 
 ```heex
-<.kotoba field={@form[:comment]} id="comment" features={~w(bold italic links lists)} />
+<.kotoba field={@form[:comment]} id="comment" features={~w(bold italic links lists)}>
+  <:toolbar>
+    <.kotoba_toolbar commands={~w(bold italic link bullet number undo redo)} />
+  </:toolbar>
+</.kotoba>
 ```
 
 ```elixir
 |> Kotoba.Content.validate_features(:comment, ~w(bold italic links lists)a)
 ```
 
-See the [Extensions](extensions.md) guide for what a feature that is off
-does, and for the app's own extensions.
-
-## Code languages
-
-In a code block, the toolbar has a code language picker. It offers the
-languages of `Kotoba.CodeLanguages` (28 of them, and plain text). To
-offer fewer, give their ids:
-
-```heex
-<.kotoba field={@form[:body]} id="post-body" code_languages={~w(elixir erlang sql bash)} />
-```
-
-A name that is not a language raises `ArgumentError`. The list chooses
-what the picker offers, not what the editor keeps: a pasted or stored
-block in another language keeps its language, is highlighted when the
-editor knows it, and shows in the picker.
-
-## A custom toolbar
-
-The default toolbar has every command. To choose the commands or to use
-your own icons, give a `toolbar` slot:
-
-```heex
-<.kotoba field={@form[:body]} id="post-body">
-  <:toolbar>
-    <.kotoba_toolbar>
-      <:button command="bold"><.icon name="hero-bold" /></:button>
-      <:button command="link" label="Add a link"><.icon name="hero-link" /></:button>
-    </.kotoba_toolbar>
-  </:toolbar>
-</.kotoba>
-```
-
-`Kotoba.Components.kotoba_toolbar/1` can also be outside the editor, with
-`for` set to the editor id. `Kotoba.Components.toolbar_commands/0` lists
-the commands. The editor hides the buttons of the `table-*` commands
-(Insert row above, Delete table, and the rest) when the selection is not
-in a table; the `table` command inserts one. The `code-language` command
-renders a `<select>`, the code language picker, which the editor fills
-and shows in a code block.
+The [Editing features](features.md) guide has the features, their
+shortcuts, the code languages and the toolbar commands.
 
 ## Testing a form
 
@@ -242,5 +210,6 @@ assert_push_event(view, "kotoba:prompt_results", %{items: [%{label: "Ada Lovelac
 
 `Kotoba.Content.cast/1` also takes a map (the document envelope, or a bare
 Lexical root node) and a `Kotoba.Content`. `Kotoba.Content.from_markdown/2`
-makes content from Markdown, on a best-effort basis. `Kotoba.Renderer`
-renders a document as HTML, text or Markdown.
+makes content from Markdown, on a best-effort basis, for seeds, tests and
+imports. The [Rendering](rendering.md) guide shows how to show content,
+and how to render it as HTML, text or Markdown elsewhere.

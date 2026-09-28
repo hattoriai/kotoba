@@ -18,7 +18,7 @@ defmodule Kotoba.Renderer do
   | list               | `ul`, `ol` (with `start` when it is not 1), `ul.kotoba-check` |
   | list item          | `li`; in a check list `li.kotoba-checked` or `li.kotoba-unchecked` |
   | code               | `pre` with `code.language-<language>`, the text escaped |
-  | text               | the text in `strong`, `em`, `s`, `u`, `code`, `sub`, `sup`, `mark`, and `span.kotoba-lowercase`, `span.kotoba-uppercase`, `span.kotoba-capitalize` |
+  | text               | the text in `strong`, `em`, `s`, `u`, `code`, `sub`, `sup`, `mark` (`mark.kotoba-highlight-<name>` for a highlight color), and `span.kotoba-lowercase`, `span.kotoba-uppercase`, `span.kotoba-capitalize`; a text color is a `span.kotoba-color-<name>` around it |
   | line break         | `br`                                                   |
   | horizontal rule    | `hr`                                                   |
   | table              | `table.kotoba-table` in a `div.kotoba-table-scroll`, with a `thead` for a first row of header cells and a `tbody` |

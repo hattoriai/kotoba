@@ -117,19 +117,18 @@ then sees the tokens that the theme reads, and puts them in the built CSS.
 
 ## Rendered content
 
-`Kotoba.Components.kotoba_content/1` renders semantic HTML (`p`, `h1`–`h4`,
-`blockquote`, `ul`, `ol`, `li`, `pre`, `code`, `strong`, `em`, `s`, `a`,
-`hr`, `figure`) in a `div.kotoba-content`. `kotoba.css` does not style it
-(but for the colors, below), so it takes the typography of your app, for
-example:
+`Kotoba.Components.kotoba_content/1` renders semantic HTML in a
+`div.kotoba-content`. `kotoba.css` styles only what the HTML needs to read
+right (tables, check list boxes, mentions, attachments, the colors of the
+palette and the case formats), and the rest takes the typography of your
+app, for example:
 
 ```heex
 <.kotoba_content content={@post.body} class="prose" />
 ```
 
-Check lists have `class="kotoba-check"`, mentions `span.kotoba-mention`,
-attachments `figure.kotoba-attachment`, and unknown nodes an empty
-`span.kotoba-unknown`.
+The [Rendering](rendering.md) guide has the HTML of each node and its
+classes.
 
 ## Colors
 

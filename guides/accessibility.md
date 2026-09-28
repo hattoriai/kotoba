@@ -31,9 +31,9 @@ can come and go with the error:
 ## The toolbar
 
 The toolbar has `role="toolbar"`, with a `group` for each set of buttons
-(Text, Blocks, Lists, Insert, History). A Code group is there only while
-the selection is in a code block, and a Table group only while it is in
-a table.
+(Text, Blocks, Lists, Insert, History, and one for each extension, named
+after it). A Code group is there only while the selection is in a code
+block, and a Table group only while it is in a table.
 
 * The toolbar is one tab stop. Tab goes to the toolbar, and Tab again goes
   to the editable area.

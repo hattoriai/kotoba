@@ -146,9 +146,17 @@ For development, in `config/dev.exs`:
 config :kotoba, Kotoba.Storage.Local, root: Path.expand("../tmp/uploads", __DIR__)
 ```
 
+And for the tests, in `config/test.exs`, when a test uploads a file:
+
+```elixir
+# config/test.exs
+config :kotoba, Kotoba.Storage.Local, root: Path.expand("../tmp/test_uploads", __DIR__)
+```
+
 `config/runtime.exs` runs in every environment, after `config/dev.exs`.
 Outside the `:prod` block, its root would also replace the development
-root, and uploads in development would fail.
+root, and uploads in development would fail. The adapter raises when it
+stores a file with no root configured.
 
 Serve the files with `Kotoba.Storage.Local.Plug`, in the endpoint before
 the router:
@@ -202,26 +210,57 @@ fresh cache.
 ## 6. Put the editor in a LiveView form
 
 Import the components, for example in the `html_helpers` of your web
-module:
+module (`lib/my_app_web.ex`). The installer does not add this line:
 
 ```elixir
 import Kotoba.Components
 ```
 
-Then, in the LiveView:
+Then a LiveView with the form:
 
-```heex
-<.form for={@form} id="post-form" phx-change="validate" phx-submit="save">
-  <.input field={@form[:title]} label="Title" />
-  <label id="post-body-label">Body</label>
-  <.kotoba field={@form[:body]} id="post-body" label_id="post-body-label" />
-  <.button>Save</.button>
-</.form>
+```elixir
+defmodule MyAppWeb.PostLive.New do
+  use MyAppWeb, :live_view
+
+  alias MyApp.Blog.Post
+  alias MyApp.Repo
+
+  @impl true
+  def mount(_params, _session, socket) do
+    {:ok, assign(socket, form: to_form(Post.changeset(%Post{}, %{})))}
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <.form for={@form} id="post-form" phx-change="validate" phx-submit="save">
+      <.input field={@form[:title]} label="Title" />
+      <label id="post-body-label">Body</label>
+      <.kotoba field={@form[:body]} id="post-body" label_id="post-body-label" />
+      <.button>Save</.button>
+    </.form>
+    """
+  end
+
+  @impl true
+  def handle_event("validate", %{"post" => params}, socket) do
+    changeset = Post.changeset(%Post{}, params)
+    {:noreply, assign(socket, form: to_form(changeset, action: :validate))}
+  end
+
+  def handle_event("save", %{"post" => params}, socket) do
+    case %Post{} |> Post.changeset(params) |> Repo.insert() do
+      {:ok, post} -> {:noreply, push_navigate(socket, to: ~p"/posts/#{post}")}
+      {:error, changeset} -> {:noreply, assign(socket, form: to_form(changeset))}
+    end
+  end
+end
 ```
 
 The editor posts the document with the form, so the form's own
 `phx-change` and `phx-submit` events have it. The LiveView needs no other
-event for the editor. The [Forms](forms.md) guide explains the form data,
+event for the editor. To edit a post, build the form from the post
+(`Post.changeset(post, %{})`): the editor starts with its document. The [Forms](forms.md) guide explains the form data,
 and the `change` attribute for a LiveView that wants each change as an
 event.
 
@@ -240,8 +279,15 @@ the [Security](security.md) guide.
 
 ## Next
 
-* [Forms and changesets](forms.md)
-* [Uploads](uploads.md)
-* [Prompts and mentions](prompts.md)
-* [Custom nodes](custom_nodes.md)
-* [Theming](theming.md)
+* [Editing features](features.md): what the editor does, and how to
+  choose it for each field.
+* [Forms and changesets](forms.md): the form data, events and server
+  pushes.
+* [Rendering](rendering.md): HTML, text and Markdown.
+* [Uploads](uploads.md): files and images.
+* [Prompts and mentions](prompts.md): `@` menus, emoji, tags.
+* [Custom nodes](custom_nodes.md) and [Extensions](extensions.md): your
+  own nodes, commands and buttons.
+* [Theming](theming.md): colours, the Sumi theme, dark mode.
+* [Security](security.md), [Accessibility](accessibility.md) and
+  [Known limits](limits.md).
