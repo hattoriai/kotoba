@@ -193,12 +193,26 @@ mix precommit              # compile, format, credo --strict and test
 mix dialyzer
 ```
 
-The browser tests in `e2e/` use Playwright with Chromium. Install the
-browser once:
+The browser tests in `e2e/` use Playwright, in Chromium, Firefox and
+WebKit (the engine of Safari). Install the browsers once:
 
 ```sh
-cd e2e && npm ci && npx playwright install chromium
+cd e2e && npm ci && npx playwright install chromium firefox webkit
 ```
+
+`mix test.e2e` runs every spec in the three browsers, and `E2E_BROWSERS`
+picks some of them. In `e2e/`, Playwright runs one spec (it starts the
+development server too):
+
+```sh
+E2E_BROWSERS=firefox mix test.e2e
+cd e2e && E2E_BROWSERS=chromium,webkit npx playwright test specs/prompts.spec.ts
+```
+
+A failed test keeps its trace and a screenshot in `e2e/test-results/`;
+open a trace with `npx playwright show-trace <trace.zip>` in `e2e/`. CI
+runs one job for each browser, and uploads the results of a failed job as
+an artifact.
 
 `mix test.e2e` runs `npm ci` in `e2e/` when `e2e/node_modules` is missing,
 builds the bundle, and starts its own development server, without
