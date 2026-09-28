@@ -1,7 +1,7 @@
 {
   "name": "kotoba-e2e",
   "private": true,
-  "license": "Apache-2.0",
+  "license": "MIT",
   "scripts": {
     "test": "playwright test",
     "typecheck": "tsc --noEmit"

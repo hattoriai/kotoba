@@ -1,6 +1,5 @@
 Kotoba
-Copyright the Kotoba authors. Licensed under the Apache License, Version 2.0
-(see LICENSE).
+Copyright the Kotoba authors. Licensed under the MIT License (see LICENSE).
 
 This product includes icons from Lucide (https://lucide.dev), copied into
 assets/src/icons.ts and built into priv/static/kotoba.esm.js and

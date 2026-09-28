@@ -67,7 +67,7 @@ defmodule Kotoba.MixProject do
   defp package do
     [
       name: "kotoba",
-      licenses: ["Apache-2.0"],
+      licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
       # The four bundle files by name: other build output in priv/static
       # never goes into the package.
