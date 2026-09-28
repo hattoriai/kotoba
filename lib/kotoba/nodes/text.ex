@@ -189,7 +189,11 @@ defmodule Kotoba.Nodes.Text do
       %{text: nil, highlight: "yellow"}
 
   """
-  @spec colors(%{format: integer(), style: String.t() | nil}) :: %{
+  @spec colors(%{
+          :format => integer(),
+          :style => String.t() | nil,
+          optional(atom()) => any()
+        }) :: %{
           text: String.t() | nil,
           highlight: String.t() | nil
         }
