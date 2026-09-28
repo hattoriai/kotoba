@@ -23,8 +23,12 @@ defmodule Kotoba.Components do
   @commands [
     {"bold", "Bold", "Text"},
     {"italic", "Italic", "Text"},
+    {"underline", "Underline", "Text"},
     {"strikethrough", "Strikethrough", "Text"},
+    {"highlight", "Highlight", "Text"},
     {"code", "Inline code", "Text"},
+    {"subscript", "Subscript", "Text"},
+    {"superscript", "Superscript", "Text"},
     {"link", "Link", "Text"},
     {"h1", "Heading 1", "Blocks"},
     {"h2", "Heading 2", "Blocks"},
@@ -159,7 +163,7 @@ defmodule Kotoba.Components do
 
   slot :toolbar,
     doc:
-      "a custom toolbar, for example `<.kotoba_toolbar>`; the default toolbar has every command"
+      "a custom toolbar, for example `<.kotoba_toolbar>`; the default toolbar has the commands of the editor's features, but `subscript` and `superscript`"
 
   def kotoba(assigns) do
     %FormField{} = field = assigns.field

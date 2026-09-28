@@ -43,7 +43,9 @@ a table.
 * A format or block button has `aria-pressed`. A button that cannot act
   now (Undo with no history, say) has `aria-disabled="true"`.
 * The title of a button shows its shortcut: `Cmd/Ctrl+B` (bold),
-  `Cmd/Ctrl+I` (italic), `Cmd/Ctrl+K` (link) and `Cmd/Ctrl+Z` (undo).
+  `Cmd/Ctrl+I` (italic), `Cmd/Ctrl+U` (underline), `Cmd/Ctrl+Shift+H`
+  (highlight), `Cmd/Ctrl+,` (subscript), `Cmd/Ctrl+.` (superscript),
+  `Cmd/Ctrl+K` (link) and `Cmd/Ctrl+Z` (undo).
 * An editor with fewer features (see `Kotoba.Features`) has only their
   buttons, and an extension's buttons join the toolbar with the same
   keyboard behaviour, `aria-pressed` and live region messages.

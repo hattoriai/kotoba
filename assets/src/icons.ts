@@ -28,6 +28,38 @@ export const strikethrough: Icon = [
   ["line", { x1: "4", x2: "20", y1: "12", y2: "12" }],
 ];
 
+/** Lucide `underline`. */
+export const underline: Icon = [
+  ["path", { d: "M6 4v6a6 6 0 0 0 12 0V4" }],
+  ["line", { x1: "4", x2: "20", y1: "20", y2: "20" }],
+];
+
+/** Lucide `highlighter`. */
+export const highlighter: Icon = [
+  ["path", { d: "m9 11-6 6v3h9l3-3" }],
+  ["path", { d: "m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4" }],
+];
+
+/** Lucide `subscript`. */
+export const subscript: Icon = [
+  ["path", { d: "m4 5 8 8" }],
+  ["path", { d: "m12 5-8 8" }],
+  [
+    "path",
+    { d: "M20 19h-4c0-1.5.44-2 1.5-2.5S20 15.33 20 14c0-.47-.17-.93-.48-1.29a2.11 2.11 0 0 0-2.62-.44c-.42.24-.74.62-.9 1.07" },
+  ],
+];
+
+/** Lucide `superscript`. */
+export const superscript: Icon = [
+  ["path", { d: "m4 19 8-8" }],
+  ["path", { d: "m12 19-8-8" }],
+  [
+    "path",
+    { d: "M20 12h-4c0-1.5.442-2 1.5-2.5S20 8.334 20 7.002c0-.472-.17-.93-.484-1.29a2.105 2.105 0 0 0-2.617-.436c-.42.239-.738.614-.899 1.06" },
+  ],
+];
+
 /** Lucide `code`. */
 export const code: Icon = [
   ["path", { d: "m16 18 6-6-6-6" }],
@@ -229,8 +261,12 @@ export const grid2x2X: Icon = [
 export const TOOLBAR_ICONS: Readonly<Record<Exclude<ToolbarCommand, "code-language">, Icon>> = {
   "bold": bold,
   "italic": italic,
+  "underline": underline,
   "strikethrough": strikethrough,
+  "highlight": highlighter,
   "code": code,
+  "subscript": subscript,
+  "superscript": superscript,
   "link": link,
   "h1": heading1,
   "h2": heading2,

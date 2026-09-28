@@ -10,6 +10,8 @@
 //
 // A command of a feature that the editor does not have (see features.ts) is
 // not in the default toolbar, and its button in an app's toolbar is hidden.
+// `subscript` and `superscript` are not in the default toolbar either: an
+// app's toolbar can have them.
 // An extension's toolbar controls (see extensions.ts) are buttons with the
 // command `<extension>:<command>`: the default toolbar puts them before the
 // History group, and an app's toolbar can place them by that command.
@@ -124,8 +126,12 @@ export interface SelectionState {
 export type ToolbarCommand =
   | "bold"
   | "italic"
+  | "underline"
   | "strikethrough"
+  | "highlight"
   | "code"
+  | "subscript"
+  | "superscript"
   | "link"
   | "h1"
   | "h2"
@@ -161,15 +167,23 @@ interface ToolbarItem {
   done?: string;
   /** The feature of the command; none for undo and redo. */
   feature?: Feature;
+  /** `false` for a command that is not in the default toolbar (an app's toolbar can have it). */
+  inDefault?: false;
 }
 
-const MOD = typeof navigator !== "undefined" && /Mac|iP(hone|ad)/.test(navigator.platform) ? "⌘" : "Ctrl+";
+const MAC = typeof navigator !== "undefined" && /Mac|iP(hone|ad)/.test(navigator.platform);
+const MOD = MAC ? "⌘" : "Ctrl+";
+const SHIFT_MOD = MAC ? "⇧⌘" : "Ctrl+Shift+";
 
 export const TOOLBAR_ITEMS: readonly ToolbarItem[] = [
   { command: "bold", label: "Bold", group: "Text", shortcut: `${MOD}B`, feature: "bold" },
   { command: "italic", label: "Italic", group: "Text", shortcut: `${MOD}I`, feature: "italic" },
+  { command: "underline", label: "Underline", group: "Text", shortcut: `${MOD}U`, feature: "underline" },
   { command: "strikethrough", label: "Strikethrough", group: "Text", feature: "strikethrough" },
+  { command: "highlight", label: "Highlight", group: "Text", shortcut: `${SHIFT_MOD}H`, feature: "highlight" },
   { command: "code", label: "Inline code", group: "Text", feature: "inline_code" },
+  { command: "subscript", label: "Subscript", group: "Text", shortcut: `${MOD},`, feature: "subscript", inDefault: false },
+  { command: "superscript", label: "Superscript", group: "Text", shortcut: `${MOD}.`, feature: "superscript", inDefault: false },
   { command: "link", label: "Link", group: "Text", shortcut: `${MOD}K`, feature: "links" },
   { command: "h1", label: "Heading 1", group: "Blocks", feature: "headings" },
   { command: "h2", label: "Heading 2", group: "Blocks", feature: "headings" },
@@ -198,7 +212,9 @@ export const TOOLBAR_ITEMS: readonly ToolbarItem[] = [
 ];
 
 const COMMANDS = new Set<string>(TOOLBAR_ITEMS.map((item) => item.command));
-const TOGGLE_FORMATS = new Set<string>(["bold", "italic", "strikethrough", "code"]);
+/** The text formats of the toolbar: each one is a toggle button of the same name. */
+const TOOLBAR_FORMATS = ["bold", "italic", "underline", "strikethrough", "highlight", "code", "subscript", "superscript"] as const;
+const TOGGLE_FORMATS = new Set<string>(TOOLBAR_FORMATS);
 const BLOCK_COMMANDS = new Set<string>(["h1", "h2", "h3", "h4", "quote", "bullet", "number", "check", "code-block"]);
 /** The commands that act on the table at the selection. */
 const TABLE_COMMANDS = new Set<string>(
@@ -271,7 +287,7 @@ export function $readSelectionState(): SelectionState {
   const selection = $getSelection();
   if (!$isRangeSelection(selection)) return state;
 
-  for (const format of ["bold", "italic", "strikethrough", "code"] as const) {
+  for (const format of TOOLBAR_FORMATS) {
     if (selection.hasFormat(format)) state.formats.add(format);
   }
   state.link = $selectedLinkUrl() !== null;
@@ -308,8 +324,12 @@ export function runCommand(editor: LexicalEditor, command: ToolbarCommand, state
   switch (command) {
     case "bold":
     case "italic":
+    case "underline":
     case "strikethrough":
+    case "highlight":
     case "code":
+    case "subscript":
+    case "superscript":
       editor.dispatchCommand(FORMAT_TEXT_COMMAND, command);
       return;
     case "bullet":
@@ -841,6 +861,7 @@ function buildToolbar(
   for (const item of TOOLBAR_ITEMS) {
     if (item.command === "upload" && !uploads) continue;
     if (item.feature !== undefined && !features.has(item.feature)) continue;
+    if (item.inDefault === false) continue;
     if (item.group === "History" && !extensionsPlaced) placeExtensions();
 
     if (group === null || group.dataset.group !== item.group) {

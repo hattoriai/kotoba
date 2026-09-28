@@ -16,7 +16,8 @@ features and its extensions.
 The comment editor has five features; the body editor, with no
 `features`, has every feature. The features are in `Kotoba.Features`:
 
-`bold`, `italic`, `strikethrough`, `inline_code`, `links`, `headings`,
+`bold`, `italic`, `underline`, `strikethrough`, `highlight`, `subscript`,
+`superscript`, `inline_code`, `links`, `headings`,
 `quotes`, `lists`, `check_lists` (needs `lists`), `code_blocks`,
 `horizontal_rules`, `tables`, `attachments` (with `uploads`) and `mentions`
 (with `prompts`).
@@ -25,8 +26,8 @@ A feature that is off is not in the editor at all:
 
 * its toolbar buttons are not in the default toolbar, and are hidden in a
   custom one;
-* its Markdown shortcut (`# `, `> `, ` ``` `, `**`...) types the text;
-* its keyboard shortcut (`Cmd/Ctrl+B`, `Cmd/Ctrl+I`) does nothing;
+* its Markdown shortcut (`# `, `> `, ` ``` `, `**`, `==`...) types the text;
+* its keyboard shortcut (`Cmd/Ctrl+B`, `Cmd/Ctrl+U`...) does nothing;
 * pasted content of it comes in as plain paragraphs and text: a pasted
   table, heading or code block is paragraphs, and a pasted format is
   dropped;
@@ -34,6 +35,9 @@ A feature that is off is not in the editor at all:
   in a placeholder, and saves it with no change.
 
 Paragraphs, line breaks, tabs, undo and redo are always there.
+Subscript and superscript have no button in the default toolbar: they
+have their keyboard shortcuts, and an app's toolbar can have their
+buttons (`command="subscript"`, `command="superscript"`).
 
 ## Check the features on the server
 
