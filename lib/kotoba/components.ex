@@ -381,10 +381,12 @@ defmodule Kotoba.Components do
   defp command!(command) when is_binary(command) do
     if Regex.match?(~r/\A[a-z][a-z0-9-]*:[a-z][a-z0-9-]*\z/, command),
       do: command,
-      else: command!(nil)
+      else: unknown_command!(command)
   end
 
-  defp command!(command) do
+  defp command!(command), do: unknown_command!(command)
+
+  defp unknown_command!(command) do
     raise ArgumentError,
           "unknown Kotoba toolbar command #{inspect(command)}, use one of #{inspect(@command_names)} " <>
             "or an extension's \"<extension>:<command>\""
