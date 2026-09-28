@@ -4,8 +4,8 @@ Kotoba (言葉, "words") is rich text for Phoenix. It gives your app:
 
 * a rich-text editor for LiveView forms, built on
   [Lexical](https://lexical.dev): text formats, headings, quotes, lists and
-  check lists, links, highlighted code blocks, file attachments, mentions,
-  and your own nodes;
+  check lists, links, highlighted code blocks, tables, file attachments,
+  mentions, and your own nodes;
 * `Kotoba.Content`, an Ecto type that stores the document with a cached
   HTML and text rendering;
 * safe rendering to HTML, text and Markdown, with no raw HTML anywhere.

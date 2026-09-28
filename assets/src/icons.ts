@@ -140,6 +140,91 @@ export const redo2: Icon = [
   ["path", { d: "M20 9H9.5A5.5 5.5 0 0 0 4 14.5A5.5 5.5 0 0 0 9.5 20H13" }],
 ];
 
+/** Lucide `table`. */
+export const table: Icon = [
+  ["path", { d: "M12 3v18" }],
+  ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
+  ["path", { d: "M3 9h18" }],
+  ["path", { d: "M3 15h18" }],
+];
+
+/** Lucide `between-horizontal-start`. */
+export const betweenHorizontalStart: Icon = [
+  ["rect", { width: "13", height: "7", x: "8", y: "3", rx: "1" }],
+  ["path", { d: "m2 9 3 3-3 3" }],
+  ["rect", { width: "13", height: "7", x: "8", y: "14", rx: "1" }],
+];
+
+/** Lucide `between-horizontal-end`. */
+export const betweenHorizontalEnd: Icon = [
+  ["rect", { width: "13", height: "7", x: "3", y: "3", rx: "1" }],
+  ["path", { d: "m22 15-3-3 3-3" }],
+  ["rect", { width: "13", height: "7", x: "3", y: "14", rx: "1" }],
+];
+
+/** Lucide `between-vertical-start`. */
+export const betweenVerticalStart: Icon = [
+  ["rect", { width: "7", height: "13", x: "3", y: "8", rx: "1" }],
+  ["path", { d: "m15 2-3 3-3-3" }],
+  ["rect", { width: "7", height: "13", x: "14", y: "8", rx: "1" }],
+];
+
+/** Lucide `between-vertical-end`. */
+export const betweenVerticalEnd: Icon = [
+  ["rect", { width: "7", height: "13", x: "3", y: "3", rx: "1" }],
+  ["path", { d: "m9 22 3-3 3 3" }],
+  ["rect", { width: "7", height: "13", x: "14", y: "3", rx: "1" }],
+];
+
+/** Lucide `panel-top`. */
+export const panelTop: Icon = [
+  ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
+  ["path", { d: "M3 9h18" }],
+];
+
+/** Lucide `panel-left`. */
+export const panelLeft: Icon = [
+  ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2" }],
+  ["path", { d: "M9 3v18" }],
+];
+
+/** Lucide `table-rows-split`. */
+export const tableRowsSplit: Icon = [
+  ["path", { d: "M14 10h2" }],
+  ["path", { d: "M15 22v-8" }],
+  ["path", { d: "M15 2v4" }],
+  ["path", { d: "M2 10h2" }],
+  ["path", { d: "M20 10h2" }],
+  ["path", { d: "M3 19h18" }],
+  ["path", { d: "M3 22v-6a2 2 135 0 1 2-2h14a2 2 45 0 1 2 2v6" }],
+  ["path", { d: "M3 2v2a2 2 45 0 0 2 2h14a2 2 135 0 0 2-2V2" }],
+  ["path", { d: "M8 10h2" }],
+  ["path", { d: "M9 22v-8" }],
+  ["path", { d: "M9 2v4" }],
+];
+
+/** Lucide `table-columns-split`. */
+export const tableColumnsSplit: Icon = [
+  ["path", { d: "M14 14v2" }],
+  ["path", { d: "M14 20v2" }],
+  ["path", { d: "M14 2v2" }],
+  ["path", { d: "M14 8v2" }],
+  ["path", { d: "M2 15h8" }],
+  ["path", { d: "M2 3h6a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H2" }],
+  ["path", { d: "M2 9h8" }],
+  ["path", { d: "M22 15h-4" }],
+  ["path", { d: "M22 3h-2a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h2" }],
+  ["path", { d: "M22 9h-4" }],
+  ["path", { d: "M5 3v18" }],
+];
+
+/** Lucide `grid-2x2-x`. */
+export const grid2x2X: Icon = [
+  ["path", { d: "M12 3v17a1 1 0 0 1-1 1H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v6a1 1 0 0 1-1 1H3" }],
+  ["path", { d: "m16.5 16.5 5 5" }],
+  ["path", { d: "m16.5 21.5 5-5" }],
+];
+
 /** The icon of each toolbar command. */
 export const TOOLBAR_ICONS: Readonly<Record<ToolbarCommand, Icon>> = {
   "bold": bold,
@@ -157,7 +242,17 @@ export const TOOLBAR_ICONS: Readonly<Record<ToolbarCommand, Icon>> = {
   "check": listChecks,
   "code-block": squareCode,
   "rule": minus,
+  "table": table,
   "upload": paperclip,
+  "table-row-before": betweenHorizontalStart,
+  "table-row-after": betweenHorizontalEnd,
+  "table-column-before": betweenVerticalStart,
+  "table-column-after": betweenVerticalEnd,
+  "table-header-row": panelTop,
+  "table-header-column": panelLeft,
+  "table-delete-row": tableRowsSplit,
+  "table-delete-column": tableColumnsSplit,
+  "table-delete": grid2x2X,
   "undo": undo2,
   "redo": redo2,
 };

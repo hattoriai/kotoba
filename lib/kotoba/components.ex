@@ -36,7 +36,17 @@ defmodule Kotoba.Components do
     {"check", "Check list", "Lists"},
     {"code-block", "Code block", "Insert"},
     {"rule", "Horizontal rule", "Insert"},
+    {"table", "Table", "Insert"},
     {"upload", "Attach a file", "Insert"},
+    {"table-row-before", "Insert row above", "Table"},
+    {"table-row-after", "Insert row below", "Table"},
+    {"table-column-before", "Insert column before", "Table"},
+    {"table-column-after", "Insert column after", "Table"},
+    {"table-header-row", "Header row", "Table"},
+    {"table-header-column", "Header column", "Table"},
+    {"table-delete-row", "Delete row", "Table"},
+    {"table-delete-column", "Delete column", "Table"},
+    {"table-delete", "Delete table", "Table"},
     {"undo", "Undo", "History"},
     {"redo", "Redo", "History"}
   ]
@@ -251,7 +261,9 @@ defmodule Kotoba.Components do
 
   The editor adds `role="toolbar"`, the roving tabindex, `aria-pressed`
   and `aria-disabled`. The commands are the ones of `toolbar_commands/0`;
-  another command raises `ArgumentError`.
+  another command raises `ArgumentError`. The editor hides the buttons of
+  the `table-*` commands (the ones that act on the table at the selection)
+  when the selection is not in a table.
   """
   attr :for, :string, default: nil, doc: "the id of the editor, when the toolbar is outside it"
   attr :commands, :list, default: @command_names, doc: "the commands, when there are no buttons"

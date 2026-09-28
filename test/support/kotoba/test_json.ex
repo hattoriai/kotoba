@@ -108,6 +108,27 @@ defmodule Kotoba.TestJSON do
     )
   end
 
+  def table(rows, attrs \\ %{}), do: element("table", rows, attrs)
+
+  def table_row(cells), do: element("tablerow", cells)
+
+  @doc "A cell with `headerState` 0 (data), 1 (header row), 2 (header column) or 3."
+  def table_cell(children, header_state \\ 0, attrs \\ %{}) do
+    element(
+      "tablecell",
+      children,
+      Map.merge(
+        %{
+          "backgroundColor" => nil,
+          "colSpan" => 1,
+          "headerState" => header_state,
+          "rowSpan" => 1
+        },
+        attrs
+      )
+    )
+  end
+
   def unknown(type), do: %{"type" => type, "version" => 1, "children" => [text("hidden")]}
 
   def element(type, children, attrs \\ %{}) do

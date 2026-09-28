@@ -37,6 +37,9 @@ defmodule Kotoba.Nodes do
     Nodes.Code,
     Nodes.CodeHighlight,
     Nodes.HorizontalRule,
+    Nodes.Table,
+    Nodes.TableRow,
+    Nodes.TableCell,
     Nodes.Attachment,
     Nodes.Mention
   ]

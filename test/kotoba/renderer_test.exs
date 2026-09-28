@@ -382,7 +382,7 @@ defmodule Kotoba.RendererTest do
       assert html(input) == "<pre><code>x</code></pre>"
     end
 
-    test "a horizontal rule and an attachment are valid only under the root or a list item" do
+    test "a horizontal rule and an attachment are valid only under the root, a list item or a table cell" do
       input = [paragraph([hr(), attachment()])]
 
       assert html(input) ==
@@ -459,6 +459,162 @@ defmodule Kotoba.RendererTest do
 
       assert Phoenix.HTML.safe_to_string(Renderer.to_html(doc)) ==
                ~s(<p><span class="kotoba-unknown" data-type="text"></span></p>)
+    end
+  end
+
+  describe "tables" do
+    defp cell(value, header_state \\ 0, attrs \\ %{}),
+      do: table_cell([paragraph([text(value)])], header_state, attrs)
+
+    defp people_table do
+      table([
+        table_row([cell("Name", 1), cell("Role", 1)]),
+        table_row([cell("Ada"), table_cell([paragraph([text("Engineer", 1)])])])
+      ])
+    end
+
+    test "a first row of header cells goes in a thead, with th scope=col" do
+      assert html([people_table()]) ==
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><thead><tr>) <>
+                 ~s(<th scope="col"><p>Name</p></th><th scope="col"><p>Role</p></th>) <>
+                 "</tr></thead><tbody><tr><td><p>Ada</p></td>" <>
+                 "<td><p><strong>Engineer</strong></p></td></tr></tbody></table></div>"
+    end
+
+    test "a header column has th scope=row; spans render, colours and widths do not" do
+      input =
+        table(
+          [
+            table_row([
+              cell("Total", 2),
+              cell("42", 0, %{
+                "colSpan" => 2,
+                "rowSpan" => 3,
+                "backgroundColor" => "#ffeeaa",
+                "width" => 120
+              })
+            ]),
+            table_row([cell("Corner", 3), cell("x")])
+          ],
+          %{"colWidths" => [90, 60, 60]}
+        )
+
+      assert html([input]) ==
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody><tr><th scope="row"><p>Total</p></th>) <>
+                 ~s(<td colspan="2" rowspan="3"><p>42</p></td></tr>) <>
+                 ~s(<tr><th scope="col"><p>Corner</p></th><td><p>x</p></td></tr></tbody></table></div>)
+    end
+
+    test "a first row with a data cell is not a header row" do
+      input = table([table_row([cell("a", 1), cell("b")]), table_row([cell("c"), cell("d")])])
+
+      assert html([input]) ==
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody><tr><th scope="col"><p>a</p></th>) <>
+                 "<td><p>b</p></td></tr><tr><td><p>c</p></td><td><p>d</p></td></tr></tbody></table></div>"
+    end
+
+    test "a cell holds blocks and block decorators" do
+      input =
+        table([
+          table_row([
+            table_cell([
+              heading("h2", [text("H")]),
+              list("bullet", [item([text("i")])]),
+              code([highlight("x")]),
+              hr(),
+              attachment()
+            ])
+          ])
+        ])
+
+      assert html([input]) ==
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody><tr><td><h2>H</h2><ul><li>i</li></ul>) <>
+                 "<pre><code>x</code></pre><hr>" <>
+                 ~s(<figure class="kotoba-attachment">) <>
+                 ~s(<img src="/uploads/k/cat.png" alt="cat.png" width="640" height="480">) <>
+                 "<figcaption>cat.png</figcaption></figure></td></tr></tbody></table></div>"
+    end
+
+    test "an empty table has an empty tbody" do
+      assert html([table([])]) ==
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody></tbody></table></div>)
+    end
+
+    test "a table is valid only under the root, and holds no table" do
+      unknown = ~s(<span class="kotoba-unknown" data-type="table"></span>)
+
+      assert html([quote_block([people_table()])]) == "<blockquote>#{unknown}</blockquote>"
+      assert html([list("bullet", [item([people_table()])])]) == "<ul><li>#{unknown}</li></ul>"
+
+      assert html([table([table_row([table_cell([people_table()])])])]) ==
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody><tr><td>#{unknown}</td></tr></tbody></table></div>)
+    end
+
+    test "rows are valid only in a table, and cells only in a row" do
+      assert html([table_row([cell("x")])]) ==
+               ~s(<span class="kotoba-unknown" data-type="tablerow"></span>)
+
+      assert html([table([cell("x")])]) ==
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody>) <>
+                 ~s(<span class="kotoba-unknown" data-type="tablecell"></span></tbody></table></div>)
+
+      assert html([table([table_row([paragraph([text("x")])])])]) ==
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody><tr>) <>
+                 ~s(<span class="kotoba-unknown" data-type="paragraph"></span></tr></tbody></table></div>)
+
+      assert html([paragraph([cell("x")])]) ==
+               ~s(<p><span class="kotoba-unknown" data-type="tablecell"></span></p>)
+    end
+
+    test "to_text/2 gives a line for each row, with the cells separated by a tab" do
+      input = [
+        paragraph([text("Before")]),
+        people_table(),
+        table([
+          table_row([table_cell([paragraph([text("a")]), paragraph([text("b")])]), cell("c")])
+        ]),
+        paragraph([text("After")])
+      ]
+
+      assert input |> doc() |> Renderer.to_text() ==
+               "Before\nName\tRole\nAda\tEngineer\na\nb\tc\nAfter"
+    end
+
+    test "to_markdown/2 writes a table with a header row" do
+      input = [paragraph([text("Before")]), people_table(), paragraph([text("After")])]
+
+      assert input |> doc() |> Renderer.to_markdown() ==
+               "Before\n\n| Name | Role |\n| --- | --- |\n| Ada | **Engineer** |\n\nAfter"
+    end
+
+    test "to_markdown/2 gives a table with no header row an empty one, and keeps each cell on its line" do
+      input =
+        table([
+          table_row([cell("Total", 2), cell("a | b")]),
+          table_row([
+            table_cell([paragraph([text("x"), linebreak(), text("y")]), paragraph([text("z")])])
+          ]),
+          table_row([
+            table_cell([list("bullet", [item([text("Navy")]), item([text("COBOL")])])]),
+            table_cell([paragraph([text("c"), tab(), text("d")])])
+          ])
+        ])
+
+      assert [input] |> doc() |> Renderer.to_markdown() ==
+               Enum.join(
+                 [
+                   "|  |  |",
+                   "| --- | --- |",
+                   "| Total | a \\| b |",
+                   "| x<br>y<br>z |  |",
+                   "| - Navy<br>- COBOL | c d |"
+                 ],
+                 "\n"
+               )
+    end
+
+    test "to_markdown/2 of an empty table has one empty column" do
+      assert [table([])] |> doc() |> Renderer.to_markdown() == "|  |\n| --- |"
     end
   end
 

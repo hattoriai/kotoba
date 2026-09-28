@@ -13,6 +13,7 @@ import {
   HorizontalRuleNode,
   INSERT_HORIZONTAL_RULE_COMMAND,
   namedSignals,
+  signal,
 } from "@lexical/extension";
 import { createEmptyHistoryState, registerHistory } from "@lexical/history";
 import {
@@ -43,6 +44,15 @@ import {
   type Transformer,
 } from "@lexical/markdown";
 import { HeadingNode, QuoteNode, registerRichText } from "@lexical/rich-text";
+import {
+  TableCellNode,
+  TableNode,
+  TableRowNode,
+  registerTableCellUnmergeTransform,
+  registerTablePlugin,
+  registerTableSelectionObserver,
+  setScrollableTablesActive,
+} from "@lexical/table";
 import { $getNearestNodeOfType, $insertNodeToNearestRoot, $unwrapNode } from "@lexical/utils";
 import {
   $getSelection,
@@ -81,6 +91,9 @@ export const BUILT_IN_NODES: readonly Klass<LexicalNode>[] = [
   CodeNode,
   CodeHighlightNode,
   HorizontalRuleNode,
+  TableNode,
+  TableRowNode,
+  TableCellNode,
   AttachmentNode,
   MentionNode,
   UploadMarkerNode,
@@ -124,6 +137,13 @@ export const THEME: EditorThemeClasses = {
     nested: { listitem: "kotoba-li-nested" },
   },
   link: "kotoba-link",
+  table: "kotoba-table",
+  tableRow: "kotoba-table-row",
+  tableCell: "kotoba-table-cell",
+  tableCellHeader: "kotoba-table-header",
+  tableCellSelected: "kotoba-table-cell-selected",
+  tableSelection: "kotoba-table-selection",
+  tableScrollableWrapper: "kotoba-table-scroll",
   hr: "kotoba-hr",
   hrSelected: "kotoba-selected",
   code: "kotoba-code",
@@ -235,13 +255,16 @@ export function createKotobaEditor(options: EditorOptions): LexicalEditor {
     return true;
   });
 
-  return createEditor({
+  const editor = createEditor({
     namespace: options.namespace,
     nodes: [...BUILT_IN_NODES, ...appNodes],
     theme: THEME,
     editable: options.editable,
     onError: (error) => console.error("Kotoba:", error),
   });
+  // A wide table scrolls in its own box, so the page does not.
+  setScrollableTablesActive(editor, true);
+  return editor;
 }
 
 /**
@@ -299,6 +322,24 @@ function registerListTab(editor: LexicalEditor): () => void {
   );
 }
 
+/**
+ * Tables as the server keeps them (see `Kotoba.Nodes.Table`): no table in a
+ * table, no merged cells (a pasted table with merged cells is split into
+ * plain cells) and no cell colours. In a cell, Tab and Shift+Tab move to
+ * the next and the previous cell, and from the last cell Tab moves after
+ * the table; Escape then Tab leaves the editor, as in a list.
+ */
+function registerTables(editor: LexicalEditor): () => void {
+  return mergeRegister(
+    registerTablePlugin(editor, { hasNestedTables: signal(false) }),
+    registerTableSelectionObserver(editor, true),
+    registerTableCellUnmergeTransform(editor),
+    editor.registerNodeTransform(TableCellNode, (cell) => {
+      if (cell.getBackgroundColor() !== null) cell.setBackgroundColor(null);
+    }),
+  );
+}
+
 /** Registers the rich text plugins. Returns a function that removes them. */
 export function registerPlugins(editor: LexicalEditor, options: PluginOptions): () => void {
   const { linkSchemes } = options;
@@ -314,6 +355,7 @@ export function registerPlugins(editor: LexicalEditor, options: PluginOptions): 
     registerList(editor),
     registerCheckList(editor),
     registerListTab(editor),
+    registerTables(editor),
     registerLink(
       editor,
       namedSignals({ validateUrl: (url: string) => isAbsoluteLinkUrl(url, linkSchemes), attributes: undefined }),

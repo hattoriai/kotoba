@@ -111,6 +111,14 @@ defmodule KotobaDev.Sample do
             "list",
             [element("listitem", [text("One")], %{"value" => 1, "checked" => nil})],
             %{"listType" => "bullet", "start" => 1, "tag" => "ul"}
+          ),
+          element(
+            "table",
+            [
+              element("tablerow", [cell("Language", 1), cell("Year", 1)], %{}),
+              element("tablerow", [cell("Elixir", 0), cell("2012", 0)], %{})
+            ],
+            %{}
           )
         ])
     }
@@ -128,6 +136,16 @@ defmodule KotobaDev.Sample do
 
   defp paragraph(children),
     do: element("paragraph", children, %{"textFormat" => 0, "textStyle" => ""})
+
+  # A table cell: headerState 1 in the header row, 0 elsewhere.
+  defp cell(value, header_state),
+    do:
+      element("tablecell", [paragraph([text(value)])], %{
+        "headerState" => header_state,
+        "colSpan" => 1,
+        "rowSpan" => 1,
+        "backgroundColor" => nil
+      })
 
   defp element(type, children, extra) do
     Map.merge(

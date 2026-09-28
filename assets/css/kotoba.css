@@ -104,6 +104,12 @@
   cursor: pointer;
 }
 
+/* The table controls are hidden outside a table. */
+.kotoba-toolbar-group[hidden],
+.kotoba-toolbar-button[hidden] {
+  display: none;
+}
+
 .kotoba-toolbar-button:hover {
   border-color: var(--kotoba-border);
 }
@@ -305,6 +311,46 @@
   border: none;
   border-top: 1px solid var(--kotoba-border);
   cursor: pointer;
+}
+
+/* Tables: the editor's and the rendered HTML's (both have these classes) */
+
+.kotoba-table-scroll {
+  max-width: 100%;
+  margin: 0 0 var(--kotoba-space);
+  overflow-x: auto;
+}
+
+.kotoba-table {
+  border-collapse: collapse;
+  margin: 0;
+}
+
+.kotoba-table th,
+.kotoba-table td {
+  min-width: 4em;
+  padding: calc(var(--kotoba-space) * 0.75) var(--kotoba-space);
+  border: 1px solid var(--kotoba-border);
+  text-align: start;
+  vertical-align: top;
+}
+
+.kotoba-table th {
+  background: var(--kotoba-surface);
+  font-weight: 600;
+}
+
+.kotoba-table :is(th, td) > :last-child {
+  margin-bottom: 0;
+}
+
+/* Cells selected together: the cells show the selection, not the text. */
+.kotoba-table .kotoba-table-cell-selected {
+  background: var(--kotoba-selection);
+}
+
+.kotoba-table-selection ::selection {
+  background: transparent;
 }
 
 /* Decorator nodes */
