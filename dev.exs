@@ -81,6 +81,50 @@ defmodule KotobaDev.People do
 
   @doc "The `!` prompt: a search that always fails, as a database that is down."
   def broken(_query), do: raise("the search is down")
+
+  @doc "The `~` prompt: a search that takes a second, in a task (`async: true`)."
+  def slow(query) do
+    Process.sleep(1_000)
+    search(query)
+  end
+end
+
+defmodule KotobaDev.Prompts do
+  @moduledoc """
+  The prompts of the editor page:
+
+    * `@` people, whose query can have spaces ("Ada Lovelace");
+    * `!` a search that always fails;
+    * `:` emoji, a local list that inserts text;
+    * `+` tags, an async search that inserts a Tag node;
+    * `~` people again, from a search of a second, in a task.
+  """
+
+  @emoji [
+    %{id: "tada", label: "tada", hint: "🎉", text: "🎉"},
+    %{id: "heart", label: "heart", hint: "❤️", text: "❤️"},
+    %{id: "thumbsup", label: "thumbs up", hint: "👍", text: "👍"},
+    %{id: "rocket", label: "rocket", hint: "🚀", text: "🚀"},
+    %{id: "eyes", label: "eyes", hint: "👀", text: "👀"}
+  ]
+
+  @tags ~w(urgent bug design later)
+
+  def list do
+    [
+      {"@", :people, [search: &KotobaDev.People.search/1, spaces: true]},
+      {"!", :broken, &KotobaDev.People.broken/1},
+      {":", :emoji, [items: @emoji, insert: :text, label: "Emoji"]},
+      {"+", :tags, [search: &tags/1, insert: {:node, "dev-tag"}, async: true, label: "Tags"]},
+      {"~", :slow, [search: &KotobaDev.People.slow/1, async: true, min_length: 1]}
+    ]
+  end
+
+  defp tags(query) do
+    for tag <- @tags, String.starts_with?(tag, String.downcase(query)) do
+      %{id: tag, label: tag, attrs: %{label: tag}}
+    end
+  end
 end
 
 defmodule KotobaDev.Sample do
@@ -250,8 +294,9 @@ end
 
 defmodule KotobaDev.EditorLive do
   @moduledoc """
-  The editor in a form, with the `@` prompt, uploads and the Tag node. The
-  `!` prompt always fails, so the menu shows "No results". The
+  The editor in a form, with the prompts of `KotobaDev.Prompts`, uploads
+  and the Tag node. The `!` prompt always fails, so the menu says "Results
+  did not load". The
   buttons under the form send each server event. After Submit, the stored
   content renders below.
 
@@ -273,12 +318,7 @@ defmodule KotobaDev.EditorLive do
 
   @editor "post_body_editor"
 
-  @prompts [
-    {"@", :people, &KotobaDev.People.search/1},
-    {"!", :broken, &KotobaDev.People.broken/1}
-  ]
-
-  defp prompts, do: @prompts
+  defp prompts, do: KotobaDev.Prompts.list()
 
   @impl true
   def mount(params, _session, socket) do
@@ -431,7 +471,7 @@ defmodule KotobaDev.EditorLive do
     do: {:noreply, update(socket, :changes, &(&1 + 1))}
 
   def handle_event("kotoba:prompt", params, socket),
-    do: {:noreply, Kotoba.Live.handle_prompt(socket, params, @prompts)}
+    do: {:noreply, Kotoba.Live.handle_prompt(socket, params, prompts())}
 
   def handle_event("toggle_changes", _params, socket),
     do: {:noreply, update(socket, :push_changes, &(not &1))}
@@ -473,6 +513,10 @@ defmodule KotobaDev.EditorLive do
   end
 
   defp posted_text(_params), do: ""
+
+  @impl true
+  def handle_async({:kotoba_prompt, _id, _prompt, _query} = name, result, socket),
+    do: {:noreply, Kotoba.Live.handle_prompt_async(socket, name, result)}
 
   defp handle_progress(:body, %{done?: true}, socket) do
     cond do

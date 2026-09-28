@@ -128,7 +128,7 @@ test("no menu in a code block or in the middle of a word", async ({ page }) => {
   await expect(menu(page)).toBeHidden();
 });
 
-test("a prompt whose callback fails shows No results, and the page stays alive", async ({ page }) => {
+test("a prompt whose callback fails says the results did not load, and the page stays alive", async ({ page }) => {
   const editable = await openEditor(page);
   // A server-side assign that a restart of the LiveView would reset.
   await page.locator("#push-changes").click();
@@ -140,8 +140,8 @@ test("a prompt whose callback fails shows No results, and the page stays alive",
 
   // The "!" prompt of the development page raises in its callback.
   await page.keyboard.type("!db");
-  await expect(menu(page).locator(".kotoba-menu-status")).toHaveText("No results");
-  await expect(page.locator("#post_body_editor .kotoba-live")).toHaveText("No results");
+  await expect(menu(page).locator(".kotoba-menu-status")).toHaveText("Results did not load");
+  await expect(page.locator("#post_body_editor .kotoba-live")).toHaveText("Results did not load");
   const count = Number(await page.locator("#change-count").textContent());
 
   // The LiveView did not restart: it keeps its assigns and answers the next prompt.

@@ -61,7 +61,8 @@ defmodule Kotoba.Live do
 
   require Logger
 
-  import Phoenix.LiveView, only: [push_event: 3, cancel_upload: 3, consume_uploaded_entry: 3]
+  import Phoenix.LiveView,
+    only: [push_event: 3, cancel_upload: 3, consume_uploaded_entry: 3, start_async: 3]
 
   alias Kotoba.{Attachments, Content, Document, Prompts, Sanitizer, Storage}
   alias Kotoba.Nodes.Attachment
@@ -70,34 +71,82 @@ defmodule Kotoba.Live do
   @v 1
 
   @doc """
-  Answers a `kotoba:prompt` event: runs the callback of the prompt with the
+  Answers a `kotoba:prompt` event: runs the search of the prompt with the
   query, and pushes `kotoba:prompt_results` to the editor.
 
   `params` is the payload of the event (`%{"id", "prompt", "query"}`), and
   `prompts` the prompt list (see `Kotoba.Prompts`). The pushed payload is
-  `%{id, prompt, query, items: [%{id, label, hint?}]}`. The editor uses
-  `query` to drop results that arrive after a newer query. A prompt name
-  that is not in the list gives no items. A payload without a prompt and a
-  query is ignored.
+  `%{id, prompt, query, items: [item]}`, with `error: true` when the search
+  failed. The editor uses `query` to drop results that arrive after a
+  newer query. A prompt name that is not in the list gives no items. A
+  payload without a prompt and a query is ignored.
+
+  The search of an `async: true` prompt runs in a task of the LiveView
+  (`Phoenix.LiveView.start_async/3`), so the LiveView goes on while it
+  runs. Its result comes to `handle_async/3`, which gives it to
+  `handle_prompt_async/3`:
+
+      def handle_async({:kotoba_prompt, _id, _prompt, _query} = name, result, socket) do
+        {:noreply, Kotoba.Live.handle_prompt_async(socket, name, result)}
+      end
   """
   @spec handle_prompt(Socket.t(), map(), Prompts.prompts()) :: Socket.t()
   def handle_prompt(socket, %{"prompt" => name, "query" => query} = params, prompts)
       when is_binary(name) and is_binary(query) do
-    items =
-      case Prompts.find(prompts, name) do
-        nil -> []
-        prompt -> Prompts.run(prompt, query, socket)
-      end
+    id = editor_id(params)
 
-    payload =
-      params
-      |> editor_id()
-      |> payload(%{prompt: name, query: query, items: items})
+    case Prompts.find_spec(prompts, name) do
+      nil ->
+        push_prompt_results(socket, id, name, query, {:ok, []})
 
-    push_event(socket, "kotoba:prompt_results", payload)
+      %{async: true} = spec ->
+        start_async(socket, {:kotoba_prompt, id, name, query}, fn ->
+          Prompts.search(spec, query)
+        end)
+
+      spec ->
+        push_prompt_results(socket, id, name, query, Prompts.search(spec, query, socket))
+    end
   end
 
   def handle_prompt(%Socket{} = socket, _params, _prompts), do: socket
+
+  @doc """
+  Pushes the result of the search of an `async: true` prompt (see
+  `handle_prompt/3`) to the editor. `name` and `result` are the arguments
+  of `handle_async/3`. A search that exits (a crash or a timeout of the
+  task) gives `error: true`, as a search that fails.
+  """
+  @spec handle_prompt_async(Socket.t(), term(), {:ok, term()} | {:exit, term()}) :: Socket.t()
+  def handle_prompt_async(socket, {:kotoba_prompt, id, name, query}, result)
+      when is_binary(name) and is_binary(query) do
+    result =
+      case result do
+        {:ok, {:ok, items}} when is_list(items) ->
+          {:ok, items}
+
+        {:ok, _error} ->
+          :error
+
+        {:exit, reason} ->
+          Logger.warning("the Kotoba prompt #{inspect(name)} exited: #{inspect(reason)}")
+          :error
+      end
+
+    push_prompt_results(socket, id, name, query, result)
+  end
+
+  def handle_prompt_async(%Socket{} = socket, _name, _result), do: socket
+
+  defp push_prompt_results(socket, id, name, query, result) do
+    payload =
+      case result do
+        {:ok, items} -> %{prompt: name, query: query, items: items}
+        :error -> %{prompt: name, query: query, items: [], error: true}
+      end
+
+    push_event(socket, "kotoba:prompt_results", payload(id, payload))
+  end
 
   @doc """
   Replaces the document of the editor `id` (`set_content`).
