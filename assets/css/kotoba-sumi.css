@@ -100,6 +100,8 @@
      blade, which a Sumi page keeps for what needs attention. */
   --kotoba-mention-text: var(--color-base-content, var(--sumi-ink, var(--kotoba-sumi-content)));
   --kotoba-mention-background: color-mix(in oklab, var(--color-base-content, var(--sumi-ink, var(--kotoba-sumi-content))) 10%, transparent);
+  /* A marker stroke: the page's warning colour, faint, under the ink. */
+  --kotoba-highlight: color-mix(in oklab, var(--color-warning, oklch(84% 0.16 85)) 40%, transparent);
   --kotoba-focus-ring: 0 0 0 2px var(--kotoba-background), 0 0 0 4px var(--color-sumi-blade, var(--sumi-accent, #e84a1c));
   --kotoba-shadow: 0 4px 16px color-mix(in oklab, var(--color-sumi-ink, #0a0a0b) 24%, transparent);
 

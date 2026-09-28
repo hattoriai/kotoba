@@ -676,6 +676,8 @@ defmodule KotobaDev.ExtensionsLive do
   Features and extensions. The comment editor has four features and the
   example extension (a callout); its changeset refuses a document with
   another feature. The notes editor has every feature and no extension.
+  The formats editor has the text formats, in a toolbar of the app that
+  has subscript and superscript.
   `?case=broken` adds an extension whose register throws and one that does
   not load: the editor still mounts, with the callout.
   """
@@ -695,6 +697,7 @@ defmodule KotobaDev.ExtensionsLive do
      assign(socket,
        form: to_form(%{"body" => nil}, as: :comment),
        notes: to_form(%{"body" => nil}, as: :notes),
+       formats: to_form(%{"body" => nil}, as: :formats),
        extensions: extensions,
        shown: true,
        error: nil,
@@ -726,6 +729,21 @@ defmodule KotobaDev.ExtensionsLive do
     <.form for={@notes} id="notes-form">
       <label id="notes-label" class="label">Notes</label>
       <.kotoba field={@notes[:body]} id="notes_editor" label_id="notes-label" />
+    </.form>
+    <.form for={@formats} id="formats-form">
+      <label id="formats-label" class="label">Formats</label>
+      <.kotoba
+        field={@formats[:body]}
+        id="formats_editor"
+        label_id="formats-label"
+        features={~w(bold italic underline strikethrough highlight subscript superscript)}
+      >
+        <:toolbar>
+          <.kotoba_toolbar commands={
+            ~w(bold italic underline strikethrough highlight subscript superscript code undo)
+          } />
+        </:toolbar>
+      </.kotoba>
     </.form>
     """
   end

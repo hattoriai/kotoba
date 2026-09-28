@@ -30,8 +30,8 @@ defmodule Kotoba.FeaturesTest do
         Features.names!(["nope"])
       end
 
-      assert_raise ArgumentError, ~r/unknown Kotoba feature :underline/, fn ->
-        Features.names!([:underline])
+      assert_raise ArgumentError, ~r/unknown Kotoba feature :uppercase/, fn ->
+        Features.names!([:uppercase])
       end
 
       assert_raise ArgumentError, ~r/:check_lists needs :lists/, fn ->
@@ -45,7 +45,16 @@ defmodule Kotoba.FeaturesTest do
   describe "used/1" do
     test "finds every feature from its nodes and formats" do
       input = [
-        heading("h2", [text("b", 1), text("i", 2), text("s", 4), text("c", 16)]),
+        heading("h2", [
+          text("b", 1),
+          text("i", 2),
+          text("u", 8),
+          text("s", 4),
+          text("h", 128),
+          text("sub", 32),
+          text("sup", 64),
+          text("c", 16)
+        ]),
         quote_block([link("https://a.b", [text("l")]), autolink("https://c.d", [text("a")])]),
         list("check", [item([text("x")], %{"checked" => true})]),
         code([highlight("x")], "elixir"),
@@ -58,13 +67,24 @@ defmodule Kotoba.FeaturesTest do
     end
 
     test "is empty for paragraphs of plain text, the formats that are not features, and app nodes" do
-      input = [paragraph([text("u", 8), text("h", 128), tab(), linebreak()]), unknown("x-chart")]
+      input = [
+        paragraph([text("u", 512), text("c", 1024), tab(), linebreak()]),
+        unknown("x-chart")
+      ]
+
       assert Features.used(doc(input)) == []
     end
 
     test "a bulleted list is lists, not check_lists" do
       assert Features.used(doc([list("bullet", [item([text("x")])])])) == [:lists]
     end
+  end
+
+  test "the underline, highlight, subscript and superscript formats are features" do
+    input = doc([paragraph([text("u", 8 + 128), text("s", 32)]), paragraph([text("p", 64)])])
+
+    assert Features.used(input) == [:underline, :highlight, :subscript, :superscript]
+    assert Features.check(input, [:underline]) == {:error, [:highlight, :subscript, :superscript]}
   end
 
   test "check/2 gives the features that a document uses and does not have" do

@@ -47,6 +47,7 @@ value that you set on `:root`, on an ancestor or on `.kotoba` wins:
 | `--kotoba-accent` | `#2f5bd3` | links, focus, the active option |
 | `--kotoba-accent-text` | `#ffffff` | text on the accent |
 | `--kotoba-selection` | the accent at 16% | selected nodes |
+| `--kotoba-highlight` | a light yellow | highlighted text |
 | `--kotoba-mention-text` | the accent | the text of a mention |
 | `--kotoba-mention-background` | the selection | the tint behind a mention |
 | `--kotoba-focus-ring` | `0 0 0 2px` accent | the `box-shadow` of focus |

@@ -12,7 +12,11 @@ defmodule Kotoba.Features do
   | ------- | ---------- | ----------------- |
   | `bold` | bold text | the `bold` format |
   | `italic` | italic text | the `italic` format |
+  | `underline` | underlined text | the `underline` format |
   | `strikethrough` | struck text | the `strikethrough` format |
+  | `highlight` | highlighted text | the `highlight` format |
+  | `subscript` | subscript text (not in the default toolbar) | the `subscript` format |
+  | `superscript` | superscript text (not in the default toolbar) | the `superscript` format |
   | `inline_code` | code in a line of text | the `code` format |
   | `links` | links, autolinks, the link form | `link`, `autolink` |
   | `headings` | headings | `heading` |
@@ -25,9 +29,15 @@ defmodule Kotoba.Features do
   | `attachments` | file uploads (with the `uploads` attribute) | `attachment` |
   | `mentions` | prompts and mentions (with the `prompts` attribute) | `mention` |
 
-  Paragraphs, line breaks, tabs, undo and redo are always there. The other
-  text formats (underline, highlight, subscript, superscript) are not
-  features: the editor keeps them.
+  Paragraphs, line breaks, tabs, undo and redo are always there. The case
+  formats (`lowercase`, `uppercase`, `capitalize`) are not features: the
+  editor keeps them.
+
+  The keyboard shortcuts of the formats are Cmd (Ctrl on other systems)
+  with `B`, `I`, `U`, `Shift+H` (highlight), `,` (subscript) and `.`
+  (superscript). Subscript and superscript have no button in the default
+  toolbar: an app's toolbar (`Kotoba.Components.kotoba_toolbar/1`) can have
+  them.
 
   A feature that is off has no node, no toolbar button, no Markdown shortcut
   and no keyboard shortcut in the editor. A pasted table, heading or code
@@ -46,7 +56,11 @@ defmodule Kotoba.Features do
   @features [
     :bold,
     :italic,
+    :underline,
     :strikethrough,
+    :highlight,
+    :subscript,
+    :superscript,
     :inline_code,
     :links,
     :headings,
@@ -62,7 +76,16 @@ defmodule Kotoba.Features do
 
   @requires %{check_lists: :lists}
 
-  @formats %{bold: :bold, italic: :italic, strikethrough: :strikethrough, inline_code: :code}
+  @formats %{
+    bold: :bold,
+    italic: :italic,
+    underline: :underline,
+    strikethrough: :strikethrough,
+    highlight: :highlight,
+    subscript: :subscript,
+    superscript: :superscript,
+    inline_code: :code
+  }
 
   @types %{
     Nodes.Link => :links,
@@ -84,7 +107,11 @@ defmodule Kotoba.Features do
   @type feature ::
           :bold
           | :italic
+          | :underline
           | :strikethrough
+          | :highlight
+          | :subscript
+          | :superscript
           | :inline_code
           | :links
           | :headings

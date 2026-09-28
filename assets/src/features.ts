@@ -33,10 +33,15 @@ import {
   $isRangeSelection,
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_EDITOR,
+  COMMAND_PRIORITY_LOW,
+  CONTROL_OR_META,
   FORMAT_TEXT_COMMAND,
+  KEY_DOWN_COMMAND,
   TextNode,
+  isExactShortcutMatch,
   mergeRegister,
   type Klass,
+  type LexicalEditor,
   type LexicalNode,
   type TextFormatType,
 } from "lexical";
@@ -53,7 +58,11 @@ import { MentionNode } from "./nodes/mention";
 export const FEATURES = [
   "bold",
   "italic",
+  "underline",
   "strikethrough",
+  "highlight",
+  "subscript",
+  "superscript",
   "inline_code",
   "links",
   "headings",
@@ -76,7 +85,11 @@ const REQUIRES: Partial<Record<Feature, Feature>> = { check_lists: "lists" };
 export const FEATURE_FORMATS: Partial<Record<Feature, TextFormatType>> = {
   bold: "bold",
   italic: "italic",
+  underline: "underline",
   strikethrough: "strikethrough",
+  highlight: "highlight",
+  subscript: "subscript",
+  superscript: "superscript",
   inline_code: "code",
 };
 
@@ -138,6 +151,29 @@ function keepsTransformer(transformer: Transformer, features: ReadonlySet<Featur
   return true;
 }
 
+/**
+ * A keyboard shortcut that toggles a text format: Cmd (Ctrl elsewhere) and
+ * the key, with Shift when `shift`. Lexical has the ones of bold, italic
+ * and underline.
+ */
+function registerFormatShortcut(
+  editor: LexicalEditor,
+  format: TextFormatType,
+  key: string,
+  shift = false,
+): () => void {
+  return editor.registerCommand(
+    KEY_DOWN_COMMAND,
+    (event: KeyboardEvent) => {
+      if (!isExactShortcutMatch(event, key, { ...CONTROL_OR_META, shiftKey: shift })) return false;
+      event.preventDefault();
+      return editor.dispatchCommand(FORMAT_TEXT_COMMAND, format);
+    },
+    // Above Lexical's own key handler, which takes every key.
+    COMMAND_PRIORITY_LOW,
+  );
+}
+
 export interface FeatureOptions {
   /** The allowed link schemes, as `Kotoba.Sanitizer` has them. */
   linkSchemes: readonly string[];
@@ -177,7 +213,11 @@ export function builtInExtensions(features: ReadonlySet<Feature>, options: Featu
   const extensions: Record<Feature, KotobaExtension> = {
     bold: { name: "bold" },
     italic: { name: "italic" },
+    underline: { name: "underline" },
     strikethrough: { name: "strikethrough" },
+    highlight: { name: "highlight", register: (editor) => registerFormatShortcut(editor, "highlight", "h", true) },
+    subscript: { name: "subscript", register: (editor) => registerFormatShortcut(editor, "subscript", ",") },
+    superscript: { name: "superscript", register: (editor) => registerFormatShortcut(editor, "superscript", ".") },
     inline_code: { name: "inline_code" },
     links: {
       name: "links",

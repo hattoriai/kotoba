@@ -9,9 +9,18 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Underline, highlight, subscript and superscript are features, with
+  their keyboard shortcuts (`Cmd/Ctrl+U`, `Cmd/Ctrl+Shift+H`,
+  `Cmd/Ctrl+,`, `Cmd/Ctrl+.`) and toolbar commands. The default toolbar
+  has Underline and Highlight; an app's toolbar can have Subscript and
+  Superscript. The `==` Markdown shortcut highlights only in an editor
+  with `highlight`. Highlighted text has its own colour,
+  `--kotoba-highlight` (a light yellow), not the selection's.
+
 - Features: `<.kotoba features={~w(bold italic links lists)}>` gives an
   editor only those built-in features (`Kotoba.Features`: bold, italic,
-  strikethrough, inline_code, links, headings, quotes, lists, check_lists,
+  underline, strikethrough, highlight, subscript, superscript,
+  inline_code, links, headings, quotes, lists, check_lists,
   code_blocks, horizontal_rules, tables, attachments, mentions). A feature
   that is off has no node, toolbar button, Markdown shortcut or keyboard
   shortcut; pasted content of it comes in as paragraphs and text, and a

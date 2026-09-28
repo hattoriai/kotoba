@@ -21,6 +21,7 @@
   --kotoba-accent: #2f5bd3;
   --kotoba-accent-text: #ffffff;
   --kotoba-selection: rgba(47, 91, 211, 0.16);
+  --kotoba-highlight: rgba(255, 204, 0, 0.4);
   --kotoba-mention-text: var(--kotoba-accent);
   --kotoba-mention-background: var(--kotoba-selection);
   --kotoba-radius: 6px;
@@ -296,7 +297,7 @@
 .kotoba-strike { text-decoration: line-through; }
 .kotoba-underline { text-decoration: underline; }
 .kotoba-underline.kotoba-strike { text-decoration: underline line-through; }
-.kotoba-highlight { background: var(--kotoba-selection); }
+.kotoba-highlight { background: var(--kotoba-highlight); color: inherit; }
 
 .kotoba-inline-code,
 .kotoba-code {
