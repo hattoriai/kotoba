@@ -1,6 +1,6 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 
-import { MOD, type JSONNode, expectNodes, openEditor, readDocument, settle } from "./support";
+import { MOD, type JSONNode, expectNodes, openEditor, pasteData, readDocument, settle } from "./support";
 
 const toolbar = (page: Page) => page.getByRole("toolbar", { name: "Formatting" });
 const button = (page: Page, name: string) => toolbar(page).getByRole("button", { name, exact: true });
@@ -193,16 +193,11 @@ test("Alt+F10 reaches the table controls from a cell; they act at the caret and 
 test("a pasted HTML table becomes a table, with its merged cells split and no colours", async ({ page }) => {
   const editable = await openEditor(page);
   await editable.click();
-  await settle(page);
-  await editable.evaluate((element) => {
-    const data = new DataTransfer();
-    data.setData(
-      "text/html",
+  await pasteData(page, editable, {
+    html:
       "<table><tr><th>Name</th><th>Role</th></tr>" +
-        '<tr><td colspan="2" style="background-color: #ff0">Wide</td></tr></table>',
-    );
-    data.setData("text/plain", "Name Role Wide");
-    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+      '<tr><td colspan="2" style="background-color: #ff0">Wide</td></tr></table>',
+    text: "Name Role Wide",
   });
 
   const cells = await expectNodes(page, "tablecell", 4);

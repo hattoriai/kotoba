@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { MOD, expectNodes, nodesOfType, openEditor, selectBack, settle } from "./support";
+import { MOD, expectNodes, nodesOfType, openEditor, pasteData, selectBack, settle } from "./support";
 
 const UNDERLINE = 8;
 const SUBSCRIPT = 32;
@@ -100,11 +100,9 @@ test("in an editor without them, the shortcuts do nothing and pasted formats are
   await page.keyboard.type("plain ==not highlighted== ");
   await settle(page);
 
-  await editable.evaluate((element) => {
-    const data = new DataTransfer();
-    data.setData("text/html", "<p><u>u</u> <mark>m</mark> <sub>b</sub> <sup>p</sup> <b>bold</b></p>");
-    data.setData("text/plain", "u m b p bold");
-    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  await pasteData(page, editable, {
+    html: "<p><u>u</u> <mark>m</mark> <sub>b</sub> <sup>p</sup> <b>bold</b></p>",
+    text: "u m b p bold",
   });
 
   await expect.poll(async () => (await formats(page, "comment_body")).map(([text]) => text).join("")).toContain("bold");
