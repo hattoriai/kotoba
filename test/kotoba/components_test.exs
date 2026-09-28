@@ -227,6 +227,21 @@ defmodule Kotoba.ComponentsTest do
       assert attr(html, "button[data-kotoba-command=h2]", "title") == "Heading 2"
     end
 
+    test "has the commands of the editor's toolbar, in its order" do
+      source = File.read!(Path.expand("../../assets/src/toolbar.ts", __DIR__))
+      [items] = Regex.run(~r/TOOLBAR_ITEMS[^=]*= \[(.*?)\n\];/s, source, capture: :all_but_first)
+      editor = Regex.scan(~r/command: "([a-z0-9-]+)", label: "([^"]+)"/, items)
+
+      assert Enum.map(editor, fn [_, command, _label] -> command end) ==
+               Components.toolbar_commands()
+
+      html = toolbar(%{})
+
+      for [_, command, label] <- editor do
+        assert attr(html, "button[data-kotoba-command=#{command}]", "title") == label
+      end
+    end
+
     test "outside the editor, points at it and is ignored by patches" do
       html = toolbar(%{for: "post-body", commands: ["bold"]})
 

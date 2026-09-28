@@ -475,10 +475,10 @@ defmodule Kotoba.RendererTest do
 
     test "a first row of header cells goes in a thead, with th scope=col" do
       assert html([people_table()]) ==
-               ~s(<table class="kotoba-table"><thead><tr>) <>
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><thead><tr>) <>
                  ~s(<th scope="col"><p>Name</p></th><th scope="col"><p>Role</p></th>) <>
                  "</tr></thead><tbody><tr><td><p>Ada</p></td>" <>
-                 "<td><p><strong>Engineer</strong></p></td></tr></tbody></table>"
+                 "<td><p><strong>Engineer</strong></p></td></tr></tbody></table></div>"
     end
 
     test "a header column has th scope=row; spans render, colours and widths do not" do
@@ -500,17 +500,17 @@ defmodule Kotoba.RendererTest do
         )
 
       assert html([input]) ==
-               ~s(<table class="kotoba-table"><tbody><tr><th scope="row"><p>Total</p></th>) <>
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody><tr><th scope="row"><p>Total</p></th>) <>
                  ~s(<td colspan="2" rowspan="3"><p>42</p></td></tr>) <>
-                 ~s(<tr><th scope="col"><p>Corner</p></th><td><p>x</p></td></tr></tbody></table>)
+                 ~s(<tr><th scope="col"><p>Corner</p></th><td><p>x</p></td></tr></tbody></table></div>)
     end
 
     test "a first row with a data cell is not a header row" do
       input = table([table_row([cell("a", 1), cell("b")]), table_row([cell("c"), cell("d")])])
 
       assert html([input]) ==
-               ~s(<table class="kotoba-table"><tbody><tr><th scope="col"><p>a</p></th>) <>
-                 "<td><p>b</p></td></tr><tr><td><p>c</p></td><td><p>d</p></td></tr></tbody></table>"
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody><tr><th scope="col"><p>a</p></th>) <>
+                 "<td><p>b</p></td></tr><tr><td><p>c</p></td><td><p>d</p></td></tr></tbody></table></div>"
     end
 
     test "a cell holds blocks and block decorators" do
@@ -528,15 +528,16 @@ defmodule Kotoba.RendererTest do
         ])
 
       assert html([input]) ==
-               ~s(<table class="kotoba-table"><tbody><tr><td><h2>H</h2><ul><li>i</li></ul>) <>
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody><tr><td><h2>H</h2><ul><li>i</li></ul>) <>
                  "<pre><code>x</code></pre><hr>" <>
                  ~s(<figure class="kotoba-attachment">) <>
                  ~s(<img src="/uploads/k/cat.png" alt="cat.png" width="640" height="480">) <>
-                 "<figcaption>cat.png</figcaption></figure></td></tr></tbody></table>"
+                 "<figcaption>cat.png</figcaption></figure></td></tr></tbody></table></div>"
     end
 
     test "an empty table has an empty tbody" do
-      assert html([table([])]) == ~s(<table class="kotoba-table"><tbody></tbody></table>)
+      assert html([table([])]) ==
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody></tbody></table></div>)
     end
 
     test "a table is valid only under the root, and holds no table" do
@@ -546,7 +547,7 @@ defmodule Kotoba.RendererTest do
       assert html([list("bullet", [item([people_table()])])]) == "<ul><li>#{unknown}</li></ul>"
 
       assert html([table([table_row([table_cell([people_table()])])])]) ==
-               ~s(<table class="kotoba-table"><tbody><tr><td>#{unknown}</td></tr></tbody></table>)
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody><tr><td>#{unknown}</td></tr></tbody></table></div>)
     end
 
     test "rows are valid only in a table, and cells only in a row" do
@@ -554,12 +555,12 @@ defmodule Kotoba.RendererTest do
                ~s(<span class="kotoba-unknown" data-type="tablerow"></span>)
 
       assert html([table([cell("x")])]) ==
-               ~s(<table class="kotoba-table"><tbody>) <>
-                 ~s(<span class="kotoba-unknown" data-type="tablecell"></span></tbody></table>)
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody>) <>
+                 ~s(<span class="kotoba-unknown" data-type="tablecell"></span></tbody></table></div>)
 
       assert html([table([table_row([paragraph([text("x")])])])]) ==
-               ~s(<table class="kotoba-table"><tbody><tr>) <>
-                 ~s(<span class="kotoba-unknown" data-type="paragraph"></span></tr></tbody></table>)
+               ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody><tr>) <>
+                 ~s(<span class="kotoba-unknown" data-type="paragraph"></span></tr></tbody></table></div>)
 
       assert html([paragraph([cell("x")])]) ==
                ~s(<p><span class="kotoba-unknown" data-type="tablecell"></span></p>)
@@ -570,8 +571,8 @@ defmodule Kotoba.RendererTest do
         input = table([table_row([table_cell([paragraph([text("x")])], 0, attrs)])])
 
         assert html([input]) ==
-                 ~s(<table class="kotoba-table"><tbody><tr>) <>
-                   ~s(<span class="kotoba-unknown" data-type="tablecell"></span></tr></tbody></table>)
+                 ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody><tr>) <>
+                   ~s(<span class="kotoba-unknown" data-type="tablecell"></span></tr></tbody></table></div>)
       end
     end
 

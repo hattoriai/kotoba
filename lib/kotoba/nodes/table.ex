@@ -7,8 +7,9 @@ defmodule Kotoba.Nodes.Table do
   `frozenColumnCount`, `frozenRowCount`) stay in `extra`: `to_json/1`
   writes them back, and the renderers do not use them.
 
-  In HTML, a first row of header cells goes in a `thead`, and the other
-  rows in a `tbody`. In Markdown, the table is a GitHub Flavored Markdown
+  In HTML, the table is in a `div.kotoba-table-scroll` (a wide table
+  scrolls in it, as in the editor), a first row of header cells goes in a
+  `thead`, and the other rows in a `tbody`. In Markdown, the table is a GitHub Flavored Markdown
   table: the first row is its header row when it is made of header cells,
   and the header row is empty otherwise. Markdown has no merged cells and
   no blocks in a cell, so the Markdown of such a table is lossy: see
@@ -23,13 +24,19 @@ defmodule Kotoba.Nodes.Table do
   def render_html(node, opts) do
     {head, body} = split_header(node)
 
-    Renderer.tag("table", [class: "kotoba-table"], [
-      if(head != [],
-        do: Renderer.tag("thead", [], Renderer.html_children(%{node | children: head}, opts)),
-        else: ""
-      ),
-      Renderer.tag("tbody", [], Renderer.html_children(%{node | children: body}, opts))
-    ])
+    # The editor puts a wide table in a box that scrolls, and so does the
+    # HTML: the page does not.
+    Renderer.tag(
+      "div",
+      [class: "kotoba-table-scroll"],
+      Renderer.tag("table", [class: "kotoba-table"], [
+        if(head != [],
+          do: Renderer.tag("thead", [], Renderer.html_children(%{node | children: head}, opts)),
+          else: ""
+        ),
+        Renderer.tag("tbody", [], Renderer.html_children(%{node | children: body}, opts))
+      ])
+    )
   end
 
   @impl Kotoba.Node

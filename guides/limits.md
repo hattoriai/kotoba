@@ -60,11 +60,29 @@ less than one frame apart, which a person does not type:
 
 ## Bundle size
 
-The editor bundle is about 425 KB, 140 KB with gzip. It has Lexical, its
-plugins and the Prism grammars of `@lexical/code-prism` (more languages
+The editor bundle is about 495 KB, 160 KB with gzip. It has Lexical, its
+plugins (tables, about 70 KB of it) and the Prism grammars of `@lexical/code-prism` (more languages
 than the toolbar offers, so a pasted code block in another language keeps
 its highlighting). The bundle is part of your `app.js`, so every page that
 loads `app.js` pays for its size.
+
+## Tables have no merged cells, colours or widths
+
+A table cell cannot span rows or columns in the editor: a pasted table
+with merged cells becomes a table of plain cells, and the text of a
+merged cell goes in its first cell. The editor drops the background
+colour of a pasted cell, and it has no column resizing. A document made
+elsewhere can have `colSpan`, `rowSpan`, `backgroundColor` and width
+keys: the server keeps them, and its HTML renders `colspan` and
+`rowspan` (no colour or width), but the editor splits the merged cells
+and drops the colours when the document loads in it. A table in a table is not allowed; a table pasted into a cell
+fills the cells from there.
+
+Markdown has no merged cells and no blocks in a cell, so the Markdown of
+a table is a GitHub Flavored Markdown table with each cell on one line:
+a line break or a second block in a cell becomes `<br>`. When the first
+row is not a row of header cells, the Markdown table has an empty header
+row.
 
 ## `window.Prism`
 

@@ -7,6 +7,15 @@
 // `data-kotoba-toolbar="<hook element id>"`) that holds buttons with a
 // `data-kotoba-command` attribute. The commands are the `command` values of
 // `TOOLBAR_ITEMS`.
+//
+// Alt+F10 in the editor moves the focus to the toolbar's tab stop. It is the
+// way to the toolbar from a table cell, where Tab and Shift+Tab move between
+// the cells.
+//
+// The table commands other than `table` act on the table at the selection.
+// Their buttons (and an element with `data-kotoba-context="table"`, such as
+// the default toolbar's Table group) are hidden when the selection is not
+// in a table.
 
 import { $createCodeNode, $isCodeNode } from "@lexical/code-core";
 import { INSERT_HORIZONTAL_RULE_COMMAND } from "@lexical/extension";
@@ -19,6 +28,21 @@ import {
   REMOVE_LIST_COMMAND,
 } from "@lexical/list";
 import {
+  $createTableNodeWithDimensions,
+  $deleteTableColumnAtSelection,
+  $deleteTableRowAtSelection,
+  $findCellNode,
+  $findTableNode,
+  $insertTableColumnAtSelection,
+  $insertTableRowAtSelection,
+  $isTableCellNode,
+  $isTableRowNode,
+  $isTableSelection,
+  TableCellHeaderStates,
+  type TableCellNode,
+  type TableNode,
+} from "@lexical/table";
+import {
   $createHeadingNode,
   $createQuoteNode,
   $isHeadingNode,
@@ -26,7 +50,7 @@ import {
   type HeadingTagType,
 } from "@lexical/rich-text";
 import { $setBlocksType } from "@lexical/selection";
-import { $findMatchingParent, $getNearestNodeOfType } from "@lexical/utils";
+import { $findMatchingParent, $getNearestNodeOfType, $insertNodeToNearestRoot } from "@lexical/utils";
 import {
   $createParagraphNode,
   $getSelection,
@@ -36,6 +60,7 @@ import {
   CAN_REDO_COMMAND,
   CAN_UNDO_COMMAND,
   COMMAND_PRIORITY_LOW,
+  KEY_DOWN_COMMAND,
   FORMAT_TEXT_COMMAND,
   REDO_COMMAND,
   UNDO_COMMAND,
@@ -62,10 +87,18 @@ export type BlockType =
   | "check"
   | "code-block";
 
+/** The table at the selection: whether its first row and first column are header cells. */
+export interface TableState {
+  headerRow: boolean;
+  headerColumn: boolean;
+}
+
 export interface SelectionState {
   formats: Set<TextFormatType>;
   block: BlockType;
   link: boolean;
+  /** The table at the selection, or `null` when the selection is not in a table. */
+  table: TableState | null;
 }
 
 export type ToolbarCommand =
@@ -84,7 +117,17 @@ export type ToolbarCommand =
   | "check"
   | "code-block"
   | "rule"
+  | "table"
   | "upload"
+  | "table-row-before"
+  | "table-row-after"
+  | "table-column-before"
+  | "table-column-after"
+  | "table-header-row"
+  | "table-header-column"
+  | "table-delete-row"
+  | "table-delete-column"
+  | "table-delete"
   | "undo"
   | "redo";
 
@@ -93,6 +136,8 @@ interface ToolbarItem {
   label: string;
   group: string;
   shortcut?: string;
+  /** What the live region says when the command has run (the toggles say "on" or "off"). */
+  done?: string;
 }
 
 const MOD = typeof navigator !== "undefined" && /Mac|iP(hone|ad)/.test(navigator.platform) ? "⌘" : "Ctrl+";
@@ -113,7 +158,17 @@ export const TOOLBAR_ITEMS: readonly ToolbarItem[] = [
   { command: "check", label: "Check list", group: "Lists" },
   { command: "code-block", label: "Code block", group: "Insert" },
   { command: "rule", label: "Horizontal rule", group: "Insert" },
+  { command: "table", label: "Table", group: "Insert", done: "Table inserted" },
   { command: "upload", label: "Attach a file", group: "Insert" },
+  { command: "table-row-before", label: "Insert row above", group: "Table", done: "Row inserted" },
+  { command: "table-row-after", label: "Insert row below", group: "Table", done: "Row inserted" },
+  { command: "table-column-before", label: "Insert column before", group: "Table", done: "Column inserted" },
+  { command: "table-column-after", label: "Insert column after", group: "Table", done: "Column inserted" },
+  { command: "table-header-row", label: "Header row", group: "Table" },
+  { command: "table-header-column", label: "Header column", group: "Table" },
+  { command: "table-delete-row", label: "Delete row", group: "Table", done: "Row deleted" },
+  { command: "table-delete-column", label: "Delete column", group: "Table", done: "Column deleted" },
+  { command: "table-delete", label: "Delete table", group: "Table", done: "Table deleted" },
   { command: "undo", label: "Undo", group: "History", shortcut: `${MOD}Z` },
   { command: "redo", label: "Redo", group: "History" },
 ];
@@ -121,14 +176,54 @@ export const TOOLBAR_ITEMS: readonly ToolbarItem[] = [
 const COMMANDS = new Set<string>(TOOLBAR_ITEMS.map((item) => item.command));
 const TOGGLE_FORMATS = new Set<string>(["bold", "italic", "strikethrough", "code"]);
 const BLOCK_COMMANDS = new Set<string>(["h1", "h2", "h3", "h4", "quote", "bullet", "number", "check", "code-block"]);
+/** The commands that act on the table at the selection. */
+const TABLE_COMMANDS = new Set<string>(
+  TOOLBAR_ITEMS.filter((item) => item.group === "Table").map((item) => item.command),
+);
+const TABLE_TOGGLES = new Set<string>(["table-header-row", "table-header-column"]);
+
+/** The rows and columns of a new table. */
+export const NEW_TABLE_ROWS = 3;
+export const NEW_TABLE_COLUMNS = 3;
 
 function isCommand(value: string | undefined): value is ToolbarCommand {
   return value !== undefined && COMMANDS.has(value);
 }
 
-/** Reads the formats, the block type and the link at the selection. */
+function $firstCells(table: TableNode): { row: TableCellNode[]; column: TableCellNode[] } {
+  const rows = table.getChildren().filter($isTableRowNode);
+  const cells = (row: (typeof rows)[number]) => row.getChildren().filter($isTableCellNode);
+  return {
+    row: rows.length > 0 ? cells(rows[0]) : [],
+    column: rows.flatMap((row) => cells(row).slice(0, 1)),
+  };
+}
+
+function $readTableState(table: TableNode): TableState {
+  const { row, column } = $firstCells(table);
+  const all = (cells: TableCellNode[], state: number) =>
+    cells.length > 0 && cells.every((cell) => cell.hasHeaderState(state));
+  return {
+    headerRow: all(row, TableCellHeaderStates.ROW),
+    headerColumn: all(column, TableCellHeaderStates.COLUMN),
+  };
+}
+
+/** The table at the selection: a caret or a range in a cell, or selected cells. */
+function $selectedTable(): TableNode | null {
+  const selection = $getSelection();
+  if ($isTableSelection(selection)) return $findTableNode(selection.anchor.getNode());
+  if (!$isRangeSelection(selection)) return null;
+  const cell = $findCellNode(selection.anchor.getNode());
+  return cell === null ? null : $findTableNode(cell);
+}
+
+/** Reads the formats, the block type, the link and the table at the selection. */
 export function $readSelectionState(): SelectionState {
-  const state: SelectionState = { formats: new Set(), block: "paragraph", link: false };
+  const state: SelectionState = { formats: new Set(), block: "paragraph", link: false, table: null };
+  const table = $selectedTable();
+  if (table !== null) state.table = $readTableState(table);
+
   const selection = $getSelection();
   if (!$isRangeSelection(selection)) return state;
 
@@ -207,6 +302,20 @@ export function runCommand(editor: LexicalEditor, command: ToolbarCommand, state
     case "rule":
       editor.dispatchCommand(INSERT_HORIZONTAL_RULE_COMMAND, undefined);
       return;
+    case "table":
+      editor.update($insertTable);
+      return;
+    case "table-row-before":
+    case "table-row-after":
+    case "table-column-before":
+    case "table-column-after":
+    case "table-header-row":
+    case "table-header-column":
+    case "table-delete-row":
+    case "table-delete-column":
+    case "table-delete":
+      editor.update(() => $runTableCommand(command, state));
+      return;
     case "undo":
       editor.dispatchCommand(UNDO_COMMAND, undefined);
       return;
@@ -215,6 +324,73 @@ export function runCommand(editor: LexicalEditor, command: ToolbarCommand, state
       return;
     case "link":
     case "upload":
+      return;
+  }
+}
+
+/**
+ * Inserts a table with a header row at the selection, and puts the caret in
+ * its first cell. There is no table in a table.
+ *
+ * A paragraph follows the table, so there is a place to write after it.
+ * It also keeps a click in another cell working: Lexical drops the click of
+ * a document that is one table with the caret in an empty cell (its
+ * "single empty block" case).
+ */
+function $insertTable(): void {
+  const selection = $getSelection();
+  if (!$isRangeSelection(selection) || $findTableNode(selection.anchor.getNode()) !== null) return;
+
+  const table = $createTableNodeWithDimensions(NEW_TABLE_ROWS, NEW_TABLE_COLUMNS, { rows: true, columns: false });
+  $insertNodeToNearestRoot(table);
+  if (table.getNextSibling() === null) table.insertAfter($createParagraphNode());
+  table.getFirstDescendant()?.selectStart();
+}
+
+function $runTableCommand(command: ToolbarCommand, state: SelectionState): void {
+  const table = $selectedTable();
+  if (table === null || state.table === null) return;
+
+  switch (command) {
+    case "table-row-before":
+    case "table-row-after":
+      $insertTableRowAtSelection(command === "table-row-after");
+      return;
+    case "table-column-before":
+    case "table-column-after": {
+      // Lexical moves the caret to the new column; it stays where it was,
+      // as when a row is inserted.
+      const selection = $getSelection();
+      const before = selection === null ? null : selection.clone();
+      $insertTableColumnAtSelection(command === "table-column-after");
+      if (before !== null) $setSelection(before);
+      return;
+    }
+    case "table-delete-row":
+      $deleteTableRowAtSelection();
+      return;
+    case "table-delete-column":
+      $deleteTableColumnAtSelection();
+      return;
+    case "table-header-row":
+    case "table-header-column": {
+      const row = command === "table-header-row";
+      const flag = row ? TableCellHeaderStates.ROW : TableCellHeaderStates.COLUMN;
+      const on = row ? !state.table.headerRow : !state.table.headerColumn;
+      const { row: firstRow, column: firstColumn } = $firstCells(table);
+      for (const cell of row ? firstRow : firstColumn) {
+        cell.setHeaderStyles(on ? flag : TableCellHeaderStates.NO_STATUS, flag);
+      }
+      return;
+    }
+    case "table-delete": {
+      // The caret goes where the table was, in a new empty paragraph.
+      const paragraph = $createParagraphNode();
+      table.replace(paragraph);
+      paragraph.select();
+      return;
+    }
+    default:
       return;
   }
 }
@@ -245,20 +421,31 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
   if (!toolbar.hasAttribute("aria-label")) toolbar.setAttribute("aria-label", options.label);
   toolbar.classList.add("kotoba-toolbar");
 
-  const buttons = (): HTMLButtonElement[] =>
-    Array.from(toolbar.querySelectorAll<HTMLButtonElement>("button[data-kotoba-command]")).filter(
-      (button) => !button.hidden && isCommand(button.dataset.kotobaCommand),
+  const commandButtons = (): HTMLButtonElement[] =>
+    Array.from(toolbar.querySelectorAll<HTMLButtonElement>("button[data-kotoba-command]")).filter((button) =>
+      isCommand(button.dataset.kotobaCommand),
     );
+  const buttons = (): HTMLButtonElement[] => commandButtons().filter((button) => !button.hidden);
 
-  let state: SelectionState = { formats: new Set(), block: "paragraph", link: false };
+  let state: SelectionState = { formats: new Set(), block: "paragraph", link: false, table: null };
   let disabled = false;
   const history = { undo: false, redo: false };
 
   const refresh = (): void => {
-    for (const button of buttons()) {
-      const command = button.dataset.kotobaCommand as ToolbarCommand;
+    const focused = document.activeElement;
+    const inTable = state.table !== null;
+    for (const element of toolbar.querySelectorAll<HTMLElement>('[data-kotoba-context="table"]')) {
+      element.hidden = !inTable;
+    }
 
-      if (TOGGLE_FORMATS.has(command)) {
+    for (const button of commandButtons()) {
+      const command = button.dataset.kotobaCommand as ToolbarCommand;
+      if (TABLE_COMMANDS.has(command)) button.hidden = !inTable;
+
+      if (TABLE_TOGGLES.has(command)) {
+        const pressed = command === "table-header-row" ? state.table?.headerRow : state.table?.headerColumn;
+        button.setAttribute("aria-pressed", String(pressed === true));
+      } else if (TOGGLE_FORMATS.has(command)) {
         button.setAttribute("aria-pressed", String(state.formats.has(command as TextFormatType)));
       } else if (BLOCK_COMMANDS.has(command)) {
         button.setAttribute("aria-pressed", String(state.block === command));
@@ -270,15 +457,24 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
         disabled ||
         (command === "undo" && !history.undo) ||
         (command === "redo" && !history.redo) ||
-        (command === "upload" && !options.uploads);
+        (command === "upload" && !options.uploads) ||
+        (command === "table" && inTable);
       button.setAttribute("aria-disabled", String(unavailable));
     }
+
+    // A table control that was just hidden (the selection left the table,
+    // or the table was deleted) gives the focus back to the editor, and the
+    // toolbar keeps a tab stop.
+    const visible = buttons();
+    if (!visible.some((button) => button.tabIndex === 0)) rove(undefined, false);
+    if (focused instanceof HTMLButtonElement && toolbar.contains(focused) && focused.hidden) editor.focus();
   };
 
   const rove = (target: HTMLButtonElement | undefined, focus: boolean): void => {
     const all = buttons();
     const current = target ?? all.find((button) => button.tabIndex === 0) ?? all[0];
-    for (const button of all) button.tabIndex = button === current ? 0 : -1;
+    // Every button, a hidden one too: the toolbar has one tab stop.
+    for (const button of commandButtons()) button.tabIndex = button === current ? 0 : -1;
     if (focus) current?.focus();
   };
 
@@ -311,9 +507,11 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
 
     if (command !== "link" && command !== "upload") {
       const item = TOOLBAR_ITEMS.find((entry) => entry.command === command);
-      if (item && (TOGGLE_FORMATS.has(command) || BLOCK_COMMANDS.has(command))) {
+      if (item && (TOGGLE_FORMATS.has(command) || BLOCK_COMMANDS.has(command) || TABLE_TOGGLES.has(command))) {
         const pressed = button.getAttribute("aria-pressed") !== "true";
         options.announce(`${item.label} ${pressed ? "on" : "off"}`);
+      } else if (item?.done !== undefined) {
+        options.announce(item.done);
       }
     }
   };
@@ -350,6 +548,17 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
       state = editorState.read($readSelectionState);
       refresh();
     }),
+    editor.registerCommand(
+      KEY_DOWN_COMMAND,
+      (event: KeyboardEvent) => {
+        if (!event.altKey || event.key !== "F10" || event.ctrlKey || event.metaKey || event.shiftKey) return false;
+        if (buttons().length === 0) return false;
+        event.preventDefault();
+        rove(undefined, true);
+        return true;
+      },
+      COMMAND_PRIORITY_LOW,
+    ),
     editor.registerCommand(
       CAN_UNDO_COMMAND,
       (canUndo) => {
@@ -402,6 +611,10 @@ function buildToolbar(uploads: boolean): HTMLElement {
       group.dataset.group = item.group;
       group.setAttribute("role", "group");
       group.setAttribute("aria-label", item.group);
+      if (TABLE_COMMANDS.has(item.command)) {
+        group.dataset.kotobaContext = "table";
+        group.hidden = true;
+      }
       toolbar.append(group);
     }
 

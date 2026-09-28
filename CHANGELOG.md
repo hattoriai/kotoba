@@ -9,11 +9,39 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Tables. The Table button inserts a table with a header row. In a table,
+  a Table group in the toolbar inserts and deletes rows and columns,
+  toggles a header row and a header column, and deletes the table. Tab
+  and Shift+Tab move between the cells; Escape then Tab leaves the
+  editor, as in a list. Pasted HTML tables become tables (merged cells
+  are split and cell colours dropped); a table in a table is not allowed.
+- `Kotoba.Nodes.Table`, `Kotoba.Nodes.TableRow` and
+  `Kotoba.Nodes.TableCell` read the JSON of `@lexical/table`. The HTML is
+  a `table.kotoba-table` in a `div.kotoba-table-scroll`, with a `thead`
+  for a header row and `th` with `scope`; the text has a line for each
+  row; the Markdown is a GitHub Flavored Markdown table. The sanitizer
+  keeps a table under the root, rows in tables and cells in rows. The
+  editor's layout keys (column widths, cell colours) round-trip and are
+  not rendered.
+- Alt+F10 in the editor moves the focus to the toolbar, the way to the
+  table controls from a cell.
+- `Kotoba.Renderer.text_each/2`, the text counterpart of `markdown_each/2`.
+- The toolbar commands `table`, `table-row-before`, `table-row-after`,
+  `table-column-before`, `table-column-after`, `table-header-row`,
+  `table-header-column`, `table-delete-row`, `table-delete-column` and
+  `table-delete`.
 - A prompt can have a label, the accessible name of its menu:
   `prompts={[people: {fun, label: "People in the workshop"}]}`. Without
   one, the menu is still named "<prompt> suggestions".
   `Kotoba.Prompts.labels/1` gives the labels, and the component sends
   them to the editor as `data-prompt-labels`.
+
+### Changed
+
+- `table`, `tablerow` and `tablecell` are built-in node types now, so an
+  app node cannot have one of these types.
+- The editor bundle is about 70 KB larger (20 KB with gzip), for
+  `@lexical/table`.
 
 ### Fixed
 

@@ -21,7 +21,7 @@ defmodule Kotoba.Renderer do
   | text               | the text in `strong`, `em`, `s`, `u`, `code`, `sub`, `sup`, `mark`, and `span.kotoba-lowercase`, `span.kotoba-uppercase`, `span.kotoba-capitalize` |
   | line break         | `br`                                                   |
   | horizontal rule    | `hr`                                                   |
-  | table              | `table.kotoba-table`, with a `thead` for a first row of header cells and a `tbody` |
+  | table              | `table.kotoba-table` in a `div.kotoba-table-scroll`, with a `thead` for a first row of header cells and a `tbody` |
   | table row          | `tr`                                                   |
   | table cell         | `td`, or `th` with `scope="col"` (header row) or `scope="row"` (header column); `colspan` and `rowspan` when they are more than 1 |
   | link, autolink     | `a` with `rel="noopener nofollow"`, or the text when the URL is not safe |

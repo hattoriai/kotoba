@@ -175,7 +175,9 @@ your own icons, give a `toolbar` slot:
 
 `Kotoba.Components.kotoba_toolbar/1` can also be outside the editor, with
 `for` set to the editor id. `Kotoba.Components.toolbar_commands/0` lists
-the commands.
+the commands. The editor hides the buttons of the `table-*` commands
+(Insert row above, Delete table, and the rest) when the selection is not
+in a table; the `table` command inserts one.
 
 ## Testing a form
 

@@ -31,7 +31,8 @@ can come and go with the error:
 ## The toolbar
 
 The toolbar has `role="toolbar"`, with a `group` for each set of buttons
-(Text, Blocks, Lists, Insert, History).
+(Text, Blocks, Lists, Insert, History). A Table group is there only while
+the selection is in a table.
 
 * The toolbar is one tab stop. Tab goes to the toolbar, and Tab again goes
   to the editable area.
@@ -42,6 +43,9 @@ The toolbar has `role="toolbar"`, with a `group` for each set of buttons
   now (Undo with no history, say) has `aria-disabled="true"`.
 * The title of a button shows its shortcut: `Cmd/Ctrl+B` (bold),
   `Cmd/Ctrl+I` (italic), `Cmd/Ctrl+K` (link) and `Cmd/Ctrl+Z` (undo).
+* Alt+F10 in the editable area moves the focus to the toolbar's tab stop.
+  It is the way to the toolbar from a table cell, where Tab and Shift+Tab
+  move between the cells.
 
 After a command from the keyboard, the focus goes back to the editable
 area, with the same selection. The command acts on the selection, so the
@@ -57,11 +61,33 @@ The editor is not a keyboard trap.
   move together. Shift+Tab in an item that is not indented moves the focus
   out of the editor.
 * In a code block, Tab inserts a tab character.
+* In a table cell, Tab moves to the next cell and Shift+Tab to the
+  previous one. From the last cell, Tab moves the caret after the table,
+  and from the first cell Shift+Tab moves it before the table.
 * Everywhere else, Tab and Shift+Tab move the focus out of the editor, as
   in any form field.
 * Escape takes the focus out of the editor. Then Tab goes to the next
-  control of the page. Use Escape then Tab to leave a list or a code
-  block.
+  control of the page. Use Escape then Tab to leave a list, a code block
+  or a table.
+
+## Tables
+
+The Table button inserts a table of three rows and three columns, with a
+header row, and puts the caret in its first cell. In a table, the Table
+group has Insert row above, Insert row below, Insert column before,
+Insert column after, Header row, Header column, Delete row, Delete column
+and Delete table.
+
+* The commands act on the cell of the caret, and the caret stays in it
+  when a row or a column is inserted. The live region says what happened
+  ("Row inserted", "Table deleted").
+* Header row and Header column have `aria-pressed`: they make the first
+  row or the first column header cells.
+* When the table is deleted (or the selection leaves it) while a Table
+  button has the focus, the focus goes back to the editable area.
+* The rendered HTML has `th scope="col"` in the header row and
+  `th scope="row"` in the header column, and a first row of header cells
+  in a `thead`, so a screen reader reads the header of each cell.
 
 ## The prompt menu
 
