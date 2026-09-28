@@ -167,6 +167,21 @@ defmodule Kotoba.ComponentsTest do
              }
     end
 
+    test "renders the languages of the code language picker, as ids" do
+      assert attr(html(field: field(nil)), "[phx-hook]", "data-code-languages") == nil
+
+      html = html(field: field(nil), code_languages: ["elixir", "js", :sql, "ex"])
+      assert attr(html, "[phx-hook]", "data-code-languages") == "elixir,javascript,sql"
+
+      assert_raise ArgumentError, ~r/unknown Kotoba code language "cobol"/, fn ->
+        html(field: field(nil), code_languages: ["cobol"])
+      end
+
+      assert_raise ArgumentError, ~r/at least one language/, fn ->
+        html(field: field(nil), code_languages: [])
+      end
+    end
+
     test "raises on a prompt list that is not valid" do
       assert_raise ArgumentError, ~r/one character/, fn ->
         html(field: field(nil), prompts: [{"@@", :people, fn _ -> [] end}])
@@ -217,10 +232,16 @@ defmodule Kotoba.ComponentsTest do
 
     test "renders a text button for each command" do
       html = toolbar(%{})
-      buttons = find(html, "button")
+      controls = find(html, "[data-kotoba-command]")
 
-      assert LazyHTML.attribute(buttons, "data-kotoba-command") == Components.toolbar_commands()
-      assert Enum.all?(LazyHTML.attribute(buttons, "type"), &(&1 == "button"))
+      assert LazyHTML.attribute(controls, "data-kotoba-command") == Components.toolbar_commands()
+      assert Enum.all?(LazyHTML.attribute(find(html, "button"), "type"), &(&1 == "button"))
+
+      # The code language picker is a select, which the editor fills.
+      assert attr(html, "select[data-kotoba-command=code-language]", "aria-label") ==
+               "Code language"
+
+      assert find(html, "select option") |> Enum.count() == 0
       assert attr(html, "[data-kotoba-toolbar]", "aria-label") == "Formatting"
       assert attr(html, "[data-kotoba-toolbar]", "data-kotoba-toolbar") == ""
       assert attr(html, "[data-kotoba-toolbar]", "phx-update") == nil
@@ -238,7 +259,7 @@ defmodule Kotoba.ComponentsTest do
       html = toolbar(%{})
 
       for [_, command, label] <- editor do
-        assert attr(html, "button[data-kotoba-command=#{command}]", "title") == label
+        assert attr(html, "[data-kotoba-command=#{command}]", "title") == label
       end
     end
 

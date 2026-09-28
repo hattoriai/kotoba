@@ -104,9 +104,33 @@
   cursor: pointer;
 }
 
-/* The table controls are hidden outside a table. */
+/* The code language picker: a select that looks like the buttons. */
+.kotoba-toolbar-select {
+  min-height: 2rem;
+  padding: 0 0.5rem;
+  border: 1px solid var(--kotoba-border);
+  border-radius: calc(var(--kotoba-radius) - 2px);
+  background: var(--kotoba-background);
+  color: inherit;
+  font: inherit;
+  font-size: var(--kotoba-small);
+  cursor: pointer;
+}
+
+.kotoba-toolbar-select:focus-visible {
+  outline: none;
+  box-shadow: var(--kotoba-focus-ring, 0 0 0 2px var(--kotoba-accent));
+}
+
+.kotoba-toolbar-select[aria-disabled="true"] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* The table and code controls are hidden outside a table or a code block. */
 .kotoba-toolbar-group[hidden],
-.kotoba-toolbar-button[hidden] {
+.kotoba-toolbar-button[hidden],
+.kotoba-toolbar-select[hidden] {
   display: none;
 }
 

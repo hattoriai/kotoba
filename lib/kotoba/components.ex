@@ -17,7 +17,7 @@ defmodule Kotoba.Components do
 
   use Phoenix.Component
 
-  alias Kotoba.{Content, Document, Prompts, Renderer, Sanitizer}
+  alias Kotoba.{CodeLanguages, Content, Document, Prompts, Renderer, Sanitizer}
   alias Phoenix.HTML.FormField
 
   @commands [
@@ -38,6 +38,7 @@ defmodule Kotoba.Components do
     {"rule", "Horizontal rule", "Insert"},
     {"table", "Table", "Insert"},
     {"upload", "Attach a file", "Insert"},
+    {"code-language", "Code language", "Code"},
     {"table-row-before", "Insert row above", "Table"},
     {"table-row-after", "Insert row below", "Table"},
     {"table-column-before", "Insert column before", "Table"},
@@ -126,6 +127,11 @@ defmodule Kotoba.Components do
     default: [],
     doc: "the prompt list, see `Kotoba.Prompts`; `{fun, label: label}` names a prompt's menu"
 
+  attr :code_languages, :list,
+    default: nil,
+    doc:
+      "the ids of the languages of the code language picker, see `Kotoba.CodeLanguages`; every language by default"
+
   attr :uploads, Phoenix.LiveView.UploadConfig,
     default: nil,
     doc: "an upload config, for example `@uploads.attachments`"
@@ -159,6 +165,7 @@ defmodule Kotoba.Components do
         node_urls: node_urls(assigns.nodes),
         triggers: json_map(Prompts.triggers(assigns.prompts)),
         prompt_labels: json_map(Prompts.labels(assigns.prompts)),
+        code_languages: code_languages(assigns.code_languages),
         link_schemes: Enum.join(Sanitizer.allowed_schemes(), ","),
         aria_label: aria_label(assigns, field),
         upload_id: assigns.uploads && assigns.uploads.ref,
@@ -181,6 +188,7 @@ defmodule Kotoba.Components do
         data-nodes={@node_urls}
         data-prompts={@triggers}
         data-prompt-labels={@prompt_labels}
+        data-code-languages={@code_languages}
         data-upload={@upload_id}
         data-debounce={@debounce}
         data-link-schemes={@link_schemes}
@@ -239,6 +247,13 @@ defmodule Kotoba.Components do
     end)
   end
 
+  defp code_languages(nil), do: nil
+
+  defp code_languages([]),
+    do: raise(ArgumentError, "code_languages needs at least one language, or nil for every one")
+
+  defp code_languages(names), do: names |> CodeLanguages.ids!() |> Enum.join(",")
+
   defp json_map(map) when map_size(map) == 0, do: nil
   defp json_map(map), do: JSON.encode!(map)
 
@@ -263,7 +278,9 @@ defmodule Kotoba.Components do
   and `aria-disabled`. The commands are the ones of `toolbar_commands/0`;
   another command raises `ArgumentError`. The editor hides the buttons of
   the `table-*` commands (the ones that act on the table at the selection)
-  when the selection is not in a table.
+  when the selection is not in a table. `code-language` renders a
+  `<select>`, the code language picker: the editor fills its options, and
+  hides it when the selection is not in a code block.
   """
   attr :for, :string, default: nil, doc: "the id of the editor, when the toolbar is outside it"
   attr :commands, :list, default: @command_names, doc: "the commands, when there are no buttons"
@@ -305,16 +322,26 @@ defmodule Kotoba.Components do
       class={["kotoba-toolbar" | List.wrap(@class)]}
       {@rest}
     >
-      <button
-        :for={button <- @buttons}
-        type="button"
-        class={["kotoba-toolbar-button" | List.wrap(button.slot && button.slot[:class])]}
-        data-kotoba-command={button.command}
-        aria-label={button.slot && button.label}
-        title={button.label}
-      >
-        {if button.slot, do: render_slot(button.slot), else: button.label}
-      </button>
+      <%= for button <- @buttons do %>
+        <select
+          :if={button.command == "code-language"}
+          class={["kotoba-toolbar-select" | List.wrap(button.slot && button.slot[:class])]}
+          data-kotoba-command={button.command}
+          aria-label={button.label}
+          title={button.label}
+        >
+        </select>
+        <button
+          :if={button.command != "code-language"}
+          type="button"
+          class={["kotoba-toolbar-button" | List.wrap(button.slot && button.slot[:class])]}
+          data-kotoba-command={button.command}
+          aria-label={button.slot && button.label}
+          title={button.label}
+        >
+          {if button.slot, do: render_slot(button.slot), else: button.label}
+        </button>
+      <% end %>
     </div>
     """
   end

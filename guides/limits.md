@@ -60,10 +60,9 @@ less than one frame apart, which a person does not type:
 
 ## Bundle size
 
-The editor bundle is about 495 KB, 160 KB with gzip. It has Lexical, its
-plugins (tables, about 70 KB of it) and the Prism grammars of `@lexical/code-prism` (more languages
-than the toolbar offers, so a pasted code block in another language keeps
-its highlighting). The bundle is part of your `app.js`, so every page that
+The editor bundle is about 520 KB, 170 KB with gzip. It has Lexical, its
+plugins (tables, about 70 KB of it) and the Prism grammars of the 28 code
+languages of `Kotoba.CodeLanguages` (about 45 KB). The bundle is part of your `app.js`, so every page that
 loads `app.js` pays for its size.
 
 ## Tables have no merged cells, colours or widths
@@ -83,6 +82,16 @@ a table is a GitHub Flavored Markdown table with each cell on one line:
 a line break or a second block in a cell becomes `<br>`. When the first
 row is not a row of header cells, the Markdown table has an empty header
 row.
+
+## Code languages are the bundle's
+
+The editor highlights the 28 languages of `Kotoba.CodeLanguages` and
+their aliases, and an app cannot add a grammar. A block in another
+language keeps its language and is plain text in the editor. Prism knows
+the names in lower case: a block with `Elixir` shows as Elixir in the
+picker but is not highlighted until a language is picked. The HTML of a
+code block has `class="language-<name>"` with the stored name, and no
+highlighting.
 
 ## `window.Prism`
 

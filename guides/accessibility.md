@@ -31,8 +31,9 @@ can come and go with the error:
 ## The toolbar
 
 The toolbar has `role="toolbar"`, with a `group` for each set of buttons
-(Text, Blocks, Lists, Insert, History). A Table group is there only while
-the selection is in a table.
+(Text, Blocks, Lists, Insert, History). A Code group is there only while
+the selection is in a code block, and a Table group only while it is in
+a table.
 
 * The toolbar is one tab stop. Tab goes to the toolbar, and Tab again goes
   to the editable area.
@@ -69,6 +70,18 @@ The editor is not a keyboard trap.
 * Escape takes the focus out of the editor. Then Tab goes to the next
   control of the page. Use Escape then Tab to leave a list, a code block
   or a table.
+
+## The code language picker
+
+In a code block, the Code group has a `<select>` named "Code language".
+It is part of the toolbar's roving tab stop.
+
+* Left and Right move to the other controls; Up and Down choose a
+  language, which applies at once. The focus stays on the picker, so the
+  person can try another language.
+* The live region says the language ("Code language Python").
+* A block in a language that the editor does not know shows it as
+  "cobol (not highlighted)", and keeps it.
 
 ## Tables
 

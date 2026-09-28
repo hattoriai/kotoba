@@ -157,6 +157,21 @@ Give each editor its own `id`. Every event from an editor has its `id`,
 and every server push names the editor, so two editors on a page do not
 act on the events of the other.
 
+## Code languages
+
+In a code block, the toolbar has a code language picker. It offers the
+languages of `Kotoba.CodeLanguages` (28 of them, and plain text). To
+offer fewer, give their ids:
+
+```heex
+<.kotoba field={@form[:body]} id="post-body" code_languages={~w(elixir erlang sql bash)} />
+```
+
+A name that is not a language raises `ArgumentError`. The list chooses
+what the picker offers, not what the editor keeps: a pasted or stored
+block in another language keeps its language, is highlighted when the
+editor knows it, and shows in the picker.
+
 ## A custom toolbar
 
 The default toolbar has every command. To choose the commands or to use
@@ -177,7 +192,9 @@ your own icons, give a `toolbar` slot:
 `for` set to the editor id. `Kotoba.Components.toolbar_commands/0` lists
 the commands. The editor hides the buttons of the `table-*` commands
 (Insert row above, Delete table, and the rest) when the selection is not
-in a table; the `table` command inserts one.
+in a table; the `table` command inserts one. The `code-language` command
+renders a `<select>`, the code language picker, which the editor fills
+and shows in a code block.
 
 ## Testing a form
 

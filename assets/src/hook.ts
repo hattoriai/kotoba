@@ -15,6 +15,8 @@
 //   * `data-prompts` - JSON: trigger character → prompt name.
 //   * `data-prompt-labels` - JSON: prompt name → the accessible name of its
 //     menu, for the prompts that have a label.
+//   * `data-code-languages` - comma-separated ids of the languages of the
+//     code language picker (every language when there is none).
 //   * `data-upload` - the id of the LiveView file input.
 //   * `data-change` - "true" to push `kotoba:change`; any other value (or
 //     none) pushes nothing. A LiveView patch can change it.
@@ -66,6 +68,7 @@ import { createKotobaEditor, registerPlugins, registeredTypes } from "./editor";
 import { createLinkForm, type LinkForm } from "./link";
 import { parseLinkSchemes } from "./links";
 import { loadNodes } from "./nodes/custom";
+import { type CodeLanguage, parseCodeLanguages } from "./code_languages";
 import { createPrompts, parseLabels, parseTriggers, type Prompts } from "./prompts";
 import {
   PROTOCOL_VERSION,
@@ -102,6 +105,7 @@ export interface Config {
   nodes: string[];
   prompts: Map<string, string>;
   promptLabels: Map<string, string>;
+  codeLanguages: readonly CodeLanguage[];
   upload: HTMLInputElement | null;
   change: boolean;
   debounce: number;
@@ -123,6 +127,7 @@ export function readConfig(el: HTMLElement): Config {
       .filter((url) => url !== ""),
     prompts: parseTriggers(data.prompts),
     promptLabels: parseLabels(data.promptLabels),
+    codeLanguages: parseCodeLanguages(data.codeLanguages),
     upload: inputById(data.upload),
     change: data.change === "true",
     debounce: Number.isFinite(debounce) && debounce >= 0 ? debounce : 300,
@@ -298,6 +303,7 @@ class Instance {
       onLink: () => this.link?.open(),
       onUpload: () => this.uploads?.open(),
       announce: this.announce,
+      codeLanguages: this.config.codeLanguages,
     });
     this.toolbar.setDisabled(this.config.readonly);
 
