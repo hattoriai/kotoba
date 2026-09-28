@@ -15,7 +15,9 @@ defmodule Mix.Tasks.Kotoba.Install do
       variable, it changes nothing and prints the lines to add.
     * `assets/css/app.css` - adds
       `@import "../../deps/kotoba/priv/static/kotoba.css";`, and the Sumi
-      theme import as a comment. For a path dependency
+      theme import as a comment. The imports follow the deps directory of
+      the project (`Mix.Project.deps_path/0`) when it is not `deps/`, as in
+      an umbrella child or with `MIX_DEPS_PATH`. For a path dependency
       (`{:kotoba, path: "../kotoba"}`), which Mix does not copy into
       `deps/`, the imports point at the dependency's directory instead.
     * `config/config.exs` - adds `config :kotoba, storage: Kotoba.Storage.Local`,
@@ -46,12 +48,16 @@ defmodule Mix.Tasks.Kotoba.Install do
   @config "config/config.exs"
 
   @impl Mix.Task
-  def run(argv), do: install(argv, package_path(Mix.Project.deps_paths()))
+  def run(argv) do
+    deps_path = Mix.Project.deps_path()
+    install(argv, package_path(Mix.Project.deps_paths(), deps_path), deps_path)
+  end
 
   @doc false
-  # The task, with the directory of the Kotoba package given.
-  @spec install([String.t()], Path.t()) :: :ok
-  def install(argv, package) do
+  # The task, with the directory of the Kotoba package and the deps
+  # directory of the project given.
+  @spec install([String.t()], Path.t(), Path.t()) :: :ok
+  def install(argv, package, deps_path \\ "deps") do
     {opts, _args} = OptionParser.parse!(argv, strict: [dry_run: :boolean])
     dry_run? = Keyword.get(opts, :dry_run, false)
     app = Mix.Project.config()[:app] || :my_app
@@ -67,18 +73,19 @@ defmodule Mix.Tasks.Kotoba.Install do
     if Enum.all?(results, &(&1 == :unchanged)) do
       Mix.shell().info("Kotoba is already installed. Nothing changed.")
     else
-      notes(app, package)
+      notes(app, package, deps_path)
     end
   end
 
   @doc false
-  # Where the Kotoba package is, from `Mix.Project.deps_paths/0`: deps/kotoba,
-  # or the directory of a path dependency (`{:kotoba, path: "../kotoba"}`),
-  # which Mix does not copy into deps/.
-  @spec package_path(%{optional(atom()) => Path.t()}) :: Path.t()
-  def package_path(deps_paths) do
+  # Where the Kotoba package is, from `Mix.Project.deps_paths/0`: kotoba in
+  # the deps directory (`Mix.Project.deps_path/0`, which an umbrella child or
+  # MIX_DEPS_PATH moves away from deps/), or the directory of a path
+  # dependency (`{:kotoba, path: "../kotoba"}`), which Mix does not copy there.
+  @spec package_path(%{optional(atom()) => Path.t()}, Path.t()) :: Path.t()
+  def package_path(deps_paths, deps_path \\ "deps") do
     case deps_paths[:kotoba] do
-      nil -> Path.expand("deps/kotoba")
+      nil -> Path.expand(Path.join(deps_path, "kotoba"))
       path -> Path.expand(path)
     end
   end
@@ -123,7 +130,7 @@ defmodule Mix.Tasks.Kotoba.Install do
     "Add the storage config to config/config.exs:\n\n" <> indent(Edits.config_block(app))
   end
 
-  defp notes(app, package) do
+  defp notes(app, package, deps_path) do
     config_source =
       case File.read(@config) do
         {:ok, source} -> source
@@ -132,7 +139,7 @@ defmodule Mix.Tasks.Kotoba.Install do
 
     Mix.shell().info("""
 
-    #{esbuild_note(config_source, package)}
+    #{esbuild_note(config_source, package, deps_path)}
 
     Kotoba.Storage.Local needs a directory for the files. Give it one in
     the :prod block of config/runtime.exs, an absolute path outside the
@@ -162,16 +169,24 @@ defmodule Mix.Tasks.Kotoba.Install do
     """)
   end
 
-  defp esbuild_note(config_source, package) do
-    if Path.dirname(package) == Path.expand("deps") do
-      if Edits.node_path?(config_source) do
-        "Your esbuild config sets NODE_PATH to deps/, so `import { Kotoba } from \"kotoba\"` resolves."
+  defp esbuild_note(config_source, package, deps_path) do
+    if Path.dirname(package) == Path.expand(deps_path) do
+      deps = Edits.relative(deps_path, ".")
+      from_config = Edits.relative(deps_path, "config")
+
+      resolves? =
+        if deps == "deps",
+          do: Edits.node_path?(config_source),
+          else: Edits.node_path?(config_source, from_config)
+
+      if resolves? do
+        "Your esbuild config sets NODE_PATH to #{deps}/, so `import { Kotoba } from \"kotoba\"` resolves."
       else
         """
-        The esbuild profile of your app must resolve `kotoba` from deps/. Give it
-        NODE_PATH=deps in config/config.exs:
+        The esbuild profile of your app must resolve `kotoba` from #{deps}/. Give it
+        NODE_PATH=#{deps} in config/config.exs:
 
-            env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}\
+            env: %{"NODE_PATH" => [Path.expand("#{from_config}", __DIR__), Mix.Project.build_path()]}\
         """
       end
     else
