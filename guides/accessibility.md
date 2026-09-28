@@ -67,7 +67,8 @@ The editor is not a keyboard trap.
 
 When a trigger (for example `@`) opens the menu:
 
-* The menu is a `listbox`, named after the prompt ("people suggestions").
+* The menu is a `listbox`, named after the prompt ("people suggestions"),
+  or with the prompt's label (see [Prompts](prompts.md)).
   The editable area has `aria-controls` with the menu's id, and
   `aria-activedescendant` with the active option.
 * Up and Down move the active option. Enter or Tab inserts it. Escape

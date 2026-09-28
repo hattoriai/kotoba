@@ -112,7 +112,9 @@ defmodule Kotoba.Components do
     default: [],
     doc: "app nodes: `{module, js_url}` tuples, or JavaScript module URLs"
 
-  attr :prompts, :list, default: [], doc: "the prompt list, see `Kotoba.Prompts`"
+  attr :prompts, :list,
+    default: [],
+    doc: "the prompt list, see `Kotoba.Prompts`; `{fun, label: label}` names a prompt's menu"
 
   attr :uploads, Phoenix.LiveView.UploadConfig,
     default: nil,
@@ -145,7 +147,8 @@ defmodule Kotoba.Components do
         input_id: input_id,
         value: field_json(field.value),
         node_urls: node_urls(assigns.nodes),
-        triggers: triggers_json(assigns.prompts),
+        triggers: json_map(Prompts.triggers(assigns.prompts)),
+        prompt_labels: json_map(Prompts.labels(assigns.prompts)),
         link_schemes: Enum.join(Sanitizer.allowed_schemes(), ","),
         aria_label: aria_label(assigns, field),
         upload_id: assigns.uploads && assigns.uploads.ref,
@@ -167,6 +170,7 @@ defmodule Kotoba.Components do
         data-placeholder={@placeholder}
         data-nodes={@node_urls}
         data-prompts={@triggers}
+        data-prompt-labels={@prompt_labels}
         data-upload={@upload_id}
         data-debounce={@debounce}
         data-link-schemes={@link_schemes}
@@ -225,12 +229,8 @@ defmodule Kotoba.Components do
     end)
   end
 
-  defp triggers_json(prompts) do
-    case Prompts.triggers(prompts) do
-      map when map_size(map) == 0 -> nil
-      map -> JSON.encode!(map)
-    end
-  end
+  defp json_map(map) when map_size(map) == 0, do: nil
+  defp json_map(map), do: JSON.encode!(map)
 
   @doc """
   Renders a custom toolbar for an editor.

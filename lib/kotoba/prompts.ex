@@ -15,6 +15,13 @@ defmodule Kotoba.Prompts do
   prompt (an atom or a string) is the `kind` of the mentions that it
   inserts.
 
+  In place of the callback, `{callback, label: label}` gives the prompt a
+  label: the accessible name of its menu, which is "<name> suggestions"
+  otherwise.
+
+      [people: {&MyApp.People.search/1, label: "People in the workshop"}]
+      [{"#", :work, {&MyApp.Work.search/1, label: "Work items"}}]
+
   The callback gets the query (the text after the trigger, at most 64
   characters and with no white space) and returns a list of items. A
   callback with arity 2 also gets the socket, for example to scope the
@@ -56,9 +63,12 @@ defmodule Kotoba.Prompts do
   @typedoc "A prompt callback."
   @type callback :: (String.t() -> list()) | (String.t(), Phoenix.LiveView.Socket.t() -> list())
 
+  @typedoc "A callback, or a callback with options (`label:`)."
+  @type spec :: callback() | {callback(), [{:label, String.t()}]}
+
   @typedoc "A prompt list, in one of the two forms of the module doc."
   @type prompts :: [
-          {atom() | String.t(), callback()} | {String.t(), atom() | String.t(), callback()}
+          {atom() | String.t(), spec()} | {String.t(), atom() | String.t(), spec()}
         ]
 
   @typedoc "A prompt, normalized: `{trigger, name, callback}`."
@@ -69,7 +79,8 @@ defmodule Kotoba.Prompts do
 
   Raises `ArgumentError` when the list is not valid: a trigger that is not
   one character, a name or a trigger that is given twice, a callback that
-  is not a function of arity 1 or 2, more than two prompts without explicit
+  is not a function of arity 1 or 2, an option other than a `:label` of
+  1 to 200 characters, more than two prompts without explicit
   triggers, or the two forms mixed.
 
   ## Examples
@@ -80,10 +91,17 @@ defmodule Kotoba.Prompts do
 
   """
   @spec normalize(prompts() | nil) :: [prompt()]
-  def normalize(nil), do: []
-  def normalize([]), do: []
+  def normalize(prompts) do
+    prompts
+    |> normalize_with_labels()
+    |> Enum.map(fn {trigger, name, fun, _label} -> {trigger, name, fun} end)
+  end
 
-  def normalize(prompts) when is_list(prompts) do
+  # `{trigger, name, callback, label}`, with a nil label when none is given.
+  defp normalize_with_labels(nil), do: []
+  defp normalize_with_labels([]), do: []
+
+  defp normalize_with_labels(prompts) when is_list(prompts) do
     normalized =
       cond do
         Enum.all?(prompts, &match?({_name, _fun}, &1)) -> positional(prompts)
@@ -96,7 +114,7 @@ defmodule Kotoba.Prompts do
     normalized
   end
 
-  def normalize(other), do: invalid!(other, "a prompt list must be a list")
+  defp normalize_with_labels(other), do: invalid!(other, "a prompt list must be a list")
 
   defp positional(prompts) when length(prompts) > length(@positional) do
     invalid!(prompts, "give each trigger explicitly for more than two prompts")
@@ -108,7 +126,7 @@ defmodule Kotoba.Prompts do
     |> Enum.map(fn {{name, fun}, trigger} -> explicit({trigger, name, fun}) end)
   end
 
-  defp explicit({trigger, name, fun} = prompt) do
+  defp explicit({trigger, name, spec} = prompt) do
     unless trigger?(trigger), do: invalid!(prompt, "a trigger must be one character")
 
     unless name?(name),
@@ -118,11 +136,38 @@ defmodule Kotoba.Prompts do
           "a name must be an atom or a non-empty string of at most #{@max_name} characters"
         )
 
+    {fun, label} = spec!(prompt, spec)
+
     unless is_function(fun, 1) or is_function(fun, 2),
       do: invalid!(prompt, "a callback must be a function of arity 1 or 2")
 
-    {trigger, to_string(name), fun}
+    {trigger, to_string(name), fun, label}
   end
+
+  defp spec!(prompt, {fun, opts}) when is_list(opts) do
+    unless Keyword.keyword?(opts) and Keyword.keys(opts) == [:label],
+      do: invalid!(prompt, "the only option of a prompt is :label")
+
+    label = Keyword.fetch!(opts, :label)
+
+    unless label?(label),
+      do:
+        invalid!(
+          prompt,
+          "a label must be a non-empty string of at most #{@max_name} characters"
+        )
+
+    {fun, label}
+  end
+
+  defp spec!(_prompt, fun), do: {fun, nil}
+
+  defp label?(label) when is_binary(label) do
+    String.valid?(label) and String.trim(label) != "" and String.length(label) <= @max_name and
+      not String.match?(label, ~r/\p{Cc}/u)
+  end
+
+  defp label?(_label), do: false
 
   defp trigger?(trigger) when is_binary(trigger) do
     String.valid?(trigger) and length(String.to_charlist(trigger)) == 1 and
@@ -162,6 +207,24 @@ defmodule Kotoba.Prompts do
   @spec triggers(prompts() | nil) :: %{String.t() => String.t()}
   def triggers(prompts) do
     prompts |> normalize() |> Map.new(fn {trigger, name, _fun} -> {trigger, name} end)
+  end
+
+  @doc """
+  Returns the map from name to label, for the prompts that have a label,
+  that the editor reads (`data-prompt-labels`).
+
+  ## Examples
+
+      iex> Kotoba.Prompts.labels(people: {fn _ -> [] end, label: "People"}, work: fn _ -> [] end)
+      %{"people" => "People"}
+
+  """
+  @spec labels(prompts() | nil) :: %{String.t() => String.t()}
+  def labels(prompts) do
+    for {_trigger, name, _fun, label} <- normalize_with_labels(prompts),
+        label != nil,
+        into: %{},
+        do: {name, label}
   end
 
   @doc """

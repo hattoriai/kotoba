@@ -54,6 +54,8 @@ interface PromptOptions {
   idPrefix: string;
   /** Trigger character → prompt name. */
   triggers: ReadonlyMap<string, string>;
+  /** Prompt name → accessible name of its menu, for the prompts that have one. */
+  labels: ReadonlyMap<string, string>;
   request(prompt: string, query: string): void;
   announce(message: string): void;
 }
@@ -84,6 +86,26 @@ export function parseTriggers(json: string | undefined): Map<string, string> {
     triggers.set(trigger, prompt);
   }
   return triggers;
+}
+
+/** Reads the `data-prompt-labels` JSON: an object of prompt name → label. */
+export function parseLabels(json: string | undefined): Map<string, string> {
+  const labels = new Map<string, string>();
+  if (json === undefined || json.trim() === "") return labels;
+
+  let data: unknown;
+  try {
+    data = JSON.parse(json);
+  } catch {
+    console.error("Kotoba: data-prompt-labels is not valid JSON");
+    return labels;
+  }
+  if (!isObject(data)) return labels;
+
+  for (const [prompt, label] of Object.entries(data)) {
+    if (typeof label === "string" && label.trim() !== "") labels.set(prompt, label);
+  }
+  return labels;
 }
 
 /** Reads the result items from the server, and drops the ones that are not valid. */
@@ -160,7 +182,7 @@ export function createPrompts(editor: LexicalEditor, options: PromptOptions): Pr
       return;
     }
 
-    listbox.setAttribute("aria-label", `${match.prompt} suggestions`);
+    listbox.setAttribute("aria-label", options.labels.get(match.prompt) ?? `${match.prompt} suggestions`);
     listbox.replaceChildren(
       ...items.map((item, index) => {
         const option = document.createElement("li");

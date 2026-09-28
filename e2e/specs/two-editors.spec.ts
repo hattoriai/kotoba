@@ -32,6 +32,8 @@ test("an editor with phx-target sends its events to the LiveComponent", async ({
   // The prompt goes to the component too, and its results come back.
   await page.keyboard.type(" @ada");
   await expect(page.locator("#b_editor").getByRole("option")).toHaveText(/Ada Lovelace/);
+  // The prompt of this editor has a label, which names its menu.
+  await expect(page.locator("#b_editor").getByRole("listbox", { name: "People in the workshop" })).toBeVisible();
   await page.keyboard.press("Enter");
   await expectNodes(page, "mention", 1, "b_body");
 
