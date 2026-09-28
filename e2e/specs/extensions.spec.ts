@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { collectConsole, expectNodes, nodesOfType, openEditor, readDocument, settle } from "./support";
+import { collectConsole, expectNodes, nodesOfType, openEditor, pasteData, readDocument, settle } from "./support";
 
 const COMMENT = "comment_editor";
 const toolbar = (page: Page, editorId = COMMENT) => page.locator(`#${editorId}`).getByRole("toolbar", { name: "Formatting" });
@@ -8,13 +8,7 @@ const buttons = (page: Page, editorId = COMMENT) =>
   toolbar(page, editorId).locator("[data-kotoba-command]:visible");
 
 async function paste(page: Page, editorId: string, html: string): Promise<void> {
-  await settle(page);
-  await page.locator(`#${editorId} .kotoba-editable`).evaluate((element, value) => {
-    const data = new DataTransfer();
-    data.setData("text/html", value);
-    data.setData("text/plain", "pasted");
-    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
-  }, html);
+  await pasteData(page, page.locator(`#${editorId} .kotoba-editable`), { html, text: "pasted" });
 }
 
 /** The types of the top-level nodes of an editor's document. */

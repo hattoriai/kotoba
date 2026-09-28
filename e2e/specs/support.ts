@@ -86,15 +86,47 @@ export async function selectBack(page: Page, count: number): Promise<void> {
   for (let i = 0; i < count; i += 1) await page.keyboard.press("Shift+ArrowLeft");
 }
 
-/** Pastes plain text into the focused editor with a real paste event. */
-export async function pasteText(page: Page, editable: Locator, text: string): Promise<void> {
+/** What a paste carries: HTML, plain text and files. */
+export interface Clipboard {
+  html?: string;
+  text?: string;
+  files?: FileSpec[];
+}
+
+/**
+ * Pastes into the editor with a paste event, as the browser sends it for
+ * Cmd/Ctrl+V: the clipboard data is in the event's `clipboardData`.
+ */
+export async function pasteData(page: Page, editable: Locator, clipboard: Clipboard): Promise<void> {
   // A paste event right after Shift+Arrow would race Lexical's selectionchange.
   await settle(page);
-  await editable.evaluate((element, value) => {
-    const data = new DataTransfer();
-    data.setData("text/plain", value);
-    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
-  }, text);
+  const files = (clipboard.files ?? []).map((file) => ({
+    name: file.name,
+    type: file.mimeType,
+    data: file.buffer.toString("base64"),
+  }));
+  await editable.evaluate(
+    (element, { html, text, files }) => {
+      const data = new DataTransfer();
+      if (html !== undefined) data.setData("text/html", html);
+      if (text !== undefined) data.setData("text/plain", text);
+      for (const file of files) {
+        const bytes = Uint8Array.from(atob(file.data), (char) => char.charCodeAt(0));
+        data.items.add(new File([bytes], file.name, { type: file.type }));
+      }
+      const event = new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true });
+      // Firefox leaves out the `clipboardData` of the event's init: the
+      // event then carries the data as a property of its own.
+      if (event.clipboardData !== data) Object.defineProperty(event, "clipboardData", { value: data });
+      element.dispatchEvent(event);
+    },
+    { html: clipboard.html, text: clipboard.text, files },
+  );
+}
+
+/** Pastes plain text into the editor. */
+export async function pasteText(page: Page, editable: Locator, text: string): Promise<void> {
+  await pasteData(page, editable, { text });
 }
 
 export interface FileSpec {
@@ -141,6 +173,7 @@ export function textFile(name: string): FileSpec {
  * browser does when the user drops or pastes files.
  */
 export async function sendFiles(editable: Locator, kind: "drop" | "paste", files: FileSpec[]): Promise<void> {
+  if (kind === "paste") return pasteData(editable.page(), editable, { files });
   const payload = files.map((file) => ({ name: file.name, type: file.mimeType, data: file.buffer.toString("base64") }));
   await editable.evaluate(
     (element, { kind, payload }) => {
@@ -151,13 +184,9 @@ export async function sendFiles(editable: Locator, kind: "drop" | "paste", files
       }
       const rect = element.getBoundingClientRect();
       const init = { bubbles: true, cancelable: true };
-      if (kind === "paste") {
-        element.dispatchEvent(new ClipboardEvent("paste", { ...init, clipboardData: data }));
-      } else {
-        const point = { clientX: rect.left + 10, clientY: rect.top + 10 };
-        element.dispatchEvent(new DragEvent("dragover", { ...init, ...point, dataTransfer: data }));
-        element.dispatchEvent(new DragEvent("drop", { ...init, ...point, dataTransfer: data }));
-      }
+      const point = { clientX: rect.left + 10, clientY: rect.top + 10 };
+      element.dispatchEvent(new DragEvent("dragover", { ...init, ...point, dataTransfer: data }));
+      element.dispatchEvent(new DragEvent("drop", { ...init, ...point, dataTransfer: data }));
     },
     { kind, payload },
   );

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { MOD, nodesOfType, openEditor, readDocument, selectBack, settle } from "./support";
+import { MOD, nodesOfType, openEditor, pasteData, readDocument, selectBack, settle } from "./support";
 
 const HIGHLIGHT = 128;
 const toolbar = (page: Page) => page.getByRole("toolbar", { name: "Formatting" });
@@ -137,15 +137,9 @@ test("the colors are submitted, stored and rendered as classes", async ({ page }
 test("a pasted style that is not a color of the palette is dropped", async ({ page }) => {
   const editable = await openEditor(page);
   await editable.click();
-  await settle(page);
-  await editable.evaluate((element) => {
-    const data = new DataTransfer();
-    data.setData(
-      "text/html",
-      '<p><span style="color: red; font-size: 40px">red</span> <span style="background-color: var(--kotoba-highlight-green)">bg</span></p>',
-    );
-    data.setData("text/plain", "red bg");
-    element.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
+  await pasteData(page, editable, {
+    html: '<p><span style="color: red; font-size: 40px">red</span> <span style="background-color: var(--kotoba-highlight-green)">bg</span></p>',
+    text: "red bg",
   });
 
   await expect.poll(() => runs(page)).toEqual([["red bg", 0, ""]]);
