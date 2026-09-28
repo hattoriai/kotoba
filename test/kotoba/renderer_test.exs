@@ -566,16 +566,6 @@ defmodule Kotoba.RendererTest do
                ~s(<p><span class="kotoba-unknown" data-type="tablecell"></span></p>)
     end
 
-    test "a cell with spans or a header state that is not valid renders as unknown" do
-      for attrs <- [%{"colSpan" => 0}, %{"rowSpan" => 1001}, %{"headerState" => 4}] do
-        input = table([table_row([table_cell([paragraph([text("x")])], 0, attrs)])])
-
-        assert html([input]) ==
-                 ~s(<div class="kotoba-table-scroll"><table class="kotoba-table"><tbody><tr>) <>
-                   ~s(<span class="kotoba-unknown" data-type="tablecell"></span></tr></tbody></table></div>)
-      end
-    end
-
     test "to_text/2 gives a line for each row, with the cells separated by a tab" do
       input = [
         paragraph([text("Before")]),

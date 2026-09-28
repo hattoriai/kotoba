@@ -271,6 +271,42 @@ defmodule Kotoba.DocumentTest do
              ]
     end
 
+    test "checks the spans and the header state of a table cell" do
+      cell = fn attrs ->
+        Map.merge(
+          %{
+            "type" => "tablecell",
+            "headerState" => 0,
+            "colSpan" => 1,
+            "rowSpan" => 1,
+            "children" => [paragraph([])]
+          },
+          attrs
+        )
+      end
+
+      row = %{
+        "type" => "tablerow",
+        "children" => [
+          cell.(%{"colSpan" => 0}),
+          cell.(%{"rowSpan" => 1001}),
+          cell.(%{"headerState" => 4}),
+          cell.(%{"colSpan" => 1000})
+        ]
+      }
+
+      assert {:error, messages} =
+               Document.parse(envelope(root([%{"type" => "table", "children" => [row]}])))
+
+      path = "root.children[0].children[0].children"
+
+      assert messages == [
+               "#{path}[0] (tablecell): colSpan must be from 1 to 1000",
+               "#{path}[1] (tablecell): rowSpan must be from 1 to 1000",
+               "#{path}[2] (tablecell): headerState must be one of: 0, 1, 2, 3"
+             ]
+    end
+
     test "requires a root node at the top" do
       assert {:error, ["root must be a node of type \"root\""]} =
                Document.parse(envelope(paragraph([])))
