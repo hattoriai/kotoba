@@ -26,16 +26,18 @@ defmodule Kotoba.Nodes.Table do
 
     # The editor puts a wide table in a box that scrolls, and so does the
     # HTML: the page does not.
+    {:safe, thead} =
+      if head != [],
+        do: Renderer.tag("thead", [], Renderer.html_children(%{node | children: head}, opts)),
+        else: {:safe, ""}
+
+    {:safe, tbody} =
+      Renderer.tag("tbody", [], Renderer.html_children(%{node | children: body}, opts))
+
     Renderer.tag(
       "div",
       [class: "kotoba-table-scroll"],
-      Renderer.tag("table", [class: "kotoba-table"], [
-        if(head != [],
-          do: Renderer.tag("thead", [], Renderer.html_children(%{node | children: head}, opts)),
-          else: ""
-        ),
-        Renderer.tag("tbody", [], Renderer.html_children(%{node | children: body}, opts))
-      ])
+      Renderer.tag("table", [class: "kotoba-table"], {:safe, [thead, tbody]})
     )
   end
 
