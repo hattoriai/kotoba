@@ -89,8 +89,10 @@ end
 ```
 
 Give the same prompt list to the component and to
-`Kotoba.Live.handle_prompt/3`. The component sends only the triggers and
-the names to the browser. The functions run in the LiveView process.
+`Kotoba.Live.handle_prompt/3`. The component sends the triggers, the
+names, the labels and the options to the browser, and the `items` of a
+local prompt; the search functions stay on the server and run in the
+LiveView process.
 
 A callback of arity 2 also gets the socket:
 
@@ -170,8 +172,11 @@ person can go on typing all the while.
 
 The callback gets the query and returns a list of items. An item is:
 
-* a map with `:id` (a string or an integer), `:label` (a string), and an
-  optional `:hint` (a string), with atom or string keys, or
+* a map with `:id` (a string or an integer), `:label` (a string), and
+  the optional `:hint` (a string, shown next to the label), `:text` (what
+  an `insert: :text` prompt inserts) and `:attrs` (the attributes of the
+  node of an `insert: {:node, type}` prompt: a map that encodes to JSON in
+  at most 2048 bytes), with atom or string keys, or
 * an `{id, label}` tuple.
 
 ```elixir

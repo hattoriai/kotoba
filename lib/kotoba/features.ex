@@ -45,6 +45,9 @@ defmodule Kotoba.Features do
   A stored node of a feature that is off loads as an unknown node: the
   editor shows a placeholder and saves it with no change.
 
+  The [Editing features](features.md) guide has the shortcuts and the
+  toolbar of each feature.
+
   The editor is not a check: a request can post any document. To refuse a
   document with a feature that the field does not have, use
   `Kotoba.Content.validate_features/3` in the changeset, or `check/2`.

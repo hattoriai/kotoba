@@ -254,8 +254,12 @@
   list-style: none;
 }
 
+/* The editor's check list items, and the rendered ones
+   (`li.kotoba-checked`, `li.kotoba-unchecked` in `ul.kotoba-check`). */
 .kotoba-li-checked,
-.kotoba-li-unchecked {
+.kotoba-li-unchecked,
+.kotoba-check > .kotoba-checked,
+.kotoba-check > .kotoba-unchecked {
   position: relative;
   padding-left: 1.6em;
   list-style: none;
@@ -263,7 +267,9 @@
 }
 
 .kotoba-li-checked::before,
-.kotoba-li-unchecked::before {
+.kotoba-li-unchecked::before,
+.kotoba-check > .kotoba-checked::before,
+.kotoba-check > .kotoba-unchecked::before {
   content: "";
   position: absolute;
   left: 0;
@@ -275,12 +281,20 @@
   cursor: pointer;
 }
 
-.kotoba-li-checked::before {
+/* A rendered box is not a control. */
+.kotoba-check > .kotoba-checked::before,
+.kotoba-check > .kotoba-unchecked::before {
+  cursor: default;
+}
+
+.kotoba-li-checked::before,
+.kotoba-check > .kotoba-checked::before {
   border-color: var(--kotoba-accent);
   background: var(--kotoba-accent);
 }
 
-.kotoba-li-checked::after {
+.kotoba-li-checked::after,
+.kotoba-check > .kotoba-checked::after {
   content: "";
   position: absolute;
   left: 0.35em;
@@ -293,7 +307,8 @@
   pointer-events: none;
 }
 
-.kotoba-li-checked {
+.kotoba-li-checked,
+.kotoba-check > .kotoba-checked {
   color: var(--kotoba-muted);
   text-decoration: line-through;
 }
@@ -317,6 +332,11 @@
 /* A highlight in a color of the palette: the editor puts the color on the
    mark, in its style. */
 mark[style*="--kotoba-highlight-"] > .kotoba-highlight { background: transparent; }
+
+/* The case formats of rendered content (`Kotoba.Nodes.Text`). */
+.kotoba-lowercase { text-transform: lowercase; }
+.kotoba-uppercase { text-transform: uppercase; }
+.kotoba-capitalize { text-transform: capitalize; }
 
 /* The colors of rendered content (`Kotoba.Nodes.Text`). */
 .kotoba-color-red { color: var(--kotoba-color-red); }

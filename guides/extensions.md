@@ -1,69 +1,19 @@
-# Features and extensions
+# Extensions
 
-An editor is made of features. Kotoba has built-in features (bold, links,
-tables, code blocks...), and an app adds its own with extensions: a node,
-the commands that act on it, a toolbar button and a Markdown shortcut,
+An extension adds to the editor what a built-in feature has: a node, the
+commands that act on it, a toolbar button and a Markdown shortcut,
 registered and cleaned up together. Each editor on a page chooses its
-features and its extensions.
-
-## Choose the features of an editor
-
-```heex
-<.kotoba field={@form[:comment]} features={~w(bold italic links lists mentions)} />
-<.kotoba field={@form[:body]} />
-```
-
-The comment editor has five features; the body editor, with no
-`features`, has every feature. The features are in `Kotoba.Features`:
-
-`bold`, `italic`, `underline`, `strikethrough`, `highlight`, `subscript`,
-`superscript`, `inline_code`, `links`, `headings`,
-`quotes`, `lists`, `check_lists` (needs `lists`), `code_blocks`,
-`horizontal_rules`, `tables`, `attachments` (with `uploads`) and `mentions`
-(with `prompts`).
-
-A feature that is off is not in the editor at all:
-
-* its toolbar buttons are not in the default toolbar, and are hidden in a
-  custom one;
-* its Markdown shortcut (`# `, `> `, ` ``` `, `**`, `==`...) types the text;
-* its keyboard shortcut (`Cmd/Ctrl+B`, `Cmd/Ctrl+U`...) does nothing;
-* pasted content of it comes in as plain paragraphs and text: a pasted
-  table, heading or code block is paragraphs, and a pasted format is
-  dropped;
-* a stored node of it loads as an unknown node: the editor shows its type
-  in a placeholder, and saves it with no change.
-
-Paragraphs, line breaks, tabs, undo and redo are always there.
-Subscript and superscript have no button in the default toolbar: they
-have their keyboard shortcuts, and an app's toolbar can have their
-buttons (`command="subscript"`, `command="superscript"`).
-
-## Check the features on the server
-
-The editor keeps out what it does not have, but a request can post any
-document. Check the field in its changeset:
-
-```elixir
-def changeset(comment, attrs) do
-  comment
-  |> cast(attrs, [:body])
-  |> Kotoba.Content.validate_features(:body, ~w(bold italic links lists mentions)a)
-end
-```
-
-A document with another feature gets the error
-`"has content that is not allowed: tables"`. `Kotoba.Features.used/1` and
-`Kotoba.Features.check/2` give the same answer for a `Kotoba.Document`.
-App nodes are not features: the check allows them.
+extensions, as it chooses its built-in features (see the
+[Editing features](features.md) guide).
 
 ## Write an extension
 
 An extension is a JavaScript module whose default export returns the
-extension. Kotoba calls it once for each editor, with the editor's copies
-of `lexical`, `@lexical/utils` and `@lexical/selection`: a node class must
-extend the editor's Lexical, and an extension module must not bundle its
-own. A Markdown shortcut is a plain object (a transformer of
+extension, or a list of extensions. Kotoba calls it once for each editor,
+with an object that has the editor's copies of `lexical`, `@lexical/utils`
+and `@lexical/selection`, and `version: 1` (the version of this
+contract). A node class must extend the editor's Lexical, and an
+extension module must not bundle its own. A Markdown shortcut is a plain object (a transformer of
 `@lexical/markdown`), so it needs no import.
 
 ```js
@@ -169,13 +119,28 @@ History group. In a custom toolbar, place one by its command:
 
 ## Serve the module and give it to the editor
 
-Build the module on its own, as for a node module (see the
-[Custom nodes](custom_nodes.md) guide), and give its URL to the editors
-that have it:
+The editor loads the module with `import()`, so serve it as an ES module.
+Add an esbuild profile in `config/config.exs`, as for node modules (see
+the [Custom nodes](custom_nodes.md) guide):
+
+```elixir
+config :esbuild,
+  kotoba_extensions: [
+    args:
+      ~w(js/kotoba/extensions/*.js --bundle --format=esm --target=es2022 --outdir=../priv/static/assets/kotoba/extensions),
+    cd: Path.expand("../assets", __DIR__)
+  ]
+```
+
+with a watcher in `config/dev.exs` and the profile in the `assets.build`
+and `assets.deploy` aliases, as the Custom nodes guide shows. Then give
+the module's URL to the editors that have it:
 
 ```heex
-<.kotoba field={@form[:body]} extensions={[~p"/assets/kotoba/callout.js"]} />
+<.kotoba field={@form[:body]} extensions={[~p"/assets/kotoba/extensions/callout.js"]} />
 ```
+
+Do not import `lexical` in the module: the default export gets it.
 
 The Elixir half of a node is a `Kotoba.Node` module in
 `config :kotoba, nodes: [...]`, as for any app node. Insert a node from

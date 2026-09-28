@@ -9,6 +9,11 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Guides: Editing features (every feature, its toolbar button, keyboard
+  and Markdown shortcuts, colors, links, code blocks, tables and custom
+  toolbars) and Rendering (the HTML of each node, styling, HTML/text/
+  Markdown outside a page, content without the editor). The quickstart
+  has a complete LiveView, and the README a feature overview.
 - Richer prompts (#8). A prompt is a callback, or options: `spaces: true`
   (queries with spaces, "Ada Lovelace", ended by two spaces),
   `min_length`, `max_length` (up to 200), `items:` (a local list that the
@@ -117,6 +122,11 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A rendered check list (`ul.kotoba-check`) shows a box, checked or not,
+  in front of each item, as the editor does; before, `kotoba.css` hid the
+  bullets and drew no box.
+- The case formats (`lowercase`, `uppercase`, `capitalize`) show in the
+  editor and in rendered content (`span.kotoba-uppercase`...).
 - `mix kotoba.install` finds the Kotoba package in the project's deps
   directory (`Mix.Project.deps_path/0`), not in `deps/`. In an umbrella
   child or with `MIX_DEPS_PATH`, a Hex dependency is no longer called a

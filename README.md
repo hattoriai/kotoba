@@ -17,6 +17,28 @@ Kotoba (言葉, "words") is rich text for Phoenix. It gives your app:
 The editor is a prebuilt JavaScript bundle in the Hex package. Your app
 does not run Node.js for it: you add the hook and one style sheet.
 
+## What the editor does
+
+| | |
+| --- | --- |
+| Text | bold, italic, underline, strikethrough, inline code, subscript, superscript; a palette of text colors and highlights |
+| Blocks | headings, quotes, bulleted, numbered and check lists, horizontal rules |
+| Code | code blocks highlighted as you type in 28 languages, with a language picker |
+| Tables | insert, rows and columns, header rows and columns, pasted tables |
+| Links | a link form, paste a URL over text, autolinks, allowed schemes |
+| Files | drop, paste or pick images and files; LiveView uploads, a storage adapter |
+| Prompts | `@` mentions, emoji, tags: server searches (async too) or local lists, with queries that have spaces |
+| Shortcuts | the usual keyboard shortcuts, and Markdown as you type (`## `, `- `, `**bold**`, ` ``` `) |
+| Per field | the features of each editor (`features={~w(bold links lists)}`), checked on the server |
+| Your own | nodes (`mix kotoba.gen.node`), extensions with commands, toolbar buttons and shortcuts, custom toolbars |
+| Output | cached, safe HTML and plain text; Markdown; a strict policy for untrusted content |
+| Theming | CSS custom properties, the Sumi theme, dark mode |
+| Accessibility | a labelled textbox, a toolbar with one tab stop, a live region, no keyboard trap |
+
+The [Editing features](guides/features.md) guide is the tour, and the
+development server of this repository (`mix dev`, below) shows each of
+them.
+
 ## Install
 
 Kotoba needs Elixir 1.18 or later (it uses the built-in `JSON` module),
@@ -118,12 +140,18 @@ HTML.
   the rendered content.
 * [Forms and changesets](guides/forms.md): what the form posts, the
   changeset, the LiveView events and the server pushes.
+* [Editing features](guides/features.md): the features of an editor, their
+  shortcuts, colors, links, code blocks, tables and the toolbar.
+* [Rendering](guides/rendering.md): the stored content in a page, HTML,
+  text and Markdown, and content without the editor.
 * [Uploads](guides/uploads.md): LiveView uploads, the storage adapters and
   how to serve the files.
-* [Prompts and mentions](guides/prompts.md): `@` menus with results from
-  the LiveView.
+* [Prompts and mentions](guides/prompts.md): `@` menus, emoji and tags,
+  from the LiveView or from a local list.
 * [Custom nodes](guides/custom_nodes.md): your own nodes, with
   `mix kotoba.gen.node`.
+* [Extensions](guides/extensions.md): your own commands, toolbar buttons
+  and Markdown shortcuts.
 * [Theming](guides/theming.md): the `--kotoba-*` properties and the Sumi
   theme.
 * [Security](guides/security.md): what Kotoba checks, and what your app
@@ -147,8 +175,10 @@ empties `priv/static` and writes the four files of the package:
 `kotoba.esm.js`, `kotoba.cjs.js`, `kotoba.css` and `kotoba-sumi.css`.
 
 `mix dev` runs `dev.exs`: a Phoenix endpoint with the editor in a form,
-the `@` prompt, uploads to `tmp/uploads`, an app node made with
+the prompts (`@` people, `:` emoji, `+` tags, `~` a slow search, `!` a
+failing one), uploads to `tmp/uploads`, an app node made with
 `mix kotoba.gen.node` (in `dev/`), buttons that send each server event,
+editors with fewer features and an example extension at `/extensions`,
 and the Sumi theme at `/?theme=sumi`. Set `PORT` for another port. esbuild
 watchers rebuild the bundle and the node modules, and the page reloads.
 Restart `mix dev` after a change in `dev/lib`.

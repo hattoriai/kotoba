@@ -27,7 +27,9 @@ For an app `:my_app`, `mix kotoba.gen.node Callout` writes:
   and reads the text of a document with the node.
 
 The type starts with the app name, so it cannot be the type of a built-in
-node. `--module` gives another module name, and `--out` another directory.
+node. `--module` gives another module name, `--out` another directory,
+`--app` another app name for the type, and `--force` replaces files that
+exist.
 See `Mix.Tasks.Kotoba.Gen.Node`.
 
 The kinds:
@@ -190,8 +192,11 @@ raises `ArgumentError`, as the editor refuses it. Do not start a type with
 
 ## Insert a node
 
-The toolbar has no button for app nodes. Insert one from the server, for
-example from a button of your own:
+A node module gives the editor no toolbar button: an
+[extension](extensions.md) can add one, with a command that inserts the
+node, or a prompt can insert it (`insert: {:node, type}`, see the
+[Prompts](prompts.md) guide). The server can insert one too, for example
+from a button of your own:
 
 ```elixir
 def handle_event("add_callout", _params, socket) do

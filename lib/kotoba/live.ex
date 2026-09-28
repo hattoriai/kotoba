@@ -22,8 +22,9 @@ defmodule Kotoba.Live do
       end
 
   Give the same prompt list to the component (`prompts={prompts(@socket)}`,
-  or build it once in `mount/3`). The component sends only the triggers
-  and names to the browser; the functions run here.
+  or build it once in `mount/3`). The component sends the triggers, the
+  names, the options and the items of a local prompt to the browser; the
+  search functions run here.
 
   ## Uploads
 

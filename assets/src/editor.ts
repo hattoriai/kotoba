@@ -185,6 +185,9 @@ export const THEME: EditorThemeClasses = {
     highlight: "kotoba-highlight",
     subscript: "kotoba-sub",
     superscript: "kotoba-sup",
+    lowercase: "kotoba-lowercase",
+    uppercase: "kotoba-uppercase",
+    capitalize: "kotoba-capitalize",
   },
 };
 

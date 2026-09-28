@@ -98,6 +98,8 @@ defmodule Kotoba.MixProject do
         "README.md",
         "guides/quickstart.md",
         "guides/forms.md",
+        "guides/features.md",
+        "guides/rendering.md",
         "guides/uploads.md",
         "guides/prompts.md",
         "guides/custom_nodes.md",
@@ -112,6 +114,8 @@ defmodule Kotoba.MixProject do
         Guides: [
           "guides/quickstart.md",
           "guides/forms.md",
+          "guides/features.md",
+          "guides/rendering.md",
           "guides/uploads.md",
           "guides/prompts.md",
           "guides/custom_nodes.md",
@@ -126,6 +130,7 @@ defmodule Kotoba.MixProject do
       ],
       groups_for_modules: [
         Editor: [
+          Kotoba,
           Kotoba.Components,
           Kotoba.Live,
           Kotoba.Prompts,

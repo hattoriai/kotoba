@@ -106,6 +106,10 @@ sees it.
   `kotoba:prompt`, the upload events) and the form events come from the
   browser. Check in each `handle_event/3` that the person can edit the
   record.
+* **Check the features.** An editor's `features` limit what the person can
+  make in the browser, not what a request can post. Check them in the
+  changeset with `Kotoba.Content.validate_features/3` (see the
+  [Editing features](features.md) guide).
 * **Scope the prompts.** A prompt callback runs with the query from the
   browser. Search only the things that the person can see, for example
   with an arity-2 callback that reads the scope from the socket. The
