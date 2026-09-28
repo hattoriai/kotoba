@@ -44,6 +44,9 @@ a table.
   now (Undo with no history, say) has `aria-disabled="true"`.
 * The title of a button shows its shortcut: `Cmd/Ctrl+B` (bold),
   `Cmd/Ctrl+I` (italic), `Cmd/Ctrl+K` (link) and `Cmd/Ctrl+Z` (undo).
+* An editor with fewer features (see `Kotoba.Features`) has only their
+  buttons, and an extension's buttons join the toolbar with the same
+  keyboard behaviour, `aria-pressed` and live region messages.
 * Alt+F10 in the editable area moves the focus to the toolbar's tab stop.
   It is the way to the toolbar from a table cell, where Tab and Shift+Tab
   move between the cells.

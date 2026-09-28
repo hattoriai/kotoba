@@ -60,7 +60,7 @@ less than one frame apart, which a person does not type:
 
 ## Bundle size
 
-The editor bundle is about 520 KB, 170 KB with gzip. It has Lexical, its
+The editor bundle is about 545 KB, 177 KB with gzip. It has Lexical, its
 plugins (tables, about 70 KB of it) and the Prism grammars of the 28 code
 languages of `Kotoba.CodeLanguages` (about 45 KB). The bundle is part of your `app.js`, so every page that
 loads `app.js` pays for its size.

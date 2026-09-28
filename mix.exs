@@ -101,6 +101,7 @@ defmodule Kotoba.MixProject do
         "guides/uploads.md",
         "guides/prompts.md",
         "guides/custom_nodes.md",
+        "guides/extensions.md",
         "guides/theming.md",
         "guides/security.md",
         "guides/accessibility.md",
@@ -114,6 +115,7 @@ defmodule Kotoba.MixProject do
           "guides/uploads.md",
           "guides/prompts.md",
           "guides/custom_nodes.md",
+          "guides/extensions.md",
           "guides/theming.md"
         ],
         Reference: [
@@ -123,7 +125,13 @@ defmodule Kotoba.MixProject do
         ]
       ],
       groups_for_modules: [
-        Editor: [Kotoba.Components, Kotoba.Live, Kotoba.Prompts],
+        Editor: [
+          Kotoba.Components,
+          Kotoba.Live,
+          Kotoba.Prompts,
+          Kotoba.Features,
+          Kotoba.CodeLanguages
+        ],
         Content: [Kotoba.Content, Kotoba.Document, Kotoba.Renderer, Kotoba.Sanitizer],
         Nodes: [Kotoba.Node, Kotoba.Node.Field, Kotoba.Nodes, ~r/^Kotoba\.Nodes\./],
         Attachments: [

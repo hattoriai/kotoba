@@ -12,6 +12,10 @@
 //   * `data-readonly` - present (and not "false") for a read-only editor.
 //   * `data-placeholder` - the text to show when the editor is empty.
 //   * `data-nodes` - comma-separated URLs of app node modules.
+//   * `data-features` - comma-separated built-in features of the editor
+//     (see features.ts); every feature when there is none.
+//   * `data-extensions` - comma-separated URLs of app extension modules
+//     (see extensions.ts).
 //   * `data-prompts` - JSON: trigger character → prompt name.
 //   * `data-prompt-labels` - JSON: prompt name → the accessible name of its
 //     menu, for the prompts that have a label.
@@ -64,7 +68,15 @@ import {
   type SerializedLexicalNode,
 } from "lexical";
 
-import { createKotobaEditor, registerPlugins, registeredTypes } from "./editor";
+import { BUILT_IN_NODES, CORE_TYPES, createKotobaEditor, registeredTypes } from "./editor";
+import {
+  composeExtensions,
+  extensionControls,
+  loadExtensions,
+  registerExtensions,
+  type KotobaExtension,
+} from "./extensions";
+import { type Feature, builtInExtensions, parseFeatures } from "./features";
 import { createLinkForm, type LinkForm } from "./link";
 import { parseLinkSchemes } from "./links";
 import { loadNodes } from "./nodes/custom";
@@ -103,6 +115,8 @@ export interface Config {
   readonly: boolean;
   placeholder: string;
   nodes: string[];
+  features: Set<Feature>;
+  extensions: string[];
   prompts: Map<string, string>;
   promptLabels: Map<string, string>;
   codeLanguages: readonly CodeLanguage[];
@@ -121,10 +135,9 @@ export function readConfig(el: HTMLElement): Config {
     input: inputById(data.input),
     readonly: data.readonly !== undefined && data.readonly !== "false",
     placeholder: data.placeholder ?? "",
-    nodes: (data.nodes ?? "")
-      .split(",")
-      .map((url) => url.trim())
-      .filter((url) => url !== ""),
+    nodes: urls(data.nodes),
+    features: parseFeatures(data.features),
+    extensions: urls(data.extensions),
     prompts: parseTriggers(data.prompts),
     promptLabels: parseLabels(data.promptLabels),
     codeLanguages: parseCodeLanguages(data.codeLanguages),
@@ -133,6 +146,13 @@ export function readConfig(el: HTMLElement): Config {
     debounce: Number.isFinite(debounce) && debounce >= 0 ? debounce : 300,
     linkSchemes: parseLinkSchemes(data.linkSchemes),
   };
+}
+
+function urls(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((url) => url.trim())
+    .filter((url) => url !== "");
 }
 
 function inputById(id: string | undefined): HTMLInputElement | null {
@@ -244,16 +264,37 @@ class Instance {
   }
 
   private async mount(): Promise<void> {
-    const appNodes = await loadNodes(this.config.nodes);
+    const [appNodes, appExtensions] = await Promise.all([
+      loadNodes(this.config.nodes),
+      loadExtensions(this.config.extensions),
+    ]);
     if (this.destroyed) return;
 
-    const options = { namespace: this.id, editable: !this.config.readonly };
+    const { features } = this.config;
+    // The built-in features, then the app's extensions. An extension node
+    // cannot take the type of a built-in node (of any feature) or of a node
+    // module's node.
+    const builtIns = builtInExtensions(features, { linkSchemes: this.config.linkSchemes });
+    const reserved = new Set<string>([...CORE_TYPES, ...BUILT_IN_NODES.map((klass) => klass.getType())]);
+    const builtIn = composeExtensions(builtIns, new Set(CORE_TYPES));
+    const moduleTypes = appNodes.flatMap((klass) => {
+      try {
+        return [klass.getType()];
+      } catch {
+        return [];
+      }
+    });
+    const app = composeExtensions(appExtensions, new Set([...reserved, ...moduleTypes]));
+    let extensions: KotobaExtension[] = [...builtIn.extensions, ...app.extensions];
+
+    const options = { namespace: this.id, editable: !this.config.readonly, builtInNodes: builtIn.nodes };
     let editor: LexicalEditor;
     try {
-      editor = createKotobaEditor({ ...options, nodes: appNodes });
+      editor = createKotobaEditor({ ...options, nodes: [...appNodes, ...app.nodes] });
     } catch (error) {
       console.error("Kotoba: the app nodes could not be registered; the editor has the built-in nodes only", error);
       editor = createKotobaEditor({ ...options, nodes: [] });
+      extensions = builtIn.extensions;
     }
     this.editor = editor;
 
@@ -281,15 +322,28 @@ class Instance {
     surface.append(editable, placeholder);
     this.el.append(surface, this.live);
 
-    this.cleanups.push(registerPlugins(editor, { linkSchemes: this.config.linkSchemes }));
+    this.cleanups.push(
+      registerExtensions(editor, extensions, {
+        id: this.id,
+        element: this.el,
+        announce: this.announce,
+        push: (event, payload) => this.push(event, { ...payload, v: PROTOCOL_VERSION, id: this.id }),
+      }),
+    );
 
-    this.link = createLinkForm(editor, {
-      host: surface,
-      linkSchemes: this.config.linkSchemes,
-      idPrefix: this.id,
+    if (features.has("links")) {
+      this.link = createLinkForm(editor, {
+        host: surface,
+        linkSchemes: this.config.linkSchemes,
+        idPrefix: this.id,
+        announce: this.announce,
+      });
+    }
+    this.uploads = createUploads(editor, {
+      host: this.el,
+      target: features.has("attachments") ? this.config.upload : null,
       announce: this.announce,
     });
-    this.uploads = createUploads(editor, { host: this.el, target: this.config.upload, announce: this.announce });
 
     const existing =
       this.el.querySelector<HTMLElement>("[data-kotoba-toolbar]") ??
@@ -304,10 +358,12 @@ class Instance {
       onUpload: () => this.uploads?.open(),
       announce: this.announce,
       codeLanguages: this.config.codeLanguages,
+      features,
+      controls: extensionControls(app.extensions.filter((extension) => extensions.includes(extension))),
     });
     this.toolbar.setDisabled(this.config.readonly);
 
-    if (this.config.prompts.size > 0) {
+    if (this.config.prompts.size > 0 && features.has("mentions")) {
       this.prompts = createPrompts(editor, {
         host: surface,
         editable,

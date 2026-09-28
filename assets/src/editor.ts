@@ -1,8 +1,9 @@
-// The Lexical editor: its nodes, its theme and its plugins.
+// The Lexical editor: its nodes, its theme, its Markdown shortcuts and the
+// plugins that its features share (see features.ts).
 
 import { restoreHostPrism } from "./prism";
 
-import { $isCodeNode, CodeHighlightNode, CodeNode } from "@lexical/code-core";
+import { CodeHighlightNode, CodeNode } from "@lexical/code-core";
 import { PrismTokenizer, registerCodeHighlighting } from "@lexical/code-prism";
 // The grammars that @lexical/code-prism does not load (see code_languages.ts).
 // markup-templating comes before php, which needs it.
@@ -18,29 +19,9 @@ import "prismjs/components/prism-php";
 import "prismjs/components/prism-ruby";
 import "prismjs/components/prism-toml";
 import "prismjs/components/prism-yaml";
-import {
-  $createHorizontalRuleNode,
-  $isHorizontalRuleNode,
-  HorizontalRuleNode,
-  INSERT_HORIZONTAL_RULE_COMMAND,
-  namedSignals,
-  signal,
-} from "@lexical/extension";
-import { createEmptyHistoryState, registerHistory } from "@lexical/history";
-import {
-  AutoLinkNode,
-  LinkNode,
-  autoLinkEmailMatcher,
-  autoLinkUrlMatcher,
-  registerAutoLink,
-  registerLink,
-} from "@lexical/link";
-import {
-  ListItemNode,
-  ListNode,
-  registerCheckList,
-  registerList,
-} from "@lexical/list";
+import { $createHorizontalRuleNode, $isHorizontalRuleNode, HorizontalRuleNode, signal } from "@lexical/extension";
+import { AutoLinkNode, LinkNode } from "@lexical/link";
+import { ListItemNode, ListNode } from "@lexical/list";
 import {
   CHECK_LIST,
   CODE,
@@ -50,11 +31,10 @@ import {
   UNORDERED_LIST,
   TEXT_FORMAT_TRANSFORMERS,
   TEXT_MATCH_TRANSFORMERS,
-  registerMarkdownShortcuts,
   type ElementTransformer,
   type Transformer,
 } from "@lexical/markdown";
-import { HeadingNode, QuoteNode, registerRichText } from "@lexical/rich-text";
+import { HeadingNode, QuoteNode } from "@lexical/rich-text";
 import {
   TableCellNode,
   TableNode,
@@ -64,7 +44,7 @@ import {
   registerTableSelectionObserver,
   setScrollableTablesActive,
 } from "@lexical/table";
-import { $getNearestNodeOfType, $insertNodeToNearestRoot, $unwrapNode } from "@lexical/utils";
+import { $getNearestNodeOfType } from "@lexical/utils";
 import {
   $getSelection,
   $isRangeSelection,
@@ -82,10 +62,8 @@ import {
 
 import { registerCodeLanguageAliases } from "./code_languages";
 import { AttachmentNode } from "./nodes/attachment";
-import { registerDecorators } from "./nodes/decorator";
 import { UnknownNode, UploadMarkerNode } from "./nodes/internal";
 import { MentionNode } from "./nodes/mention";
-import { isAbsoluteLinkUrl, isAllowedLinkUrl } from "./links";
 import { UNKNOWN_TYPE, UPLOAD_MARKER_TYPE } from "./protocol";
 
 // Every import above has run, so the editor's Prism and its grammars are
@@ -99,6 +77,14 @@ restoreHostPrism();
  * server renders it.
  */
 const TOKENIZER = { ...PrismTokenizer, defaultLanguage: null };
+
+/**
+ * Highlights the code blocks. Only this module loads @lexical/code-prism:
+ * it must load after ./prism, which the first import of this module is.
+ */
+export function registerCodeBlocks(editor: LexicalEditor): () => void {
+  return registerCodeHighlighting(editor, TOKENIZER);
+}
 
 /** The node classes that every Kotoba editor has. */
 export const BUILT_IN_NODES: readonly Klass<LexicalNode>[] = [
@@ -121,7 +107,7 @@ export const BUILT_IN_NODES: readonly Klass<LexicalNode>[] = [
 ];
 
 /** The node types that Lexical registers on every editor. */
-const CORE_TYPES = ["root", "paragraph", "text", "linebreak", "tab"];
+export const CORE_TYPES = ["root", "paragraph", "text", "linebreak", "tab"];
 
 export const THEME: EditorThemeClasses = {
   paragraph: "kotoba-paragraph",
@@ -236,11 +222,18 @@ export const MARKDOWN_TRANSFORMERS: Transformer[] = [
 
 export interface EditorOptions {
   namespace: string;
+  /** The app's node classes (node modules and extensions). */
   nodes: readonly Klass<LexicalNode>[];
+  /** The built-in node classes of the editor's features. The default is every one. */
+  builtInNodes?: readonly Klass<LexicalNode>[];
   editable: boolean;
 }
 
-/** Creates an editor with the built-in nodes and the app's nodes. */
+/**
+ * Creates an editor with the built-in nodes of its features and the app's
+ * nodes. An app node cannot have the type of a built-in node, even of a
+ * feature that the editor does not have (the server reserves them all).
+ */
 export function createKotobaEditor(options: EditorOptions): LexicalEditor {
   const builtInTypes = new Set(BUILT_IN_NODES.map((klass) => klass.getType()));
   const appNodes = options.nodes.filter((klass) => {
@@ -264,7 +257,7 @@ export function createKotobaEditor(options: EditorOptions): LexicalEditor {
 
   const editor = createEditor({
     namespace: options.namespace,
-    nodes: [...BUILT_IN_NODES, ...appNodes],
+    nodes: [...(options.builtInNodes ?? BUILT_IN_NODES), ...appNodes],
     theme: THEME,
     editable: options.editable,
     onError: (error) => console.error("Kotoba:", error),
@@ -286,11 +279,6 @@ export function registeredTypes(editor: LexicalEditor): Set<string> {
   return types;
 }
 
-export interface PluginOptions {
-  /** The allowed link schemes, as `Kotoba.Sanitizer` has them. */
-  linkSchemes: readonly string[];
-}
-
 /** The deepest list nesting that Tab makes. */
 export const MAX_LIST_INDENT = 6;
 
@@ -301,7 +289,7 @@ export const MAX_LIST_INDENT = 6;
  * indented. Code blocks handle Tab themselves (it inserts a tab), at a
  * higher priority.
  */
-function registerListTab(editor: LexicalEditor): () => void {
+export function registerListTab(editor: LexicalEditor): () => void {
   return editor.registerCommand(
     KEY_TAB_COMMAND,
     (event: KeyboardEvent) => {
@@ -336,7 +324,7 @@ function registerListTab(editor: LexicalEditor): () => void {
  * the next and the previous cell, and from the last cell Tab moves after
  * the table; Escape then Tab leaves the editor, as in a list.
  */
-function registerTables(editor: LexicalEditor): () => void {
+export function registerTables(editor: LexicalEditor): () => void {
   return mergeRegister(
     registerTablePlugin(editor, { hasNestedTables: signal(false) }),
     registerTableSelectionObserver(editor, true),
@@ -344,47 +332,5 @@ function registerTables(editor: LexicalEditor): () => void {
     editor.registerNodeTransform(TableCellNode, (cell) => {
       if (cell.getBackgroundColor() !== null) cell.setBackgroundColor(null);
     }),
-  );
-}
-
-/** Registers the rich text plugins. Returns a function that removes them. */
-export function registerPlugins(editor: LexicalEditor, options: PluginOptions): () => void {
-  const { linkSchemes } = options;
-  // A link from a markdown shortcut, pasted HTML or the server that the
-  // server would not keep becomes its text.
-  const $unwrapUnsafeLink = (node: LinkNode): void => {
-    if (!isAllowedLinkUrl(node.getURL(), linkSchemes)) $unwrapNode(node);
-  };
-
-  return mergeRegister(
-    registerRichText(editor),
-    registerHistory(editor, createEmptyHistoryState(), 300),
-    registerList(editor),
-    registerCheckList(editor),
-    registerListTab(editor),
-    registerTables(editor),
-    registerLink(
-      editor,
-      namedSignals({ validateUrl: (url: string) => isAbsoluteLinkUrl(url, linkSchemes), attributes: undefined }),
-    ),
-    registerAutoLink(editor, {
-      changeHandlers: [],
-      excludeParents: [(parent) => $isCodeNode(parent)],
-      matchers: [autoLinkUrlMatcher, autoLinkEmailMatcher],
-    }),
-    editor.registerNodeTransform(LinkNode, $unwrapUnsafeLink),
-    editor.registerNodeTransform(AutoLinkNode, $unwrapUnsafeLink),
-    registerMarkdownShortcuts(editor, MARKDOWN_TRANSFORMERS),
-    registerCodeHighlighting(editor, TOKENIZER),
-    editor.registerCommand(
-      INSERT_HORIZONTAL_RULE_COMMAND,
-      () => {
-        if (!$isRangeSelection($getSelection())) return false;
-        $insertNodeToNearestRoot($createHorizontalRuleNode());
-        return true;
-      },
-      COMMAND_PRIORITY_EDITOR,
-    ),
-    registerDecorators(editor),
   );
 }

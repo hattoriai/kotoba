@@ -8,6 +8,9 @@ Kotoba (言葉, "words") is rich text for Phoenix. It gives your app:
   file attachments, mentions, and your own nodes;
 * `Kotoba.Content`, an Ecto type that stores the document with a cached
   HTML and text rendering;
+* the features of each editor (`features={~w(bold links lists)}`) and
+  extensions, the app's own nodes, commands, toolbar buttons and Markdown
+  shortcuts;
 * safe rendering to HTML, text and Markdown, with no raw HTML anywhere.
 
 The editor is a prebuilt JavaScript bundle in the Hex package. Your app
