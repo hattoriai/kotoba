@@ -1,7 +1,7 @@
 {
   "name": "kotoba-assets",
   "private": true,
-  "license": "Apache-2.0",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit"

@@ -184,7 +184,7 @@ and pushes `v<version>`.
 
 ## License
 
-Kotoba is released under the Apache License, Version 2.0. See `LICENSE`.
+Kotoba is released under the MIT License. See `LICENSE`.
 
 The built editor includes third-party code under the MIT licence:
 [Lexical](https://lexical.dev) (Meta Platforms, Inc. and affiliates),
