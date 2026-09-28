@@ -13,6 +13,8 @@
 //   * `data-placeholder` - the text to show when the editor is empty.
 //   * `data-nodes` - comma-separated URLs of app node modules.
 //   * `data-prompts` - JSON: trigger character → prompt name.
+//   * `data-prompt-labels` - JSON: prompt name → the accessible name of its
+//     menu, for the prompts that have a label.
 //   * `data-upload` - the id of the LiveView file input.
 //   * `data-change` - "true" to push `kotoba:change`; any other value (or
 //     none) pushes nothing. A LiveView patch can change it.
@@ -64,7 +66,7 @@ import { createKotobaEditor, registerPlugins, registeredTypes } from "./editor";
 import { createLinkForm, type LinkForm } from "./link";
 import { parseLinkSchemes } from "./links";
 import { loadNodes } from "./nodes/custom";
-import { createPrompts, parseTriggers, type Prompts } from "./prompts";
+import { createPrompts, parseLabels, parseTriggers, type Prompts } from "./prompts";
 import {
   PROTOCOL_VERSION,
   isObject,
@@ -99,6 +101,7 @@ export interface Config {
   placeholder: string;
   nodes: string[];
   prompts: Map<string, string>;
+  promptLabels: Map<string, string>;
   upload: HTMLInputElement | null;
   change: boolean;
   debounce: number;
@@ -119,6 +122,7 @@ export function readConfig(el: HTMLElement): Config {
       .map((url) => url.trim())
       .filter((url) => url !== ""),
     prompts: parseTriggers(data.prompts),
+    promptLabels: parseLabels(data.promptLabels),
     upload: inputById(data.upload),
     change: data.change === "true",
     debounce: Number.isFinite(debounce) && debounce >= 0 ? debounce : 300,
@@ -303,6 +307,7 @@ class Instance {
         editable,
         idPrefix: this.id,
         triggers: this.config.prompts,
+        labels: this.config.promptLabels,
         request: (prompt, query) => this.push("kotoba:prompt", { v: PROTOCOL_VERSION, id: this.id, prompt, query }),
         announce: this.announce,
       });

@@ -124,6 +124,7 @@ defmodule Kotoba.ComponentsTest do
       assert attr(html, editor, "data-debounce") == "0"
       assert attr(html, editor, "data-nodes") == "/assets/pointer.js,/assets/card.js"
       assert JSON.decode!(attr(html, editor, "data-prompts")) == %{"@" => "people", "#" => "work"}
+      assert attr(html, editor, "data-prompt-labels") == nil
       assert attr(html, editor, "aria-labelledby") == "body-label"
       assert attr(html, editor, "data-aria-describedby") == "body-help"
       assert attr(html, editor, "aria-describedby") == nil
@@ -144,6 +145,26 @@ defmodule Kotoba.ComponentsTest do
     test "renders explicit prompt triggers" do
       html = html(field: field(nil), prompts: [{"+", :tags, fn _ -> [] end}])
       assert JSON.decode!(attr(html, "[phx-hook]", "data-prompts")) == %{"+" => "tags"}
+    end
+
+    test "renders the labels of the prompts that have one" do
+      html =
+        html(
+          field: field(nil),
+          prompts: [
+            people: {fn _ -> [] end, label: "People in the workshop"},
+            work: fn _ -> [] end
+          ]
+        )
+
+      assert JSON.decode!(attr(html, "[phx-hook]", "data-prompts")) == %{
+               "@" => "people",
+               "#" => "work"
+             }
+
+      assert JSON.decode!(attr(html, "[phx-hook]", "data-prompt-labels")) == %{
+               "people" => "People in the workshop"
+             }
     end
 
     test "raises on a prompt list that is not valid" do

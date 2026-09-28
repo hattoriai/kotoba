@@ -7,6 +7,14 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- A prompt can have a label, the accessible name of its menu:
+  `prompts={[people: {fun, label: "People in the workshop"}]}`. Without
+  one, the menu is still named "<prompt> suggestions".
+  `Kotoba.Prompts.labels/1` gives the labels, and the component sends
+  them to the editor as `data-prompt-labels`.
+
 ### Fixed
 
 - `mix kotoba.install` finds the Kotoba package in the project's deps

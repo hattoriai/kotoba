@@ -514,6 +514,12 @@ defmodule KotobaDev.PanelComponent do
 
   @editor "b_editor"
 
+  # A label names the prompt's menu: "People in the workshop", not
+  # "people suggestions".
+  @prompts [people: {&KotobaDev.People.search/1, label: "People in the workshop"}]
+
+  defp prompts, do: @prompts
+
   @impl true
   def mount(socket),
     do: {:ok, assign(socket, form: to_form(%{"body" => nil}, as: :b), changes: 0)}
@@ -528,7 +534,7 @@ defmodule KotobaDev.PanelComponent do
           field={@form[:body]}
           id="b_editor"
           label_id="b-label"
-          prompts={[people: &KotobaDev.People.search/1]}
+          prompts={prompts()}
           change
           phx-target={@myself}
         />
@@ -553,7 +559,7 @@ defmodule KotobaDev.PanelComponent do
     do: {:noreply, update(socket, :changes, &(&1 + 1))}
 
   def handle_event("kotoba:prompt", params, socket),
-    do: {:noreply, Kotoba.Live.handle_prompt(socket, params, people: &KotobaDev.People.search/1)}
+    do: {:noreply, Kotoba.Live.handle_prompt(socket, params, @prompts)}
 
   def handle_event("load", _params, socket),
     do: {:noreply, Kotoba.Live.push_content(socket, @editor, KotobaDev.Sample.document("Second"))}

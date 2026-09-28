@@ -21,6 +21,21 @@ A trigger is one character that is not white space. The name of a prompt
 is the `kind` of the mentions that it inserts. For more than two prompts,
 give each trigger explicitly. See `Kotoba.Prompts`.
 
+## The menu's name
+
+Screen readers announce the menu by its name, "people suggestions" (the
+prompt name) unless the prompt has a label. To give it one, put the
+callback in a tuple with `label:`:
+
+```elixir
+[people: {&MyApp.People.search/1, label: "People in the workshop"}]
+
+[{"#", :work, {&MyApp.Work.search/1, label: "Work items"}}]
+```
+
+A label is a non-empty string of at most 200 characters, with no control
+characters.
+
 ## The LiveView
 
 ```elixir

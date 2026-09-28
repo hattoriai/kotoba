@@ -20,6 +20,16 @@ defmodule Kotoba.PromptsTest do
                Prompts.normalize([{"+", :tags, &none/1}, {"é", "work", &none/1}])
     end
 
+    test "takes a callback with a label" do
+      assert [{"@", "people", fun}, {"+", "tags", _}] =
+               Prompts.normalize([
+                 {"@", :people, {&none/1, label: "People"}},
+                 {"+", :tags, &none/1}
+               ])
+
+      assert is_function(fun, 1)
+    end
+
     test "is empty for nil and []" do
       assert Prompts.normalize(nil) == []
       assert Prompts.normalize([]) == []
@@ -34,12 +44,32 @@ defmodule Kotoba.PromptsTest do
             {[{"@", nil, &none/1}], ~r/name/},
             {[{"@", String.duplicate("n", 201), &none/1}], ~r/at most 200 characters/},
             {[{"@", :a, fn -> [] end}], ~r/arity 1 or 2/},
+            {[a: {fn -> [] end, label: "A"}], ~r/arity 1 or 2/},
+            {[a: {&none/1, label: ""}], ~r/non-empty string/},
+            {[a: {&none/1, label: "  "}], ~r/non-empty string/},
+            {[a: {&none/1, label: :people}], ~r/non-empty string/},
+            {[a: {&none/1, label: "A\nB"}], ~r/non-empty string/},
+            {[a: {&none/1, label: String.duplicate("l", 201)}], ~r/at most 200 characters/},
+            {[a: {&none/1, title: "A"}], ~r/only option/},
+            {[a: {&none/1, label: "A", label: "B"}], ~r/only option/},
+            {[a: {&none/1, []}], ~r/only option/},
             {[{"@", :a, &none/1}, {"@", :b, &none/1}], ~r/each trigger/},
             {[{"@", :a, &none/1}, {"#", "a", &none/1}], ~r/each name/},
             {:people, ~r/must be a list/}
           ] do
         assert_raise ArgumentError, message, fn -> Prompts.normalize(prompts) end
       end
+    end
+  end
+
+  describe "labels/1" do
+    test "maps the name of each prompt with a label to the label" do
+      assert Prompts.labels(people: {&none/1, label: "People in the workshop"}, work: &none/1) ==
+               %{"people" => "People in the workshop"}
+
+      assert Prompts.labels([{"+", "tags", {&none/1, label: "Tags"}}]) == %{"tags" => "Tags"}
+      assert Prompts.labels(people: &none/1) == %{}
+      assert Prompts.labels(nil) == %{}
     end
   end
 
