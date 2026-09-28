@@ -474,11 +474,14 @@ defmodule Kotoba.Prompts do
           {:ok, [item()]} | :error
   def search(prompt, query, socket \\ nil)
 
-  def search({_trigger, name, fun}, query, socket),
-    do: search(%{name: name, search: fun, max_length: @max_query}, query, socket)
+  def search({_trigger, name, fun}, query, socket) when is_binary(query),
+    do: do_search(name, fun, @max_query, query, socket)
 
   def search(%{name: name, search: fun, max_length: max_length}, query, socket)
-      when is_binary(query) do
+      when is_binary(query),
+      do: do_search(name, fun, max_length, query, socket)
+
+  defp do_search(name, fun, max_length, query, socket) do
     if String.length(query) > max_length do
       {:ok, []}
     else
