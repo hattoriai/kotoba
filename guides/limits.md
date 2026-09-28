@@ -2,6 +2,14 @@
 
 These are the known limits of Kotoba 0.1.
 
+## Browsers
+
+The browser tests run in Chromium, Firefox and WebKit (the engine of
+Safari), on Linux, with the Playwright versions of these browsers. They
+do not run in Safari on macOS or iOS, in a mobile browser, or with a
+screen reader. They paste with a paste event that carries the clipboard
+data, as the browser sends it, not through the system clipboard.
+
 ## Prompt queries
 
 A prompt query ends at white space unless the prompt has `spaces: true`;
