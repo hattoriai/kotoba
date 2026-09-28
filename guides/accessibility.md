@@ -128,6 +128,13 @@ When a trigger (for example `@`) opens the menu:
   `aria-activedescendant` with the active option.
 * Up and Down move the active option. Enter or Tab inserts it. Escape
   closes the menu.
+* Under the options, a status tells what the menu is waiting for:
+  "Keep typing to search" (a query shorter than the prompt's
+  `min_length`), "Searching…", "No results" or "Results did not load" (a
+  search that failed, or that had no answer after 8 seconds). The live
+  region says the number of results, "No results" or "Results did not
+  load", and then "Inserted Ada Lovelace" (or "Could not insert …" when
+  the node of an `insert: {:node, type}` prompt cannot be made).
 
 ## The link form
 

@@ -108,9 +108,11 @@ sees it.
   record.
 * **Scope the prompts.** A prompt callback runs with the query from the
   browser. Search only the things that the person can see, for example
-  with an arity-2 callback that reads the scope from the socket.
+  with an arity-2 callback that reads the scope from the socket. The
+  `items` of a local prompt are in the page, so give only the ones that
+  the person can see.
 * **Check mentions and app nodes.** The `id` of a mention and the
-  attributes of an app node come from the browser. Check them before you
+  attributes of an app node (a prompt's `attrs` too) come from the browser. Check them before you
   act on them (a notification, a link to a record).
 * **Read-only is not access control.** `readonly` changes the editor in
   the browser only. Check on the server that the person can save.

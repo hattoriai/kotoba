@@ -2,11 +2,12 @@
 
 These are the known limits of Kotoba 0.1.
 
-## Prompt queries have no spaces
+## Prompt queries
 
-A prompt query ends at white space, so a space closes the menu. A query
-can find "Ada", but not "Ada Lovelace". A query has at most 64
-characters. See the [Prompts](prompts.md) guide.
+A prompt query ends at white space unless the prompt has `spaces: true`;
+with it, a query ends at two spaces in a row. A query has at most 200
+characters (`max_length`, 64 by default), and a local prompt at most 500
+items. See the [Prompts](prompts.md) guide.
 
 ## The cache does not see a change of the registry or of the link schemes
 
@@ -60,7 +61,7 @@ less than one frame apart, which a person does not type:
 
 ## Bundle size
 
-The editor bundle is about 551 KB, 179 KB with gzip. It has Lexical, its
+The editor bundle is about 554 KB, 180 KB with gzip. It has Lexical, its
 plugins (tables, about 70 KB of it) and the Prism grammars of the 28 code
 languages of `Kotoba.CodeLanguages` (about 45 KB). The bundle is part of your `app.js`, so every page that
 loads `app.js` pays for its size.

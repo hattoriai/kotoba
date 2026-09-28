@@ -19,6 +19,8 @@
 //   * `data-prompts` - JSON: trigger character → prompt name.
 //   * `data-prompt-labels` - JSON: prompt name → the accessible name of its
 //     menu, for the prompts that have a label.
+//   * `data-prompt-config` - JSON: prompt name → its options (spaces,
+//     minLength, maxLength, insert, nodeType, items), see prompts.ts.
 //   * `data-code-languages` - comma-separated ids of the languages of the
 //     code language picker (every language when there is none).
 //   * `data-upload` - the id of the LiveView file input.
@@ -45,7 +47,7 @@
 //     upload entry `ref` (an upload that failed).
 //   * `set_readonly` `{readonly}`
 //   * `focus` `{}`
-//   * `kotoba:prompt_results` `{prompt, query?, items: [{id, label, hint?}]}`
+//   * `kotoba:prompt_results` `{prompt, query?, items: [{id, label, hint?, text?, attrs?}], error?}`
 //
 // A change of `data-readonly` in a LiveView patch also sets the read-only
 // state, and a change of `data-change` turns the pushes on or off.
@@ -82,7 +84,7 @@ import { createLinkForm, type LinkForm } from "./link";
 import { parseLinkSchemes } from "./links";
 import { loadNodes } from "./nodes/custom";
 import { type CodeLanguage, parseCodeLanguages } from "./code_languages";
-import { createPrompts, parseLabels, parseTriggers, type Prompts } from "./prompts";
+import { createPrompts, parseConfigs, parseLabels, parseTriggers, type PromptConfig, type Prompts } from "./prompts";
 import {
   PROTOCOL_VERSION,
   isObject,
@@ -120,6 +122,7 @@ export interface Config {
   extensions: string[];
   prompts: Map<string, string>;
   promptLabels: Map<string, string>;
+  promptConfigs: Map<string, PromptConfig>;
   codeLanguages: readonly CodeLanguage[];
   upload: HTMLInputElement | null;
   change: boolean;
@@ -141,6 +144,7 @@ export function readConfig(el: HTMLElement): Config {
     extensions: urls(data.extensions),
     prompts: parseTriggers(data.prompts),
     promptLabels: parseLabels(data.promptLabels),
+    promptConfigs: parseConfigs(data.promptConfig),
     codeLanguages: parseCodeLanguages(data.codeLanguages),
     upload: inputById(data.upload),
     change: data.change === "true",
@@ -246,7 +250,8 @@ class Instance {
     this.on("set_readonly", (payload) => this.setReadonly(payload.readonly === true));
     this.on("focus", () => this.editor?.focus());
     this.on("kotoba:prompt_results", (payload) => {
-      if (typeof payload.prompt === "string") this.prompts?.receive(payload.prompt, payload.items, payload.query);
+      if (typeof payload.prompt === "string")
+        this.prompts?.receive(payload.prompt, payload.items, payload.query, payload.error);
     });
 
     this.ready = this.mount().catch((error: unknown) => {
@@ -374,6 +379,7 @@ class Instance {
         idPrefix: this.id,
         triggers: this.config.prompts,
         labels: this.config.promptLabels,
+        configs: this.config.promptConfigs,
         request: (prompt, query) => this.push("kotoba:prompt", { v: PROTOCOL_VERSION, id: this.id, prompt, query }),
         announce: this.announce,
       });

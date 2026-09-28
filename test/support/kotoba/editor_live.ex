@@ -76,9 +76,17 @@ defmodule KotobaTest.EditorLive do
          |> Enum.filter(&String.contains?(String.downcase(&1.label), String.downcase(query)))
        end},
       {"#", :work, fn query, socket -> [{"w-#{socket.id}", "Work: #{query}"}] end},
-      {"!", :broken, fn _query -> raise "the search is down" end}
+      {"!", :broken, fn _query -> raise "the search is down" end},
+      {"+", :slow, [search: &slow_search/1, async: true, spaces: true]},
+      {"~", :slow_broken,
+       [search: fn _query -> raise "the slow search is down" end, async: true]},
+      {":", :emoji, [items: [%{id: "tada", label: "tada", text: "🎉"}], insert: :text]}
     ]
   end
+
+  # A search that reports its process: the test checks that it does not run
+  # in the LiveView's.
+  defp slow_search(query), do: [%{id: inspect(self()), label: "Slow: #{query}"}]
 
   @impl true
   def handle_event("validate", _params, socket) do
@@ -88,6 +96,11 @@ defmodule KotobaTest.EditorLive do
 
   def handle_event("kotoba:prompt", params, socket) do
     {:noreply, Kotoba.Live.handle_prompt(socket, params, prompts())}
+  end
+
+  @impl true
+  def handle_async({:kotoba_prompt, _id, _prompt, _query} = name, result, socket) do
+    {:noreply, Kotoba.Live.handle_prompt_async(socket, name, result)}
   end
 
   @impl true
@@ -101,6 +114,11 @@ defmodule KotobaTest.EditorLive do
     do: {:noreply, Kotoba.Live.set_readonly(socket, @editor, readonly)}
 
   def handle_info(:focus, socket), do: {:noreply, Kotoba.Live.focus(socket, @editor)}
+
+  # The result of an async search, as handle_async/3 gets it (an exit
+  # cannot come from a real search: Kotoba.Prompts.search/3 catches it).
+  def handle_info({:async_result, name, result}, socket),
+    do: {:noreply, Kotoba.Live.handle_prompt_async(socket, name, result)}
 
   def handle_info({:remove_marker, ref}, socket),
     do: {:noreply, Kotoba.Live.remove_marker(socket, @editor, ref)}

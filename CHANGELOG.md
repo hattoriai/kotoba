@@ -9,6 +9,18 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Richer prompts (#8). A prompt is a callback, or options: `spaces: true`
+  (queries with spaces, "Ada Lovelace", ended by two spaces),
+  `min_length`, `max_length` (up to 200), `items:` (a local list that the
+  editor filters, with no request), `insert: :text` or
+  `insert: {:node, type}` (text or a node of the app, from the item's
+  `:text` and `:attrs`), and `async: true` (the search runs in
+  `start_async`; `Kotoba.Live.handle_prompt_async/3` pushes its result).
+  The menu says "Keep typing to search", "Searching…" and "Results did
+  not load" (a search that failed, with `error: true` in the reply, or
+  that had no answer after 8 seconds), keeps the answers of its queries,
+  and drops an answer to an older query. `Kotoba.Prompts.search/3`,
+  `config/1`, `specs/1`, `find_spec/2` and `filter/2` are new.
 - A color palette (#4): the Highlight button opens a palette of text
   colors and highlights (red, orange, yellow, green, blue, purple, gray)
   and "Remove color", from the mouse and the keyboard. A color is stored

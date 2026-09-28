@@ -138,7 +138,8 @@ defmodule Kotoba.Components do
 
   attr :prompts, :list,
     default: [],
-    doc: "the prompt list, see `Kotoba.Prompts`; `{fun, label: label}` names a prompt's menu"
+    doc:
+      "the prompt list, see `Kotoba.Prompts`: a search callback, or options (`label`, `spaces`, `items`, `insert`...)"
 
   attr :code_languages, :list,
     default: nil,
@@ -178,6 +179,7 @@ defmodule Kotoba.Components do
         node_urls: node_urls(assigns.nodes),
         triggers: json_map(Prompts.triggers(assigns.prompts)),
         prompt_labels: json_map(Prompts.labels(assigns.prompts)),
+        prompt_config: json_map(Prompts.config(assigns.prompts)),
         code_languages: code_languages(assigns.code_languages),
         features: assigns.features && Enum.join(Features.names!(assigns.features), ","),
         extension_urls: extension_urls(assigns.extensions),
@@ -203,6 +205,7 @@ defmodule Kotoba.Components do
         data-nodes={@node_urls}
         data-prompts={@triggers}
         data-prompt-labels={@prompt_labels}
+        data-prompt-config={@prompt_config}
         data-code-languages={@code_languages}
         data-features={@features}
         data-extensions={@extension_urls}

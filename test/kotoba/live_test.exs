@@ -34,7 +34,25 @@ defmodule Kotoba.LiveTest do
     assert LazyHTML.attribute(editor, "aria-labelledby") == ["body-label"]
 
     assert [prompts] = LazyHTML.attribute(editor, "data-prompts")
-    assert JSON.decode!(prompts) == %{"@" => "people", "#" => "work", "!" => "broken"}
+
+    assert JSON.decode!(prompts) == %{
+             "@" => "people",
+             "#" => "work",
+             "!" => "broken",
+             "+" => "slow",
+             "~" => "slow_broken",
+             ":" => "emoji"
+           }
+
+    assert [config] = LazyHTML.attribute(editor, "data-prompt-config")
+
+    assert JSON.decode!(config) == %{
+             "slow" => %{"spaces" => true},
+             "emoji" => %{
+               "insert" => "text",
+               "items" => [%{"id" => "tada", "label" => "tada", "text" => "🎉"}]
+             }
+           }
 
     assert [upload] = LazyHTML.attribute(editor, "data-upload")
     assert LazyHTML.query(doc, "input[type=file]##{upload}") |> Enum.count() == 1
@@ -94,6 +112,76 @@ defmodule Kotoba.LiveTest do
       })
 
       assert_push_event(view, "kotoba:prompt_results", %{prompt: "people", items: [_ada]})
+    end
+
+    test "a failed search has error: true", %{view: view} do
+      capture_log(fn ->
+        render_hook(view, "kotoba:prompt", %{
+          "id" => @editor,
+          "prompt" => "broken",
+          "query" => "a"
+        })
+
+        assert_push_event(view, "kotoba:prompt_results", %{prompt: "broken", error: true})
+      end)
+    end
+
+    test "runs an async search in a task, and pushes its items from handle_async", %{view: view} do
+      render_hook(view, "kotoba:prompt", %{
+        "id" => @editor,
+        "prompt" => "slow",
+        "query" => "ada love"
+      })
+
+      assert_push_event(view, "kotoba:prompt_results", %{
+        id: @editor,
+        prompt: "slow",
+        query: "ada love",
+        items: [%{id: pid, label: "Slow: ada love"}]
+      })
+
+      refute pid == inspect(view.pid)
+    end
+
+    test "an async search that fails pushes error: true", %{view: view} do
+      log =
+        capture_log(fn ->
+          render_hook(view, "kotoba:prompt", %{
+            "id" => @editor,
+            "prompt" => "slow_broken",
+            "query" => "a"
+          })
+
+          assert_push_event(view, "kotoba:prompt_results", %{
+            prompt: "slow_broken",
+            query: "a",
+            items: [],
+            error: true
+          })
+        end)
+
+      assert log =~ ~s(the Kotoba prompt "slow_broken" failed)
+      assert Process.alive?(view.pid)
+    end
+
+    test "an async search that exits pushes error: true, with its query", %{view: view} do
+      log =
+        capture_log(fn ->
+          send(
+            view.pid,
+            {:async_result, {:kotoba_prompt, @editor, "slow", "q"}, {:exit, :killed}}
+          )
+
+          assert_push_event(view, "kotoba:prompt_results", %{
+            id: @editor,
+            prompt: "slow",
+            query: "q",
+            items: [],
+            error: true
+          })
+        end)
+
+      assert log =~ ~s(the Kotoba prompt "slow" exited: :killed)
     end
 
     test "gives no items for an unknown prompt", %{view: view} do
