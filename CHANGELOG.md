@@ -9,6 +9,27 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Features: `<.kotoba features={~w(bold italic links lists)}>` gives an
+  editor only those built-in features (`Kotoba.Features`: bold, italic,
+  strikethrough, inline_code, links, headings, quotes, lists, check_lists,
+  code_blocks, horizontal_rules, tables, attachments, mentions). A feature
+  that is off has no node, toolbar button, Markdown shortcut or keyboard
+  shortcut; pasted content of it comes in as paragraphs and text, and a
+  stored node of it is kept as an unknown node. With no list, an editor
+  has every feature, as before.
+- `Kotoba.Content.validate_features/3` refuses, in a changeset, a document
+  with a feature that the field does not have; `Kotoba.Features.used/1`
+  and `check/2` read the features of a document.
+- Extensions: `<.kotoba extensions={[url]}>` loads JavaScript modules that
+  add nodes, `register` (commands, transforms, listeners, with a cleanup),
+  Markdown shortcuts and toolbar controls (`<extension>:<command>`, with
+  `aria-pressed`, visibility and the live region) to an editor. The
+  built-in features are extensions of the same form. A module that fails
+  to load or register is logged, and the editor mounts with the rest. See
+  the Extensions guide, and the example callout extension of the
+  development server.
+- `kotoba_toolbar` takes an extension's command in a `button` slot.
+
 - A code language picker: in a code block, the toolbar has a "Code
   language" `<select>` with plain text and 28 languages (Bash, C, C++,
   CSS, Diff, Dockerfile, Elixir, Erlang, Go, GraphQL, HTML, Java,
@@ -51,6 +72,9 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The editor bundle is about 24 KB larger (8 KB with gzip), for features
+  and extensions: `@lexical/utils` and `@lexical/selection` are whole in
+  it, for the extensions.
 - A code block with no language is plain text in the editor, as in the
   HTML. Lexical highlighted it as JavaScript.
 - The editor bundle is about 25 KB larger (7 KB with gzip), for the new

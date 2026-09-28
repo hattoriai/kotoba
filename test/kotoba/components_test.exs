@@ -182,6 +182,45 @@ defmodule Kotoba.ComponentsTest do
       end
     end
 
+    test "renders the features and the extension URLs" do
+      html = html(field: field(nil))
+      assert attr(html, "[phx-hook]", "data-features") == nil
+      assert attr(html, "[phx-hook]", "data-extensions") == nil
+
+      html =
+        html(
+          field: field(nil),
+          features: ["tables", :bold, :lists, :check_lists],
+          extensions: ["/assets/kotoba/callout.js", "/assets/kotoba/poll.js"]
+        )
+
+      assert attr(html, "[phx-hook]", "data-features") == "bold,lists,check_lists,tables"
+
+      assert attr(html, "[phx-hook]", "data-extensions") ==
+               "/assets/kotoba/callout.js,/assets/kotoba/poll.js"
+
+      # An empty list is an editor with no feature: paragraphs and text.
+      assert attr(html(field: field(nil), features: []), "[phx-hook]", "data-features") == ""
+    end
+
+    test "raises on features or extensions that are not valid" do
+      assert_raise ArgumentError, ~r/unknown Kotoba feature "nope"/, fn ->
+        html(field: field(nil), features: ["nope"])
+      end
+
+      assert_raise ArgumentError, ~r/needs :lists/, fn ->
+        html(field: field(nil), features: [:check_lists])
+      end
+
+      assert_raise ArgumentError, ~r/must be a module URL/, fn ->
+        html(field: field(nil), extensions: [MyApp.Callout])
+      end
+
+      assert_raise ArgumentError, ~r/cannot have a comma/, fn ->
+        html(field: field(nil), extensions: ["/a,b.js"])
+      end
+    end
+
     test "raises on a prompt list that is not valid" do
       assert_raise ArgumentError, ~r/one character/, fn ->
         html(field: field(nil), prompts: [{"@@", :people, fn _ -> [] end}])
@@ -260,6 +299,25 @@ defmodule Kotoba.ComponentsTest do
 
       for [_, command, label] <- editor do
         assert attr(html, "[data-kotoba-command=#{command}]", "title") == label
+      end
+    end
+
+    test "takes the command of an extension's control, with its label" do
+      assigns = %{}
+
+      html =
+        rendered_to_string(~H"""
+        <Components.kotoba_toolbar>
+          <:button command="callout:insert" label="Callout"><svg class="icon-callout" /></:button>
+        </Components.kotoba_toolbar>
+        """)
+
+      assert attr(html, "button[data-kotoba-command='callout:insert']", "aria-label") == "Callout"
+
+      for command <- ["callout", "Callout:insert", "callout:", "a_b:insert"] do
+        assert_raise ArgumentError, ~r/unknown Kotoba toolbar command/, fn ->
+          toolbar(%{commands: [command]})
+        end
       end
     end
 

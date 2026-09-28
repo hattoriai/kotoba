@@ -7,6 +7,9 @@ status chip or a link to a record. A node has two halves:
   checks it, and renders it as HTML, text and Markdown.
 * a JavaScript module with the Lexical node class, for the editor.
 
+To give a node commands, a toolbar button or a Markdown shortcut, make its
+JavaScript half an extension: see the [Extensions](extensions.md) guide.
+
 ## Generate a node
 
 ```sh

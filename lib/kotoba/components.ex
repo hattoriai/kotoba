@@ -17,7 +17,7 @@ defmodule Kotoba.Components do
 
   use Phoenix.Component
 
-  alias Kotoba.{CodeLanguages, Content, Document, Prompts, Renderer, Sanitizer}
+  alias Kotoba.{CodeLanguages, Content, Document, Features, Prompts, Renderer, Sanitizer}
   alias Phoenix.HTML.FormField
 
   @commands [
@@ -123,6 +123,15 @@ defmodule Kotoba.Components do
     default: [],
     doc: "app nodes: `{module, js_url}` tuples, or JavaScript module URLs"
 
+  attr :features, :list,
+    default: nil,
+    doc: "the built-in features of the editor, see `Kotoba.Features`; every feature by default"
+
+  attr :extensions, :list,
+    default: [],
+    doc:
+      "the URLs of the app's extension modules, see the Extensions guide; in the editor, after the features"
+
   attr :prompts, :list,
     default: [],
     doc: "the prompt list, see `Kotoba.Prompts`; `{fun, label: label}` names a prompt's menu"
@@ -166,6 +175,8 @@ defmodule Kotoba.Components do
         triggers: json_map(Prompts.triggers(assigns.prompts)),
         prompt_labels: json_map(Prompts.labels(assigns.prompts)),
         code_languages: code_languages(assigns.code_languages),
+        features: assigns.features && Enum.join(Features.names!(assigns.features), ","),
+        extension_urls: extension_urls(assigns.extensions),
         link_schemes: Enum.join(Sanitizer.allowed_schemes(), ","),
         aria_label: aria_label(assigns, field),
         upload_id: assigns.uploads && assigns.uploads.ref,
@@ -189,6 +200,8 @@ defmodule Kotoba.Components do
         data-prompts={@triggers}
         data-prompt-labels={@prompt_labels}
         data-code-languages={@code_languages}
+        data-features={@features}
+        data-extensions={@extension_urls}
         data-upload={@upload_id}
         data-debounce={@debounce}
         data-link-schemes={@link_schemes}
@@ -247,6 +260,20 @@ defmodule Kotoba.Components do
     end)
   end
 
+  defp extension_urls([]), do: nil
+
+  defp extension_urls(urls) do
+    Enum.map_join(urls, ",", fn
+      url when is_binary(url) and url != "" ->
+        if String.contains?(url, ","),
+          do: raise(ArgumentError, "a Kotoba extension URL cannot have a comma: #{inspect(url)}"),
+          else: url
+
+      other ->
+        raise ArgumentError, "a Kotoba extension must be a module URL, got: #{inspect(other)}"
+    end)
+  end
+
   defp code_languages(nil), do: nil
 
   defp code_languages([]),
@@ -276,8 +303,10 @@ defmodule Kotoba.Components do
 
   The editor adds `role="toolbar"`, the roving tabindex, `aria-pressed`
   and `aria-disabled`. The commands are the ones of `toolbar_commands/0`;
-  another command raises `ArgumentError`. The editor hides the buttons of
-  the `table-*` commands (the ones that act on the table at the selection)
+  or the command of an extension's control, `"<extension>:<command>"` (give
+  it a `label`); another command raises `ArgumentError`. The editor hides
+  the buttons of the features that it does not have (see
+  `Kotoba.Features`), and the buttons of the `table-*` commands (the ones that act on the table at the selection)
   when the selection is not in a table. `code-language` renders a
   `<select>`, the code language picker: the editor fills its options, and
   hides it when the selection is not in a code block.
@@ -348,14 +377,24 @@ defmodule Kotoba.Components do
 
   defp command!(command) when command in @command_names, do: command
 
+  # An extension's control: `<extension>:<command>`.
+  defp command!(command) when is_binary(command) do
+    if Regex.match?(~r/\A[a-z][a-z0-9-]*:[a-z][a-z0-9-]*\z/, command),
+      do: command,
+      else: command!(nil)
+  end
+
   defp command!(command) do
     raise ArgumentError,
-          "unknown Kotoba toolbar command #{inspect(command)}, use one of #{inspect(@command_names)}"
+          "unknown Kotoba toolbar command #{inspect(command)}, use one of #{inspect(@command_names)} " <>
+            "or an extension's \"<extension>:<command>\""
   end
 
   for {command, label, _group} <- @commands do
     defp label(unquote(command)), do: unquote(label)
   end
+
+  defp label(command), do: command
 
   @doc """
   Renders a `Kotoba.Content` as safe HTML.

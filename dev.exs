@@ -20,6 +20,7 @@
 #     reload, for the browser tests; the bundle must be built first.
 
 Code.require_file("dev/lib/kotoba_dev/nodes/tag.ex", __DIR__)
+Code.require_file("dev/lib/kotoba_dev/nodes/callout.ex", __DIR__)
 
 port = "PORT" |> System.get_env("4099") |> String.to_integer()
 watch? = System.get_env("KOTOBA_DEV_WATCH") != "false"
@@ -27,7 +28,7 @@ uploads = Path.expand("tmp/uploads", __DIR__)
 
 Application.put_env(:phoenix, :json_library, JSON)
 Logger.configure(level: :info)
-Application.put_env(:kotoba, :nodes, [KotobaDev.Nodes.Tag])
+Application.put_env(:kotoba, :nodes, [KotobaDev.Nodes.Tag, KotobaDev.Nodes.Callout])
 Application.put_env(:kotoba, :allowed_link_schemes, ~w(http https mailto tel))
 Application.put_env(:kotoba, :storage, Kotoba.Storage.Local)
 Application.put_env(:kotoba, Kotoba.Storage.Local, root: uploads, url_prefix: "/uploads/kotoba")
@@ -670,6 +671,95 @@ defmodule KotobaDev.NodesLive do
   end
 end
 
+defmodule KotobaDev.ExtensionsLive do
+  @moduledoc """
+  Features and extensions. The comment editor has four features and the
+  example extension (a callout); its changeset refuses a document with
+  another feature. The notes editor has every feature and no extension.
+  `?case=broken` adds an extension whose register throws and one that does
+  not load: the editor still mounts, with the callout.
+  """
+  use Phoenix.LiveView
+
+  import Kotoba.Components
+
+  @features ~w(bold italic links lists)
+  @callout "/assets/nodes/callout.js"
+  @broken ["/assets/nodes/broken_extension.js", "/assets/nodes/missing_extension.js"]
+
+  @impl true
+  def mount(params, _session, socket) do
+    extensions = if params["case"] == "broken", do: @broken ++ [@callout], else: [@callout]
+
+    {:ok,
+     assign(socket,
+       form: to_form(%{"body" => nil}, as: :comment),
+       notes: to_form(%{"body" => nil}, as: :notes),
+       extensions: extensions,
+       shown: true,
+       error: nil,
+       saved: nil
+     )}
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <h1>Features and extensions</h1>
+    <.form :if={@shown} for={@form} id="comment-form" phx-change="validate" phx-submit="save">
+      <label id="comment-label" class="label">Comment</label>
+      <.kotoba
+        field={@form[:body]}
+        id="comment_editor"
+        label_id="comment-label"
+        features={features()}
+        extensions={@extensions}
+      />
+      <p :if={@error} id="comment-error">{@error}</p>
+      <p :if={@saved} id="comment-saved">{@saved}</p>
+      <button type="submit" id="comment-submit">Save</button>
+    </.form>
+    <div class="row">
+      <button type="button" id="toggle-comment" phx-click="toggle">Toggle the comment editor</button>
+      <button type="button" id="load-comment" phx-click="load">Load the sample</button>
+    </div>
+    <.form for={@notes} id="notes-form">
+      <label id="notes-label" class="label">Notes</label>
+      <.kotoba field={@notes[:body]} id="notes_editor" label_id="notes-label" />
+    </.form>
+    """
+  end
+
+  defp features, do: @features
+
+  @impl true
+  def handle_event("validate", _params, socket), do: {:noreply, socket}
+
+  def handle_event("save", %{"comment" => %{"body" => body}}, socket) do
+    changeset =
+      {%{}, %{body: Kotoba.Content}}
+      |> Ecto.Changeset.cast(%{"body" => body}, [:body])
+      |> Kotoba.Content.validate_features(:body, @features)
+
+    case Ecto.Changeset.apply_action(changeset, :insert) do
+      {:ok, %{body: content}} ->
+        {:noreply, assign(socket, error: nil, saved: content && content.text)}
+
+      {:error, changeset} ->
+        [{:body, {message, keys}} | _] = changeset.errors
+
+        {:noreply,
+         assign(socket, saved: nil, error: String.replace(message, "%{names}", keys[:names]))}
+    end
+  end
+
+  def handle_event("toggle", _params, socket), do: {:noreply, update(socket, :shown, &(not &1))}
+
+  def handle_event("load", _params, socket),
+    do:
+      {:noreply, Kotoba.Live.push_content(socket, "comment_editor", KotobaDev.Sample.document())}
+end
+
 defmodule KotobaDev.Router do
   use Phoenix.Router
 
@@ -688,6 +778,7 @@ defmodule KotobaDev.Router do
     live("/", KotobaDev.EditorLive)
     live("/two", KotobaDev.TwoEditorsLive)
     live("/nodes", KotobaDev.NodesLive)
+    live("/extensions", KotobaDev.ExtensionsLive)
   end
 end
 

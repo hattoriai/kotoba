@@ -72,7 +72,7 @@ defmodule Kotoba.Content do
   use Ecto.Type
 
   alias Kotoba.Content.MarkdownImport
-  alias Kotoba.{Document, Renderer}
+  alias Kotoba.{Document, Features, Renderer}
 
   @version 1
   @kotoba_version 1
@@ -297,6 +297,41 @@ defmodule Kotoba.Content do
       {:ok, doc} -> build(doc, render_opts)
       {:error, _messages} -> empty()
     end
+  end
+
+  @doc """
+  Validates that the `Kotoba.Content` of a changeset field uses only the
+  given features (see `Kotoba.Features`), the ones of the field's editor.
+  The editor keeps out what it does not have, but a request can post any
+  document; this refuses one with a table in a comment field, say.
+
+      changeset
+      |> cast(params, [:body])
+      |> Kotoba.Content.validate_features(:body, ~w(bold italic links lists)a)
+
+  The error is `"has content that is not allowed: %{names}"`, with
+  `names: "tables"` (the features, joined with ", ") and
+  `validation: :features` in its keys. A field with no content, or with a
+  document that no longer parses, passes. The features are checked with
+  `Kotoba.Features.names!/1`, which raises for an unknown name.
+  """
+  @spec validate_features(Ecto.Changeset.t(), atom(), [atom() | String.t()]) :: Ecto.Changeset.t()
+  def validate_features(%Ecto.Changeset{} = changeset, field, features) when is_atom(field) do
+    allowed = Features.names!(features)
+
+    Ecto.Changeset.validate_change(changeset, field, fn ^field, content ->
+      with {:ok, envelope} <- to_doc(content),
+           {:ok, doc} <- Document.parse(envelope),
+           {:error, extra} <- Features.check(doc, allowed) do
+        [
+          {field,
+           {"has content that is not allowed: %{names}",
+            names: Enum.join(extra, ", "), validation: :features}}
+        ]
+      else
+        _ok -> []
+      end
+    end)
   end
 
   defp parse(envelope) do

@@ -377,6 +377,39 @@ defmodule Kotoba.ContentTest do
     end
   end
 
+  describe "validate_features/3" do
+    test "refuses content with a feature that the field does not have" do
+      body = root([table([table_row([table_cell([paragraph([text("x", 1)])])])])])
+
+      changeset =
+        %Post{}
+        |> Post.changeset(%{"body" => body})
+        |> Content.validate_features(:body, [:bold])
+
+      refute changeset.valid?
+      assert errors_on(changeset)[:body] == ["has content that is not allowed: tables"]
+      assert [body: {_message, [names: "tables", validation: :features]}] = changeset.errors
+
+      changeset =
+        %Post{}
+        |> Post.changeset(%{"body" => body})
+        |> Content.validate_features(:body, ~w(bold tables))
+
+      assert changeset.valid?
+    end
+
+    test "passes with no change of the field, and raises for an unknown feature" do
+      assert %Post{}
+             |> Post.changeset(%{})
+             |> Content.validate_features(:body, [])
+             |> Map.get(:valid?)
+
+      assert_raise ArgumentError, ~r/unknown Kotoba feature/, fn ->
+        %Post{} |> Post.changeset(%{}) |> Content.validate_features(:body, [:nope])
+      end
+    end
+  end
+
   defp errors_on(changeset) do
     Changeset.traverse_errors(changeset, fn {message, opts} ->
       Enum.reduce(opts, message, fn {key, value}, acc ->

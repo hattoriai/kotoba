@@ -8,6 +8,12 @@
 // `data-kotoba-command` attribute. The commands are the `command` values of
 // `TOOLBAR_ITEMS`.
 //
+// A command of a feature that the editor does not have (see features.ts) is
+// not in the default toolbar, and its button in an app's toolbar is hidden.
+// An extension's toolbar controls (see extensions.ts) are buttons with the
+// command `<extension>:<command>`: the default toolbar puts them before the
+// History group, and an app's toolbar can place them by that command.
+//
 // Alt+F10 in the editor moves the focus to the toolbar's tab stop. It is the
 // way to the toolbar from a table cell, where Tab and Shift+Tab move between
 // the cells.
@@ -77,6 +83,8 @@ import {
 } from "lexical";
 
 import { CODE_LANGUAGES, type CodeLanguage, PLAIN_TEXT, findCodeLanguage } from "./code_languages";
+import type { ResolvedControl } from "./extensions";
+import { FEATURES, type Feature } from "./features";
 import { TOOLBAR_ICONS, renderIcon } from "./icons";
 import { $domSelection, $selectedLinkUrl } from "./link";
 
@@ -151,38 +159,40 @@ interface ToolbarItem {
   shortcut?: string;
   /** What the live region says when the command has run (the toggles say "on" or "off"). */
   done?: string;
+  /** The feature of the command; none for undo and redo. */
+  feature?: Feature;
 }
 
 const MOD = typeof navigator !== "undefined" && /Mac|iP(hone|ad)/.test(navigator.platform) ? "⌘" : "Ctrl+";
 
 export const TOOLBAR_ITEMS: readonly ToolbarItem[] = [
-  { command: "bold", label: "Bold", group: "Text", shortcut: `${MOD}B` },
-  { command: "italic", label: "Italic", group: "Text", shortcut: `${MOD}I` },
-  { command: "strikethrough", label: "Strikethrough", group: "Text" },
-  { command: "code", label: "Inline code", group: "Text" },
-  { command: "link", label: "Link", group: "Text", shortcut: `${MOD}K` },
-  { command: "h1", label: "Heading 1", group: "Blocks" },
-  { command: "h2", label: "Heading 2", group: "Blocks" },
-  { command: "h3", label: "Heading 3", group: "Blocks" },
-  { command: "h4", label: "Heading 4", group: "Blocks" },
-  { command: "quote", label: "Quote", group: "Blocks" },
-  { command: "bullet", label: "Bulleted list", group: "Lists" },
-  { command: "number", label: "Numbered list", group: "Lists" },
-  { command: "check", label: "Check list", group: "Lists" },
-  { command: "code-block", label: "Code block", group: "Insert" },
-  { command: "rule", label: "Horizontal rule", group: "Insert" },
-  { command: "table", label: "Table", group: "Insert", done: "Table inserted" },
-  { command: "upload", label: "Attach a file", group: "Insert" },
-  { command: "code-language", label: "Code language", group: "Code" },
-  { command: "table-row-before", label: "Insert row above", group: "Table", done: "Row inserted" },
-  { command: "table-row-after", label: "Insert row below", group: "Table", done: "Row inserted" },
-  { command: "table-column-before", label: "Insert column before", group: "Table", done: "Column inserted" },
-  { command: "table-column-after", label: "Insert column after", group: "Table", done: "Column inserted" },
-  { command: "table-header-row", label: "Header row", group: "Table" },
-  { command: "table-header-column", label: "Header column", group: "Table" },
-  { command: "table-delete-row", label: "Delete row", group: "Table", done: "Row deleted" },
-  { command: "table-delete-column", label: "Delete column", group: "Table", done: "Column deleted" },
-  { command: "table-delete", label: "Delete table", group: "Table", done: "Table deleted" },
+  { command: "bold", label: "Bold", group: "Text", shortcut: `${MOD}B`, feature: "bold" },
+  { command: "italic", label: "Italic", group: "Text", shortcut: `${MOD}I`, feature: "italic" },
+  { command: "strikethrough", label: "Strikethrough", group: "Text", feature: "strikethrough" },
+  { command: "code", label: "Inline code", group: "Text", feature: "inline_code" },
+  { command: "link", label: "Link", group: "Text", shortcut: `${MOD}K`, feature: "links" },
+  { command: "h1", label: "Heading 1", group: "Blocks", feature: "headings" },
+  { command: "h2", label: "Heading 2", group: "Blocks", feature: "headings" },
+  { command: "h3", label: "Heading 3", group: "Blocks", feature: "headings" },
+  { command: "h4", label: "Heading 4", group: "Blocks", feature: "headings" },
+  { command: "quote", label: "Quote", group: "Blocks", feature: "quotes" },
+  { command: "bullet", label: "Bulleted list", group: "Lists", feature: "lists" },
+  { command: "number", label: "Numbered list", group: "Lists", feature: "lists" },
+  { command: "check", label: "Check list", group: "Lists", feature: "check_lists" },
+  { command: "code-block", label: "Code block", group: "Insert", feature: "code_blocks" },
+  { command: "rule", label: "Horizontal rule", group: "Insert", feature: "horizontal_rules" },
+  { command: "table", label: "Table", group: "Insert", done: "Table inserted", feature: "tables" },
+  { command: "upload", label: "Attach a file", group: "Insert", feature: "attachments" },
+  { command: "code-language", label: "Code language", group: "Code", feature: "code_blocks" },
+  { command: "table-row-before", label: "Insert row above", group: "Table", done: "Row inserted", feature: "tables" },
+  { command: "table-row-after", label: "Insert row below", group: "Table", done: "Row inserted", feature: "tables" },
+  { command: "table-column-before", label: "Insert column before", group: "Table", done: "Column inserted", feature: "tables" },
+  { command: "table-column-after", label: "Insert column after", group: "Table", done: "Column inserted", feature: "tables" },
+  { command: "table-header-row", label: "Header row", group: "Table", feature: "tables" },
+  { command: "table-header-column", label: "Header column", group: "Table", feature: "tables" },
+  { command: "table-delete-row", label: "Delete row", group: "Table", done: "Row deleted", feature: "tables" },
+  { command: "table-delete-column", label: "Delete column", group: "Table", done: "Column deleted", feature: "tables" },
+  { command: "table-delete", label: "Delete table", group: "Table", done: "Table deleted", feature: "tables" },
   { command: "undo", label: "Undo", group: "History", shortcut: `${MOD}Z` },
   { command: "redo", label: "Redo", group: "History" },
 ];
@@ -451,6 +461,17 @@ interface ToolbarOptions {
   announce(message: string): void;
   /** The languages of the code language picker. The default is every language. */
   codeLanguages?: readonly CodeLanguage[];
+  /** The editor's features. The default is every feature. */
+  features?: ReadonlySet<Feature>;
+  /** The toolbar controls of the app's extensions. */
+  controls?: readonly ResolvedControl[];
+}
+
+/** The state of an extension's control, read from the editor state. */
+interface ControlState {
+  active: boolean | undefined;
+  visible: boolean;
+  enabled: boolean;
 }
 
 /** A control of the toolbar: a button, or the `<select>` of `code-language`. */
@@ -460,7 +481,9 @@ type Control = HTMLButtonElement | HTMLSelectElement;
 const UNKNOWN_LANGUAGE = "kotoba-unknown-language";
 
 export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): Toolbar {
-  const toolbar = options.existing ?? buildToolbar(options.uploads);
+  const features: ReadonlySet<Feature> = options.features ?? new Set(FEATURES);
+  const controls = new Map((options.controls ?? []).map((control) => [control.id, control]));
+  const toolbar = options.existing ?? buildToolbar(options.uploads, features, [...controls.values()]);
   if (options.existing === null) options.host.prepend(toolbar);
 
   toolbar.setAttribute("role", "toolbar");
@@ -476,8 +499,34 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
     ).filter((control) =>
       control instanceof HTMLSelectElement
         ? SELECT_COMMANDS.has(control.dataset.kotobaCommand ?? "")
-        : isCommand(control.dataset.kotobaCommand),
+        : isCommand(control.dataset.kotobaCommand) || controls.has(control.dataset.kotobaCommand ?? ""),
     );
+
+  // A command of a feature that is off.
+  const off = (command: string): boolean => {
+    const feature = TOOLBAR_ITEMS.find((item) => item.command === command)?.feature;
+    return feature !== undefined && !features.has(feature);
+  };
+
+  // The state of the extensions' controls: `$` functions, read in the
+  // editor state. One that throws counts as hidden, with a log.
+  const $readControls = (): Map<string, ControlState> => {
+    const states = new Map<string, ControlState>();
+    for (const control of controls.values()) {
+      try {
+        states.set(control.id, {
+          active: control.isActive?.(),
+          visible: control.isVisible?.() ?? true,
+          enabled: control.isEnabled?.() ?? true,
+        });
+      } catch (error) {
+        console.error(`Kotoba: the toolbar control "${control.id}" could not read its state`, error);
+        states.set(control.id, { active: undefined, visible: false, enabled: false });
+      }
+    }
+    return states;
+  };
+  let controlStates = new Map<string, ControlState>();
   const buttons = (): Control[] => commandButtons().filter((control) => !control.hidden);
 
   // The options of the picker: plain text, the editor's languages, the
@@ -521,6 +570,20 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
 
     for (const button of commandButtons()) {
       const command = button.dataset.kotobaCommand as ToolbarCommand;
+
+      const control = controls.get(command);
+      if (control !== undefined) {
+        const controlState = controlStates.get(command) ?? { active: undefined, visible: true, enabled: true };
+        button.hidden = !controlState.visible;
+        if (controlState.active !== undefined) button.setAttribute("aria-pressed", String(controlState.active));
+        button.setAttribute("aria-disabled", String(disabled || !controlState.enabled));
+        continue;
+      }
+
+      if (off(command)) {
+        button.hidden = true;
+        continue;
+      }
       if (TABLE_COMMANDS.has(command)) button.hidden = !inTable;
 
       if (button instanceof HTMLSelectElement) {
@@ -574,8 +637,25 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
     rove(button, false);
     if (button.getAttribute("aria-disabled") === "true") return;
 
+    const control = controls.get(button.dataset.kotobaCommand ?? "");
+    if (control !== undefined) {
+      const pressed = button.getAttribute("aria-pressed");
+      editor.update(() => {
+        const selection = $domSelection(editor);
+        if (selection !== null) $setSelection(selection);
+        try {
+          control.run(editor);
+        } catch (error) {
+          console.error(`Kotoba: the toolbar control "${control.id}" failed`, error);
+        }
+      });
+      if (control.done !== undefined) options.announce(control.done);
+      else if (pressed !== null) options.announce(`${control.label} ${pressed === "true" ? "off" : "on"}`);
+      return;
+    }
+
     const command = button.dataset.kotobaCommand;
-    if (!isCommand(command)) return;
+    if (!isCommand(command) || off(command)) return;
 
     if (command === "link") {
       options.onLink();
@@ -657,6 +737,7 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
   const unregister = mergeRegister(
     editor.registerUpdateListener(({ editorState }) => {
       state = editorState.read($readSelectionState);
+      if (controls.size > 0) controlStates = editorState.read($readControls);
       refresh();
     }),
     editor.registerCommand(
@@ -709,20 +790,61 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
   };
 }
 
-function buildToolbar(uploads: boolean): HTMLElement {
+function buildToolbar(
+  uploads: boolean,
+  features: ReadonlySet<Feature>,
+  controls: readonly ResolvedControl[],
+): HTMLElement {
   const toolbar = document.createElement("div");
   toolbar.dataset.kotobaToolbar = "";
   let group: HTMLElement | null = null;
+  let extensionsPlaced = false;
+
+  const newGroup = (name: string): HTMLElement => {
+    const element = document.createElement("div");
+    element.className = "kotoba-toolbar-group";
+    element.dataset.group = name;
+    element.setAttribute("role", "group");
+    element.setAttribute("aria-label", name);
+    toolbar.append(element);
+    return element;
+  };
+
+  // The extensions' controls, by group, before the History group.
+  const placeExtensions = (): void => {
+    extensionsPlaced = true;
+    for (const control of controls) {
+      if (group === null || group.dataset.group !== control.group) group = newGroup(control.group);
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "kotoba-toolbar-button";
+      button.dataset.kotobaCommand = control.id;
+      button.setAttribute("aria-label", control.label);
+      button.title = control.label;
+      button.tabIndex = -1;
+      let icon: Element | null = null;
+      try {
+        icon = control.icon?.() ?? null;
+      } catch (error) {
+        console.error(`Kotoba: the icon of the toolbar control "${control.id}" failed`, error);
+      }
+      if (icon !== null) {
+        icon.setAttribute("aria-hidden", "true");
+        button.append(icon);
+      } else {
+        button.textContent = control.label;
+      }
+      group.append(button);
+    }
+  };
 
   for (const item of TOOLBAR_ITEMS) {
     if (item.command === "upload" && !uploads) continue;
+    if (item.feature !== undefined && !features.has(item.feature)) continue;
+    if (item.group === "History" && !extensionsPlaced) placeExtensions();
 
     if (group === null || group.dataset.group !== item.group) {
-      group = document.createElement("div");
-      group.className = "kotoba-toolbar-group";
-      group.dataset.group = item.group;
-      group.setAttribute("role", "group");
-      group.setAttribute("aria-label", item.group);
+      group = newGroup(item.group);
       if (TABLE_COMMANDS.has(item.command)) {
         group.dataset.kotobaContext = "table";
         group.hidden = true;
@@ -730,7 +852,6 @@ function buildToolbar(uploads: boolean): HTMLElement {
         group.dataset.kotobaContext = "code";
         group.hidden = true;
       }
-      toolbar.append(group);
     }
 
     if (SELECT_COMMANDS.has(item.command)) {

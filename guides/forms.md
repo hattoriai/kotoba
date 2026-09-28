@@ -157,6 +157,22 @@ Give each editor its own `id`. Every event from an editor has its `id`,
 and every server push names the editor, so two editors on a page do not
 act on the events of the other.
 
+## Features
+
+An editor has every built-in feature by default. To give a field fewer,
+list them, and check them in the changeset:
+
+```heex
+<.kotoba field={@form[:comment]} id="comment" features={~w(bold italic links lists)} />
+```
+
+```elixir
+|> Kotoba.Content.validate_features(:comment, ~w(bold italic links lists)a)
+```
+
+See the [Extensions](extensions.md) guide for what a feature that is off
+does, and for the app's own extensions.
+
 ## Code languages
 
 In a code block, the toolbar has a code language picker. It offers the
