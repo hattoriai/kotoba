@@ -13,8 +13,12 @@ defmodule Kotoba.DocumentGenerators do
     end
   end
 
-  @doc "Generates one block node. `depth` limits the nesting of lists and quotes."
-  def block(depth) do
+  @doc """
+  Generates one block node. `depth` limits the nesting of lists and
+  tables. With `tables?` `false` there is no table, for the blocks of a
+  table cell (a table in a table is not valid).
+  """
+  def block(depth, tables? \\ true) do
     one_of(
       [
         paragraph(),
@@ -24,8 +28,43 @@ defmodule Kotoba.DocumentGenerators do
         decorator("horizontalrule", %{}),
         attachment(),
         unknown()
-      ] ++ if(depth > 0, do: [list(depth - 1)], else: [])
+      ] ++
+        if(depth > 0, do: [list(depth - 1)], else: []) ++
+        if(depth > 0 and tables?, do: [table(depth - 1)], else: [])
     )
+  end
+
+  defp table(depth) do
+    gen all(
+          rows <- list_of(table_row(depth), min_length: 1, max_length: 3),
+          extra <- member_of([%{}, %{"colWidths" => [90, 60]}])
+        ) do
+      "table" |> element(rows) |> Map.merge(extra)
+    end
+  end
+
+  defp table_row(depth) do
+    gen all(cells <- list_of(table_cell(depth), min_length: 1, max_length: 3)) do
+      element("tablerow", cells)
+    end
+  end
+
+  defp table_cell(depth) do
+    gen all(
+          children <- list_of(block(depth, false), min_length: 1, max_length: 2),
+          header_state <- integer(0..3),
+          col_span <- integer(1..2),
+          background <- member_of([nil, "#ffeeaa"])
+        ) do
+      "tablecell"
+      |> element(children)
+      |> Map.merge(%{
+        "backgroundColor" => background,
+        "colSpan" => col_span,
+        "headerState" => header_state,
+        "rowSpan" => 1
+      })
+    end
   end
 
   defp paragraph do
@@ -80,7 +119,8 @@ defmodule Kotoba.DocumentGenerators do
   defp list_item(depth, list_type) do
     gen all(
           children <- inlines(),
-          nested <- if(depth > 0, do: list_of(list(depth - 1), max_length: 1), else: constant([])),
+          nested <-
+            if(depth > 0, do: list_of(list(depth - 1), max_length: 1), else: constant([])),
           value <- integer(1..9),
           checked <- boolean()
         ) do

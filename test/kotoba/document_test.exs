@@ -145,6 +145,40 @@ defmodule Kotoba.DocumentTest do
       assert %Nodes.CodeHighlight{text: " x", highlight_type: nil} = plain
     end
 
+    test "reads Lexical tables, with the editor's layout keys in extra" do
+      doc = parse!(fixture("table.json"))
+
+      assert [%Nodes.Paragraph{}, people, totals, %Nodes.Paragraph{children: []}] =
+               doc.root.children
+
+      assert %Nodes.Table{children: [head, ada, grace], extra: extra} = people
+      assert extra == %{}
+      assert %Nodes.TableRow{children: [name, _role]} = head
+      assert %Nodes.TableCell{header_state: 1, col_span: 1, row_span: 1} = name
+      assert %Nodes.TableRow{children: [%Nodes.TableCell{header_state: 0}, engineer]} = ada
+
+      assert %Nodes.TableCell{children: [%Nodes.Paragraph{children: [%Nodes.Text{format: 1}]}]} =
+               engineer
+
+      assert %Nodes.TableRow{children: [_grace, %Nodes.TableCell{children: [%Nodes.List{}]}]} =
+               grace
+
+      assert %Nodes.Table{extra: %{"colWidths" => [90, 60, 60]}, children: [row]} = totals
+
+      assert %Nodes.TableRow{
+               children: [
+                 %Nodes.TableCell{header_state: 2},
+                 %Nodes.TableCell{
+                   col_span: 2,
+                   extra: %{"backgroundColor" => "#ffeeaa", "width" => 120}
+                 }
+               ]
+             } = row
+
+      assert Document.text(doc) ==
+               "Before\nName\tRole\nAda\tEngineer\nGrace\tNavy\nCOBOL\nTotal\t42 | 43\n"
+    end
+
     test "accepts a JSON string" do
       json = "heading_and_bold_paragraph.json" |> fixture() |> JSON.encode!()
       assert {:ok, %Document{}} = Document.parse(json)
@@ -152,7 +186,7 @@ defmodule Kotoba.DocumentTest do
   end
 
   describe "to_json/1" do
-    for name <- ~w(heading_and_bold_paragraph.json markdown_import.json all_nodes.json) do
+    for name <- ~w(heading_and_bold_paragraph.json markdown_import.json all_nodes.json table.json) do
       test "writes the same JSON that Lexical wrote in #{name}" do
         input = fixture(unquote(name))
         assert input |> parse!() |> Document.to_json() == input
@@ -404,6 +438,23 @@ defmodule Kotoba.DocumentTest do
                  )
                )
              )
+    end
+
+    test "is true for a table of empty cells, as for an empty list" do
+      cell = %{
+        "type" => "tablecell",
+        "headerState" => 1,
+        "colSpan" => 1,
+        "rowSpan" => 1,
+        "children" => [paragraph([])]
+      }
+
+      table = %{
+        "type" => "table",
+        "children" => [%{"type" => "tablerow", "children" => [cell, cell]}]
+      }
+
+      assert Document.empty?(parse!(envelope(root([table]))))
     end
 
     test "is true for a lone tab" do

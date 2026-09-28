@@ -21,6 +21,9 @@ defmodule Kotoba.Renderer do
   | text               | the text in `strong`, `em`, `s`, `u`, `code`, `sub`, `sup`, `mark`, and `span.kotoba-lowercase`, `span.kotoba-uppercase`, `span.kotoba-capitalize` |
   | line break         | `br`                                                   |
   | horizontal rule    | `hr`                                                   |
+  | table              | `table.kotoba-table`, with a `thead` for a first row of header cells and a `tbody` |
+  | table row          | `tr`                                                   |
+  | table cell         | `td`, or `th` with `scope="col"` (header row) or `scope="row"` (header column); `colspan` and `rowspan` when they are more than 1 |
   | link, autolink     | `a` with `rel="noopener nofollow"`, or the text when the URL is not safe |
   | attachment         | `figure.kotoba-attachment` with an `img`, or a download link, and a `figcaption` |
   | mention            | `span.kotoba-mention` with `data-kind` and `data-id`   |
@@ -142,6 +145,22 @@ defmodule Kotoba.Renderer do
     |> segments(:markdown, opts)
     |> Enum.reject(fn {_block, markdown} -> markdown == "" end)
     |> Enum.map_join(separator, &elem(&1, 1))
+  end
+
+  @doc """
+  Renders each child of an element node as plain text. Returns a list of
+  `{child, text}` tuples, in order.
+  """
+  @spec text_each(Kotoba.Node.t(), keyword()) :: [{Kotoba.Node.t(), String.t()}]
+  def text_each(node, opts) do
+    opts = prepare(opts)
+
+    node
+    |> children()
+    |> Enum.with_index()
+    |> Enum.map(fn {child, index} ->
+      {child, render(child, node, :text, indexed(opts, index))}
+    end)
   end
 
   @doc """

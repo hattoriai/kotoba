@@ -17,13 +17,16 @@ defmodule Kotoba.Sanitizer do
     * **Nesting.** A list holds only list items, and a list item is valid
       only inside a list. A list item holds inline nodes, decorators and
       one nested list (by position: a second list at the same level
-      renders as unknown, even when it repeats the first). A code block
+      renders as unknown, even when it repeats the first). A table is
+      valid only under the root and holds only table rows; a table row is
+      valid only in a table and holds only table cells; a table cell is
+      valid only in a table row, and holds no table. A code block
       holds only code highlight, text, line break and tab nodes. A
       paragraph, a heading, a quote and a link hold only inline nodes and
       decorators, and a link holds no other link. A decorator has no
       children. `horizontalrule` and `attachment` (block decorators) are
-      valid only under the root or a list item; elsewhere they render as
-      unknown.
+      valid only under the root, a list item or a table cell; elsewhere
+      they render as unknown.
     * **Links.** `link_url/2` accepts a URL with an allowed scheme, or a
       relative URL. A link with a URL that is not safe renders as its text.
       An attachment with a URL that is not safe fails the check.
@@ -262,6 +265,27 @@ defmodule Kotoba.Sanitizer do
   defp check_parent(%Nodes.ListItem{}, _other_parent, _opts),
     do: {:error, "a list item must be inside a list"}
 
+  # A table under the root holds rows, and a row holds cells.
+  defp check_parent(%Nodes.TableRow{}, %Nodes.Table{}, _opts), do: :ok
+
+  defp check_parent(%Nodes.TableRow{}, _other_parent, _opts),
+    do: {:error, "a table row must be inside a table"}
+
+  defp check_parent(%Nodes.TableCell{}, %Nodes.TableRow{}, _opts), do: :ok
+
+  defp check_parent(%Nodes.TableCell{}, _other_parent, _opts),
+    do: {:error, "a table cell must be inside a table row"}
+
+  defp check_parent(_node, %Nodes.Table{}, _opts), do: {:error, "a table holds only table rows"}
+
+  defp check_parent(_node, %Nodes.TableRow{}, _opts),
+    do: {:error, "a table row holds only table cells"}
+
+  defp check_parent(%Nodes.Table{}, %Nodes.Root{}, _opts), do: :ok
+
+  defp check_parent(%Nodes.Table{}, _other_parent, _opts),
+    do: {:error, "a table is valid only under the root"}
+
   defp check_parent(_node, nil, _opts), do: :ok
   defp check_parent(_node, %Nodes.List{}, _opts), do: {:error, "a list holds only list items"}
 
@@ -282,15 +306,25 @@ defmodule Kotoba.Sanitizer do
       else: {:error, "a code block holds only code, text, line breaks and tabs"}
   end
 
-  # Block decorators are valid only under the root or a list item. The
+  # Block decorators are valid only under the root, a list item or a table
+  # cell. The
   # children of the root node have the root struct as their parent, not
   # `nil` (only the root node's own check has a `nil` parent).
   defp check_parent(%module{}, parent, _opts)
        when module in [Nodes.HorizontalRule, Nodes.Attachment] do
     case parent do
-      %Nodes.Root{} -> :ok
-      %Nodes.ListItem{} -> :ok
-      _other -> {:error, "a #{module.type()} node is valid only under the root or a list item"}
+      %Nodes.Root{} ->
+        :ok
+
+      %Nodes.ListItem{} ->
+        :ok
+
+      %Nodes.TableCell{} ->
+        :ok
+
+      _other ->
+        {:error,
+         "a #{module.type()} node is valid only under the root, a list item or a table cell"}
     end
   end
 

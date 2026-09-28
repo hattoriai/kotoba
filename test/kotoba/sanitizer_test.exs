@@ -154,7 +154,7 @@ defmodule Kotoba.SanitizerTest do
       assert :ok = Sanitizer.check(%Nodes.Tab{}, %Nodes.Code{})
     end
 
-    test "a horizontal rule and an attachment are valid only under the root or a list item" do
+    test "a horizontal rule and an attachment are valid only under the root, a list item or a table cell" do
       attachment = %Nodes.Attachment{key: "k", url: "/a", name: "a", content_type: "t", bytes: 1}
       rule = %Nodes.HorizontalRule{}
 
@@ -165,11 +165,82 @@ defmodule Kotoba.SanitizerTest do
       assert :ok = Sanitizer.check(attachment, %Nodes.Root{})
       assert :ok = Sanitizer.check(rule, %Nodes.ListItem{})
       assert :ok = Sanitizer.check(attachment, %Nodes.ListItem{})
+      assert :ok = Sanitizer.check(rule, %Nodes.TableCell{})
+      assert :ok = Sanitizer.check(attachment, %Nodes.TableCell{})
 
       for parent <- [%Nodes.Paragraph{}, %Nodes.Heading{tag: "h1"}, %Nodes.Quote{}] do
         assert {:error, _reason} = Sanitizer.check(rule, parent)
         assert {:error, _reason} = Sanitizer.check(attachment, parent)
       end
+    end
+
+    test "a table is valid only under the root, and holds only rows" do
+      table = %Nodes.Table{}
+      row = %Nodes.TableRow{}
+      cell = %Nodes.TableCell{}
+
+      assert :ok = Sanitizer.check(table, %Nodes.Root{})
+
+      for parent <- [%Nodes.TableCell{}, %Nodes.ListItem{}, %Nodes.Quote{}, %Nodes.Paragraph{}] do
+        assert {:error, "a table is valid only under the root"} = Sanitizer.check(table, parent)
+      end
+
+      assert :ok = Sanitizer.check(row, table)
+
+      assert {:error, "a table holds only table rows"} =
+               Sanitizer.check(%Nodes.Paragraph{}, table)
+
+      assert {:error, "a table cell must be inside a table row"} = Sanitizer.check(cell, table)
+    end
+
+    test "a table row is valid only in a table, and holds only cells" do
+      row = %Nodes.TableRow{}
+
+      assert :ok = Sanitizer.check(%Nodes.TableCell{}, row)
+
+      assert {:error, "a table row holds only table cells"} =
+               Sanitizer.check(%Nodes.Text{text: "x"}, row)
+
+      for parent <- [nil, %Nodes.Root{}, %Nodes.TableCell{}, %Nodes.ListItem{}] do
+        assert {:error, "a table row must be inside a table"} = Sanitizer.check(row, parent)
+      end
+    end
+
+    test "a table cell holds blocks and inline nodes" do
+      cell = %Nodes.TableCell{}
+
+      for node <- [
+            %Nodes.Paragraph{},
+            %Nodes.Heading{tag: "h2"},
+            %Nodes.Quote{},
+            %Nodes.List{list_type: "bullet", tag: "ul"},
+            %Nodes.Code{},
+            %Nodes.Text{text: "x"}
+          ] do
+        assert :ok = Sanitizer.check(node, cell)
+      end
+
+      assert {:error, "a table cell must be inside a table row"} =
+               Sanitizer.check(cell, %Nodes.Root{})
+    end
+
+    test "a table cell checks its header state and spans" do
+      row = %Nodes.TableRow{}
+
+      assert :ok =
+               Sanitizer.check(
+                 %Nodes.TableCell{header_state: 3, col_span: 2, row_span: 1000},
+                 row
+               )
+
+      assert {:error, "headerState must be one of: 0, 1, 2, 3"} =
+               Sanitizer.check(%Nodes.TableCell{header_state: 4}, row)
+
+      assert {:error, "colSpan must be from 1 to 1000"} =
+               Sanitizer.check(%Nodes.TableCell{col_span: 0}, row)
+
+      assert {:error, "rowSpan must be from 1 to 1000"} =
+               Sanitizer.check(%Nodes.TableCell{row_span: 1001}, row)
     end
 
     test "a list item holds only one nested list, by position, even when the lists are identical" do
