@@ -42,6 +42,7 @@ defmodule Kotoba.Components do
     {"rule", "Horizontal rule", "Insert"},
     {"table", "Table", "Insert"},
     {"upload", "Attach a file", "Insert"},
+    {"assist", "Assist", "Assist"},
     {"code-language", "Code language", "Code"},
     {"table-row-before", "Insert row above", "Table"},
     {"table-row-after", "Insert row below", "Table"},
@@ -141,6 +142,11 @@ defmodule Kotoba.Components do
     doc:
       "the prompt list, see `Kotoba.Prompts`: a search callback, or options (`label`, `spaces`, `items`, `insert`...)"
 
+  attr :assist, :any,
+    default: nil,
+    doc:
+      "suggestions that the person asks for: a list of actions for the toolbar's Assist menu (`[rewrite: \"Rewrite\"]`), or `true` for no menu; the LiveView then handles `kotoba:assist` and `kotoba:suggestion`, see the Suggestions guide"
+
   attr :code_languages, :list,
     default: nil,
     doc:
@@ -187,6 +193,7 @@ defmodule Kotoba.Components do
         triggers: json_map(Prompts.triggers(assigns.prompts)),
         prompt_labels: json_map(Prompts.labels(assigns.prompts)),
         prompt_config: json_map(Prompts.config(assigns.prompts)),
+        assist: assist_actions(assigns.assist),
         code_languages: code_languages(assigns.code_languages),
         features: assigns.features && Enum.join(Features.names!(assigns.features), ","),
         extension_urls: extension_urls(assigns.extensions),
@@ -213,6 +220,7 @@ defmodule Kotoba.Components do
         data-prompts={@triggers}
         data-prompt-labels={@prompt_labels}
         data-prompt-config={@prompt_config}
+        data-assist={@assist}
         data-code-languages={@code_languages}
         data-features={@features}
         data-extensions={@extension_urls}
@@ -294,6 +302,38 @@ defmodule Kotoba.Components do
     do: raise(ArgumentError, "code_languages needs at least one language, or nil for every one")
 
   defp code_languages(names), do: names |> CodeLanguages.ids!() |> Enum.join(",")
+
+  # `data-assist`: the JSON of the Assist menu's actions, "[]" for `true`.
+  defp assist_actions(nil), do: nil
+  defp assist_actions(false), do: nil
+  defp assist_actions(true), do: "[]"
+
+  defp assist_actions(actions) when is_list(actions) do
+    actions |> Enum.map(&assist_action!/1) |> JSON.encode!()
+  end
+
+  defp assist_actions(other),
+    do: raise(ArgumentError, "assist must be true, or a list of actions, got: #{inspect(other)}")
+
+  defp assist_action!({id, label}) when (is_atom(id) or is_binary(id)) and is_binary(label) do
+    id = to_string(id)
+
+    if id == "" or String.trim(label) == "",
+      do:
+        raise(
+          ArgumentError,
+          "an assist action needs an id and a label, got: #{inspect({id, label})}"
+        )
+
+    %{id: id, label: label}
+  end
+
+  defp assist_action!(%{id: id, label: label}), do: assist_action!({id, label})
+
+  defp assist_action!(other) do
+    raise ArgumentError,
+          "an assist action is {id, label} or %{id: id, label: label}, got: #{inspect(other)}"
+  end
 
   defp json_map(map) when map_size(map) == 0, do: nil
   defp json_map(map), do: JSON.encode!(map)

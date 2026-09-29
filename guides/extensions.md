@@ -90,7 +90,11 @@ The development server has this extension, with its Elixir half, in
 `context` has the editor's `id`, the hook `element`, `announce(message)`,
 which says a message in the editor's live region, and
 `push(event, payload)`, which pushes an event to the LiveView (or to the
-editor's `phx-target`) with the editor's `id` in the payload.
+editor's `phx-target`) with the editor's `id` in the payload, and
+`assist(action, detail)`, which asks the app for a suggestion as an item
+of the Assist menu does: it pushes `kotoba:assist` with the selected text
+and returns the new ref, or `null` when the editor has no `assist` (see
+the [Suggestions](suggestions.md) guide).
 
 ### Toolbar controls
 

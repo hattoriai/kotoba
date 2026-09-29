@@ -568,6 +568,113 @@ div.kotoba-unknown {
   font-size: var(--kotoba-small);
 }
 
+/* A suggestion from the server, under the editable area. */
+.kotoba-suggestion {
+  margin: var(--kotoba-space);
+  border: 1px solid var(--kotoba-accent);
+  border-radius: var(--kotoba-radius);
+  background: var(--kotoba-background);
+}
+
+.kotoba-suggestion-header {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--kotoba-space);
+  padding: calc(var(--kotoba-space) / 2) var(--kotoba-space);
+  border-bottom: 1px solid var(--kotoba-border);
+  background: var(--kotoba-selection);
+  font-size: var(--kotoba-small);
+}
+
+.kotoba-suggestion-title {
+  font-weight: 600;
+}
+
+.kotoba-suggestion-status {
+  color: var(--kotoba-muted);
+}
+
+.kotoba-suggestion-content {
+  max-height: 20rem;
+  overflow-y: auto;
+  padding: var(--kotoba-padding);
+  outline: none;
+}
+
+.kotoba-suggestion-content[aria-busy="true"] > :last-child::after {
+  content: "▍";
+  color: var(--kotoba-accent);
+}
+
+.kotoba-suggestion-actions {
+  display: flex;
+  gap: calc(var(--kotoba-space) / 2);
+  justify-content: flex-end;
+  padding: calc(var(--kotoba-space) / 2) var(--kotoba-space);
+  border-top: 1px solid var(--kotoba-border);
+}
+
+.kotoba-suggestion-button {
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--kotoba-border);
+  border-radius: calc(var(--kotoba-radius) - 2px);
+  background: var(--kotoba-background);
+  color: var(--kotoba-text);
+  font: inherit;
+  font-size: var(--kotoba-small);
+  cursor: pointer;
+}
+
+.kotoba-suggestion-accept {
+  border-color: var(--kotoba-accent);
+  background: var(--kotoba-accent);
+  color: var(--kotoba-accent-text);
+}
+
+.kotoba-suggestion-button:focus-visible,
+.kotoba-assist-item:focus-visible {
+  outline: none;
+  box-shadow: var(--kotoba-focus-ring, 0 0 0 2px var(--kotoba-accent));
+}
+
+/* The Assist menu, under the toolbar. */
+.kotoba-assist-menu {
+  position: absolute;
+  z-index: 10;
+  top: 0;
+  right: var(--kotoba-space);
+  display: flex;
+  flex-direction: column;
+  min-width: 10rem;
+  padding: calc(var(--kotoba-space) / 2);
+  border: 1px solid var(--kotoba-border);
+  border-radius: var(--kotoba-radius);
+  background: var(--kotoba-background);
+  box-shadow: var(--kotoba-shadow);
+}
+
+.kotoba-assist-item {
+  padding: calc(var(--kotoba-space) / 2) var(--kotoba-space);
+  border: 0;
+  border-radius: calc(var(--kotoba-radius) - 2px);
+  background: transparent;
+  color: var(--kotoba-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.kotoba-assist-item:hover,
+.kotoba-assist-item:focus-visible {
+  background: var(--kotoba-surface);
+}
+
+.kotoba-suggestion[hidden],
+.kotoba-suggestion-button[hidden],
+.kotoba-assist-menu[hidden] {
+  display: none;
+}
+
 .kotoba-color-menu {
   position: absolute;
   z-index: 10;

@@ -102,6 +102,7 @@ defmodule Kotoba.MixProject do
         "guides/rendering.md",
         "guides/uploads.md",
         "guides/prompts.md",
+        "guides/suggestions.md",
         "guides/custom_nodes.md",
         "guides/extensions.md",
         "guides/theming.md",
@@ -118,6 +119,7 @@ defmodule Kotoba.MixProject do
           "guides/rendering.md",
           "guides/uploads.md",
           "guides/prompts.md",
+          "guides/suggestions.md",
           "guides/custom_nodes.md",
           "guides/extensions.md",
           "guides/theming.md"

@@ -31,8 +31,8 @@ can come and go with the error:
 ## The toolbar
 
 The toolbar has `role="toolbar"`, with a `group` for each set of buttons
-(Text, Blocks, Lists, Insert, History, and one for each extension, named
-after it). A Code group is there only while the selection is in a code
+(Text, Blocks, Lists, Insert, Assist, History, and one for each extension,
+named after it). A Code group is there only while the selection is in a code
 block, and a Table group only while it is in a table.
 
 * The toolbar is one tab stop. Tab goes to the toolbar, and Tab again goes
@@ -141,6 +141,26 @@ When a trigger (for example `@`) opens the menu:
 `Cmd/Ctrl+K` or the Link button opens a small form for the URL. It keeps
 the selection while the focus is in its input. Enter applies the link, and
 Escape closes the form and returns to the editable area.
+
+## Suggestions
+
+A suggestion is text that the server streams (see the
+[Suggestions](suggestions.md) guide).
+
+* The Assist button has `aria-haspopup="menu"` and `aria-expanded`. Its
+  menu has `role="menu"` and the name "Assist", with the focus on its
+  first item. The arrow keys, Home and End move between the items, Enter
+  or Space asks for a suggestion and goes back to the editable area, and
+  Escape closes the menu, back to its button.
+* The suggestion shows in a region named after it ("Rewrite"), with
+  `aria-busy` while it streams, a status ("Writing…", "Done", "Stopped")
+  and its buttons: Stop, then Accept and Reject.
+* In the editable area, `Cmd/Ctrl+Enter` accepts the suggestion, and
+  Escape stops it while it streams, or rejects it.
+* The live region says "Rewrite: writing", then "Suggestion ready: accept
+  it with Ctrl+Enter, or reject it with Escape", and "Suggestion
+  inserted", "Suggestion discarded" or "Suggestion stopped". It does not
+  read the text as it streams.
 
 ## Announcements
 

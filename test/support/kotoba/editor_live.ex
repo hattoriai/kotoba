@@ -115,6 +115,9 @@ defmodule KotobaTest.EditorLive do
 
   def handle_info(:focus, socket), do: {:noreply, Kotoba.Live.focus(socket, @editor)}
 
+  def handle_info({:stream, function, args}, socket),
+    do: {:noreply, apply(Kotoba.Live, function, [socket, @editor | args])}
+
   # The result of an async search, as handle_async/3 gets it (an exit
   # cannot come from a real search: Kotoba.Prompts.search/3 catches it).
   def handle_info({:async_result, name, result}, socket),

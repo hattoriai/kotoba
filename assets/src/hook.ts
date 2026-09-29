@@ -29,12 +29,20 @@
 //   * `data-debounce` - milliseconds between `kotoba:change` pushes (300).
 //   * `data-link-schemes` - comma-separated allowed link schemes
 //     ("http,https,mailto"); the same list as the server's sanitizer.
+//   * `data-assist` - JSON: the actions of the Assist menu (`[{id, label}]`,
+//     `[]` for none). With it, the editor pushes `kotoba:assist` and
+//     `kotoba:suggestion` (see suggestions.ts).
 //
 // The hook pushes (every message has `v: 1` and the hook element's `id`):
 //
 //   * `kotoba:change` `{v, id, doc}` - the document envelope, debounced,
 //     only when `data-change` is "true".
 //   * `kotoba:prompt` `{v, id, prompt, query}` - a prompt query.
+//   * `kotoba:assist` `{v, id, ref, action, text}` - a request for a
+//     suggestion, only with `data-assist`.
+//   * `kotoba:suggestion` `{v, id, ref, action}` - the person accepted,
+//     rejected or stopped a suggestion (`action` is "accept", "reject" or
+//     "stop"), only with `data-assist`.
 //
 // It handles these server events (a payload with an `id` other than the
 // hook element's id is for another editor, and is ignored):
@@ -48,6 +56,9 @@
 //   * `set_readonly` `{readonly}`
 //   * `focus` `{}`
 //   * `kotoba:prompt_results` `{prompt, query?, items: [{id, label, hint?, text?, attrs?}], error?}`
+//   * `kotoba:stream` `{ref, op, ...}` - a suggestion: `op` is "start"
+//     (with `at`, `format` and `label`), "chunk" (with `text`), "end" or
+//     "cancel".
 //
 // A change of `data-readonly` in a LiveView patch also sets the read-only
 // state, and a change of `data-change` turns the pushes on or off.
@@ -75,6 +86,7 @@ import {
   composeExtensions,
   extensionControls,
   loadExtensions,
+  markdownTransformers,
   registerExtensions,
   type KotobaExtension,
 } from "./extensions";
@@ -94,6 +106,7 @@ import {
   type DocumentEnvelope,
   type JSONNode,
 } from "./protocol";
+import { createSuggestions, type AssistAction, type Suggestions } from "./suggestions";
 import { createToolbar, type Toolbar } from "./toolbar";
 import { createUploads, type Uploads } from "./uploads";
 
@@ -128,6 +141,8 @@ export interface Config {
   change: boolean;
   debounce: number;
   linkSchemes: string[];
+  /** The Assist menu's actions, or `null` for an editor with no assist. */
+  assist: AssistAction[] | null;
 }
 
 /** Reads the hook's configuration from the data attributes of its element. */
@@ -150,7 +165,26 @@ export function readConfig(el: HTMLElement): Config {
     change: data.change === "true",
     debounce: Number.isFinite(debounce) && debounce >= 0 ? debounce : 300,
     linkSchemes: parseLinkSchemes(data.linkSchemes),
+    assist: parseAssist(data.assist),
   };
+}
+
+/** Reads `data-assist`: a JSON list of `{id, label}` actions. No attribute gives `null`. */
+export function parseAssist(json: string | undefined): AssistAction[] | null {
+  if (json === undefined) return null;
+  let data: unknown;
+  try {
+    data = JSON.parse(json === "" ? "[]" : json);
+  } catch {
+    console.error("Kotoba: data-assist is not valid JSON");
+    return null;
+  }
+  if (!Array.isArray(data)) return [];
+  return data.flatMap((action) =>
+    isObject(action) && typeof action.id === "string" && action.id !== "" && typeof action.label === "string"
+      ? [{ id: action.id, label: action.label }]
+      : [],
+  );
 }
 
 function urls(value: string | undefined): string[] {
@@ -213,6 +247,7 @@ class Instance {
   private colors: ColorMenu | null = null;
   private prompts: Prompts | null = null;
   private uploads: Uploads | null = null;
+  private suggestions: Suggestions | null = null;
 
   private json = "";
   private pushed = "";
@@ -249,6 +284,7 @@ class Instance {
     });
     this.on("set_readonly", (payload) => this.setReadonly(payload.readonly === true));
     this.on("focus", () => this.editor?.focus());
+    this.on("kotoba:stream", (payload) => this.stream(payload));
     this.on("kotoba:prompt_results", (payload) => {
       if (typeof payload.prompt === "string")
         this.prompts?.receive(payload.prompt, payload.items, payload.query, payload.error);
@@ -335,8 +371,24 @@ class Instance {
         element: this.el,
         announce: this.announce,
         push: (event, payload) => this.push(event, { ...payload, v: PROTOCOL_VERSION, id: this.id }),
+        assist: (action, detail) => this.suggestions?.request(action, detail) ?? null,
       }),
     );
+
+    // Suggestions show in a panel under the editable area, rendered with the
+    // editor's nodes, and read with its Markdown shortcuts.
+    const assist = this.config.assist;
+    this.suggestions = createSuggestions(editor, {
+      host: surface,
+      namespace: this.id,
+      nodes: [...appNodes, ...app.nodes].filter((klass) => editor.hasNodes([klass])),
+      builtInNodes: builtIn.nodes,
+      transformers: markdownTransformers(editor, extensions),
+      actions: assist ?? [],
+      push:
+        assist === null ? null : (event, payload) => this.push(event, { ...payload, v: PROTOCOL_VERSION, id: this.id }),
+      announce: this.announce,
+    });
 
     if (features.has("links")) {
       this.link = createLinkForm(editor, {
@@ -365,6 +417,7 @@ class Instance {
       onLink: () => this.link?.open(),
       onUpload: () => this.uploads?.open(),
       onColors: this.colors === null ? undefined : (button) => this.colors?.open(button),
+      onAssist: assist !== null && assist.length > 0 ? (button) => this.suggestions?.openMenu(button) : undefined,
       announce: this.announce,
       codeLanguages: this.config.codeLanguages,
       features,
@@ -458,7 +511,18 @@ class Instance {
   }
 
   private setContent(doc: unknown): void {
+    // A suggestion's place may not be in the new document.
+    this.suggestions?.discard();
     this.load(doc);
+  }
+
+  private stream(payload: Record<string, unknown>): void {
+    const { ref, op } = payload;
+    if (typeof ref !== "string" || this.suggestions === null) return;
+    if (op === "start") this.suggestions.start(ref, payload);
+    else if (op === "chunk" && typeof payload.text === "string") this.suggestions.chunk(ref, payload.text);
+    else if (op === "end") this.suggestions.end(ref);
+    else if (op === "cancel") this.suggestions.cancel(ref);
   }
 
   private insertNode(json: unknown, ref: string | undefined): void {
@@ -605,6 +669,7 @@ class Instance {
     clearTimeout(this.timer);
     for (const ref of this.handlers) this.hook.removeHandleEvent(ref);
     this.prompts?.dispose();
+    this.suggestions?.dispose();
     this.toolbar?.dispose();
     this.link?.dispose();
     this.colors?.dispose();

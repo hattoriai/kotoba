@@ -32,6 +32,11 @@ not (`Kotoba.Features`):
 | `attachments` | files and images (with `uploads`) | Attach a file | drop, paste | |
 | `mentions` | prompts and mentions (with `prompts`) | | the trigger | |
 
+Suggestions are not a feature: an editor with `assist` has an Assist
+button, and any editor shows the text that the server streams with
+`Kotoba.Live.stream_start/4` (see [Suggestions](suggestions.md)). A
+suggestion has only the editor's features.
+
 `Cmd` is the key on a Mac, `Ctrl` elsewhere. A Markdown shortcut acts as
 you type it: `## ` at the start of a line makes a heading, and
 `**bold**` becomes bold when you type the last `*`. `***text***` makes
@@ -179,8 +184,8 @@ limits in the [Known limits](limits.md) guide.
 
 The default toolbar has the buttons of the editor's features, in groups:
 Text (formats and Link), Blocks (headings and Quote), Lists, Insert (Code
-block, Horizontal rule, Table, Attach a file), the extensions' buttons,
-and History (Undo, Redo). The Code group (the language picker) shows in a
+block, Horizontal rule, Table, Attach a file), Assist (with `assist`), the
+extensions' buttons, and History (Undo, Redo). The Code group (the language picker) shows in a
 code block, and the Table group in a table. The toolbar is one tab stop,
 with the arrow keys between the buttons (see the
 [Accessibility](accessibility.md) guide).
@@ -216,7 +221,7 @@ commands:
 `Kotoba.Components.toolbar_commands/0` lists the commands: `bold`,
 `italic`, `underline`, `strikethrough`, `highlight`, `code`,
 `subscript`, `superscript`, `link`, `h1` to `h4`, `quote`, `bullet`,
-`number`, `check`, `code-block`, `rule`, `table`, `upload`,
+`number`, `check`, `code-block`, `rule`, `table`, `upload`, `assist`,
 `code-language`, the `table-*` commands, `undo` and `redo`. An
 extension's control is `<extension>:<command>` (see the
 [Extensions](extensions.md) guide). Another command raises
@@ -230,6 +235,8 @@ extension's control is `<extension>:<command>` (see the
 * `code-language` renders a `<select>`, the code language picker: the
   editor fills it, and shows it in a code block.
 * `highlight` opens the color palette.
+* `assist` opens the Assist menu, and is hidden in an editor with no
+  actions.
 
 A toolbar can also be outside the editor, anywhere on the page, with
 `for` set to the editor's id:
@@ -242,6 +249,7 @@ A toolbar can also be outside the editor, anywhere on the page, with
 ## More
 
 * [Prompts and mentions](prompts.md): `@` menus, emoji, tags.
+* [Suggestions](suggestions.md): text streamed from the server.
 * [Uploads](uploads.md): files and images in the document.
 * [Custom nodes](custom_nodes.md) and [Extensions](extensions.md): your
   own nodes, commands, buttons and shortcuts.

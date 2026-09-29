@@ -89,6 +89,73 @@ defmodule KotobaDev.People do
   end
 end
 
+defmodule KotobaDev.Assist do
+  @moduledoc """
+  A fake language model for the Assist menu of the editor page: it answers
+  each action with a fixed text, in chunks of four characters, one every
+  40 ms, with no API key. The Markdown of an answer is cut anywhere, `**`
+  included. "Fail" streams a little, then cancels.
+  """
+
+  @actions [
+    rewrite: "Rewrite",
+    summarize: "Summarize",
+    continue: "Continue writing",
+    fail: "Fail"
+  ]
+
+  def actions, do: @actions
+
+  @doc "The answer, and the stream options, of an action."
+  def answer("rewrite", text),
+    do: {"A **clearer** version: #{text}", at: :selection, label: "Rewrite"}
+
+  def answer("summarize", text),
+    do:
+      {"**Summary:** #{text |> String.split() |> Enum.take(3) |> Enum.join(" ")}…",
+       at: :after, label: "Summary"}
+
+  def answer("continue", _text),
+    do:
+      {"## What comes next\n\n- One more point\n- And a _last_ one",
+       at: :after, label: "Continue writing"}
+
+  def answer("fail", _text), do: {"This answer will not", at: :selection, label: "Fail"}
+
+  @doc "Starts the stream of an answer, for the editor `id`; `opts` replace the answer's stream options."
+  def start(socket, id, ref, action, text, opts \\ []) do
+    {answer, answer_opts} = answer(action, text)
+    Process.send_after(self(), {:assist_chunk, id, ref, action, answer}, 40)
+
+    socket
+    |> Kotoba.Live.stream_start(id, ref, Keyword.merge(answer_opts, opts))
+    |> Phoenix.Component.update(:assist_refs, &MapSet.put(&1, ref))
+  end
+
+  @doc "Sends the next chunk, or ends the stream (a \"fail\" stream is cancelled after two chunks)."
+  def next(socket, id, ref, action, rest) do
+    cond do
+      ref not in socket.assigns.assist_refs ->
+        socket
+
+      rest == "" ->
+        socket |> Kotoba.Live.stream_end(id, ref) |> stop(ref)
+
+      action == "fail" and String.length(rest) < 12 ->
+        socket |> Kotoba.Live.stream_cancel(id, ref) |> stop(ref)
+
+      true ->
+        {chunk, rest} = String.split_at(rest, 4)
+        Process.send_after(self(), {:assist_chunk, id, ref, action, rest}, 40)
+        Kotoba.Live.stream_chunk(socket, id, ref, chunk)
+    end
+  end
+
+  @doc "Stops a stream: its next chunks are dropped."
+  def stop(socket, ref),
+    do: Phoenix.Component.update(socket, :assist_refs, &MapSet.delete(&1, ref))
+end
+
 defmodule KotobaDev.Prompts do
   @moduledoc """
   The prompts of the editor page:
@@ -337,7 +404,9 @@ defmodule KotobaDev.EditorLive do
        validated_text: "",
        reverse: params["uploads"] == "reverse",
        hold: false,
-       reject_next: false
+       reject_next: false,
+       assist_refs: MapSet.new(),
+       suggestions: []
      )
      |> allow_upload(:body,
        accept: ~w(.png .jpg .jpeg .gif .webp .pdf),
@@ -365,6 +434,7 @@ defmodule KotobaDev.EditorLive do
         aria-invalid={@invalid}
         aria-describedby={if @invalid, do: "body-error"}
         nodes={[{KotobaDev.Nodes.Tag, "/assets/nodes/tag.js"}]}
+        assist={KotobaDev.Assist.actions()}
       />
       <p :if={@invalid} id="body-error">Say something</p>
       <div class="row">
@@ -398,7 +468,9 @@ defmodule KotobaDev.EditorLive do
       </button>
       <button type="button" id="push-focus" phx-click="focus">Focus editor</button>
       <button type="button" id="insert-tag" phx-click="insert_tag">Insert tag</button>
+      <button type="button" id="stream-summary" phx-click="stream_summary">Stream a summary</button>
     </div>
+    <p id="suggestion-events">{Enum.join(@suggestions, " ")}</p>
 
     <div class="row" role="group" aria-label="Changes">
       <label>
@@ -504,6 +576,27 @@ defmodule KotobaDev.EditorLive do
     do:
       {:noreply, Kotoba.Live.insert_node(socket, @editor, %KotobaDev.Nodes.Tag{label: "urgent"})}
 
+  # A suggestion that the person asked for with the Assist menu.
+  def handle_event("kotoba:assist", %{"ref" => ref, "action" => action, "text" => text}, socket),
+    do: {:noreply, KotobaDev.Assist.start(socket, @editor, ref, action, text)}
+
+  # A suggestion that the server starts by itself, at the end.
+  def handle_event("stream_summary", _params, socket) do
+    ref = Kotoba.Live.stream_ref()
+
+    socket =
+      KotobaDev.Assist.start(socket, @editor, ref, "continue", "", at: :end, label: "Summary")
+
+    {:noreply, socket}
+  end
+
+  # The person accepted, rejected or stopped a suggestion: a stopped one
+  # sends no more chunks.
+  def handle_event("kotoba:suggestion", %{"ref" => ref, "action" => action}, socket) do
+    socket = update(socket, :suggestions, &(&1 ++ [action]))
+    {:noreply, if(action == "accept", do: socket, else: KotobaDev.Assist.stop(socket, ref))}
+  end
+
   # The phx-change carries the document too (the hook's formdata listener).
   defp posted_text(%{"post" => %{"body" => body}}) do
     case Kotoba.Content.cast(body) do
@@ -517,6 +610,10 @@ defmodule KotobaDev.EditorLive do
   @impl true
   def handle_async({:kotoba_prompt, _id, _prompt, _query} = name, result, socket),
     do: {:noreply, Kotoba.Live.handle_prompt_async(socket, name, result)}
+
+  @impl true
+  def handle_info({:assist_chunk, id, ref, action, rest}, socket),
+    do: {:noreply, KotobaDev.Assist.next(socket, id, ref, action, rest)}
 
   defp handle_progress(:body, %{done?: true}, socket) do
     cond do

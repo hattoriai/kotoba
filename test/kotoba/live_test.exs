@@ -267,6 +267,67 @@ defmodule Kotoba.LiveTest do
     end
   end
 
+  describe "the stream functions" do
+    test "push a suggestion's start, chunks, end and cancel", %{view: view} do
+      send(
+        view.pid,
+        {:stream, :stream_start, ["r1", [at: :after, format: :text, label: "Rewrite"]]}
+      )
+
+      assert_push_event(view, "kotoba:stream", %{
+        v: 1,
+        id: @editor,
+        ref: "r1",
+        op: "start",
+        at: "after",
+        format: "text",
+        label: "Rewrite"
+      })
+
+      send(view.pid, {:stream, :stream_start, ["r2", []]})
+
+      assert_push_event(
+        view,
+        "kotoba:stream",
+        %{
+          ref: "r2",
+          op: "start",
+          at: "selection",
+          format: "markdown"
+        } = start
+      )
+
+      refute Map.has_key?(start, :label)
+
+      send(view.pid, {:stream, :stream_chunk, ["r2", "Hello **wo"]})
+      assert_push_event(view, "kotoba:stream", %{ref: "r2", op: "chunk", text: "Hello **wo"})
+
+      send(view.pid, {:stream, :stream_end, ["r2"]})
+      assert_push_event(view, "kotoba:stream", %{v: 1, id: @editor, ref: "r2", op: "end"})
+
+      send(view.pid, {:stream, :stream_cancel, ["r1"]})
+      assert_push_event(view, "kotoba:stream", %{ref: "r1", op: "cancel"})
+    end
+
+    test "refuse a target or a format that is not one" do
+      socket = %Phoenix.LiveView.Socket{}
+
+      assert_raise ArgumentError, ~r/:at must be one of/, fn ->
+        Kotoba.Live.stream_start(socket, @editor, "r", at: :top)
+      end
+
+      assert_raise ArgumentError, ~r/:format must be one of/, fn ->
+        Kotoba.Live.stream_start(socket, @editor, "r", format: :html)
+      end
+    end
+
+    test "stream_ref/0 gives a new ref each time" do
+      refs = for _ <- 1..50, do: Kotoba.Live.stream_ref()
+      assert length(Enum.uniq(refs)) == 50
+      assert Enum.all?(refs, &Regex.match?(~r/\A[A-Za-z0-9_-]+\z/, &1))
+    end
+  end
+
   describe "consume_uploads/4" do
     test "stores an image and pushes an attachment node for its entry", %{view: view, root: root} do
       upload =

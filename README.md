@@ -28,6 +28,7 @@ does not run Node.js for it: you add the hook and one style sheet.
 | Links | a link form, paste a URL over text, autolinks, allowed schemes |
 | Files | drop, paste or pick images and files; LiveView uploads, a storage adapter |
 | Prompts | `@` mentions, emoji, tags: server searches (async too) or local lists, with queries that have spaces |
+| Suggestions | text streamed from the server (a language model), shown as it comes, then accepted as one undo step or rejected; an Assist menu |
 | Shortcuts | the usual keyboard shortcuts, and Markdown as you type (`## `, `- `, `**bold**`, ` ``` `) |
 | Per field | the features of each editor (`features={~w(bold links lists)}`), checked on the server |
 | Your own | nodes (`mix kotoba.gen.node`), extensions with commands, toolbar buttons and shortcuts, custom toolbars |
@@ -148,6 +149,8 @@ HTML.
   how to serve the files.
 * [Prompts and mentions](guides/prompts.md): `@` menus, emoji and tags,
   from the LiveView or from a local list.
+* [Suggestions](guides/suggestions.md): text streamed from the server,
+  the Assist menu, and a language model example.
 * [Custom nodes](guides/custom_nodes.md): your own nodes, with
   `mix kotoba.gen.node`.
 * [Extensions](guides/extensions.md): your own commands, toolbar buttons
