@@ -321,10 +321,12 @@ defmodule Kotoba.Attachments do
 
   # The value of an element (after its ID): its size, then that many bytes.
   defp element_value(rest) do
-    with {size, data} when byte_size(data) >= size <- vint(rest) do
-      {binary_part(data, 0, size), binary_part(data, size, byte_size(data) - size)}
-    else
-      _other -> nil
+    case vint(rest) do
+      {size, data} when byte_size(data) >= size ->
+        {binary_part(data, 0, size), binary_part(data, size, byte_size(data) - size)}
+
+      _other ->
+        nil
     end
   end
 
