@@ -141,6 +141,37 @@ export function pdf(name: string): FileSpec {
   return { name, mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n%%EOF\n") };
 }
 
+// A WebM video of 32 × 24 pixels, 0.8 s long, recorded by Chromium's
+// MediaRecorder from a canvas (VP8).
+const TINY_WEBM =
+  "GkXfo59ChoEBQveBAULygQRC84EIQoKEd2VibUKHgQRChYECGFOAZwEAAAAAAANZEU2bdLlNu4tTq4QVSalmU6yBbk27i1OrhBZU" +
+  "rmtTrIGTTbuLU6uEH0O2dVOsgcFNu4xTq4QcU7trU6yCA0fsrgAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA" +
+  "AAAAAAAAAAAVSalmoCrXsYMPQkBEiYREL6XDTYCGQ2hyb21lV0GGQ2hyb21lFlSua6mup9eBAXPFh9Wd/ouRAtmDgQFV7oEBhoVW" +
+  "X1ZQOOCKsIEguoEYU8CBAR9DtnUBAAAAAAACeueBAKDkobmBAAAA0AIAnQEqIAAYAAJHCIWFiJmEiAyCAnWqA/gCCCEpnnD+8QqP" +
+  "/6gz5BnyDP1Uv/nYNiXa8AB1oaampO6BAaWfMAIAnQEqIAAYAAcHCIWFiJmEiCYCAAeQ88nA/vBdAKDIoaiBAGQA0QEACRCAABgA" +
+  "Hlf0DABBDgD+7nZ//lnz+Gzqc/uQH0jn0q3YdaGYppbugQGlkbEBABwRPAAYABhYL/QACHAA+4EAoMqhqoEAyADRAQAJEFQAGAAe" +
+  "V/QMAEEOAP7vdtf+hJ+CT8En7p/8aY8/A9AM0HWhmKaW7oEBpZGxAQAcESwAGAAYWC/0AAhwAPuBZKDJoamBASwA0QEACRBEABgA" +
+  "Hlf0DABBDgD+7c7f/pNnibPE2fJI4Hh+Hh+G6HWhmKaW7oEBpZGxAQAcERwAGAAYWC/0AAhwAPuByKDIoaeBAZEA0QEACRA4ABgA" +
+  "Hlf0DABBDgD+6tR//SbPE2eJs+SL1Qb4FoB1oZimlu6BAaWRsQEAHBDsABgAGFgv9AAIcAD7ggEsoMyhq4EB9QDRAQAJECwAGAAe" +
+  "V/QMAEEOAP7hw3/6tD5aHy0P3Pv9uo/M8fm1NAB1oZimlu6BAaWRsQEAHBDcABgAGFgv9AAIcAD7ggGRoMqhqYECWgARAgAJECQA" +
+  "GAcwCCF6cs1ASIYA/Mr/6s+mhF/aR/+k0ap+PsgAdaGYppbugQGlkbEBABwQwAAYABhYL/QACHAA+4IB9aDKoamBAr4A0QEACRB0" +
+  "FGAAeV/QMAEEOAD+wM/6sp7q57ssa/8bqk3VJvGygHWhmKaW7oEBpZGxAQAcEIgUYABhYL/QACHAAPuCAlocU7trjbuLs4EAt4b3" +
+  "gQHxgcE=";
+
+/** A small WebM video that browsers can play. */
+export function webm(name: string): FileSpec {
+  return { name, mimeType: "video/webm", buffer: Buffer.from(TINY_WEBM, "base64") };
+}
+
+/**
+ * A file that starts as a WebM (the server takes it as one) but has no
+ * video: the browser cannot play it.
+ */
+export function brokenWebm(name: string): FileSpec {
+  const header = Buffer.from(TINY_WEBM, "base64").subarray(0, 40);
+  return { name, mimeType: "video/webm", buffer: Buffer.concat([header, Buffer.alloc(200, 0x55)]) };
+}
+
 export function png(name: string, width: number, height: number): FileSpec {
   const chunk = (type: string, data: Buffer): Buffer => {
     const length = Buffer.alloc(4);

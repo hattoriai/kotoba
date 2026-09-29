@@ -205,6 +205,13 @@ Attachments and mentions are single units in the text. Backspace before
 the caret, or Delete after it, removes one. An image attachment renders
 with its file name as the `alt` text.
 
+A PDF's viewer and a video's player are named after the file
+(`aria-label`). In the editor they are out of the tab order, so Tab does
+not go into them: the person selects the attachment, and reads or plays
+it in the saved page, where the viewer and the player's controls take the
+focus. A video never plays by itself. The caption of a PDF or a video is a
+download link, for a browser that cannot show it.
+
 ## Motion
 
 When the person asks for reduced motion (`prefers-reduced-motion:

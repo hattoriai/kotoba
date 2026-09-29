@@ -31,7 +31,8 @@ defmodule Kotoba.Sanitizer do
       they render as unknown.
     * **Links.** `link_url/2` accepts a URL with an allowed scheme, or a
       relative URL. A link with a URL that is not safe renders as its text.
-      An attachment with a URL that is not safe fails the check.
+      An attachment with a URL or a `preview` that is not safe fails the
+      check.
 
   When a node fails a check, the renderer renders it as an unknown node
   (inert, with no content). It does not raise.
@@ -191,8 +192,12 @@ defmodule Kotoba.Sanitizer do
     end
   end
 
-  defp check_url(%Nodes.Attachment{url: url}, opts) do
-    if link_url(url, opts), do: :ok, else: {:error, "url is not a safe URL"}
+  defp check_url(%Nodes.Attachment{url: url, preview: preview}, opts) do
+    cond do
+      link_url(url, opts) == nil -> {:error, "url is not a safe URL"}
+      preview != nil and link_url(preview, opts) == nil -> {:error, "preview is not a safe URL"}
+      true -> :ok
+    end
   end
 
   defp check_url(_node, _opts), do: :ok

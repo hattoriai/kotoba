@@ -65,8 +65,9 @@ marker.
 The size limit and the accepted extensions are the ones of
 `Phoenix.LiveView.allow_upload/3`. Then Kotoba reads the first bytes of
 each file on the server. It keeps a content type only when the bytes prove
-it: PNG, JPEG, GIF and WebP images, PDF, UTF-8 plain text, ZIP and Office
-files. Every other file is stored as `application/octet-stream`. The type
+it: PNG, JPEG, GIF and WebP images, PDF, MP4 and WebM video, UTF-8 plain
+text, ZIP and Office files. Every other file is stored as
+`application/octet-stream`. The type
 that the browser sends is not trusted.
 
 The storage key takes its extension from the checked type, never from the
@@ -192,6 +193,117 @@ A gallery is part of the `attachments` feature, and valid only under the
 root. Its HTML is a `div.kotoba-gallery` with the `figure` of each image,
 and `kotoba.css` lays it out as a grid. `Kotoba.Document.attachments/1`
 returns the attachments of galleries too, in order.
+
+## PDF and video previews
+
+A PDF and a video show in the document, not as a file name:
+
+* **PDF**: the browser's PDF viewer shows it, in the editor and in the
+  rendered HTML (an `object` element). A browser with no viewer (most
+  phones) shows a download link instead. The caption is always a download
+  link.
+* **Video**: MP4 (`video/mp4`) and WebM (`video/webm`) files play in a
+  `video` element with the browser's controls. It loads only the metadata
+  (`preload="metadata"`) and never plays by itself. In the editor, a video
+  that the browser cannot play (a codec it does not have, a missing file)
+  shows as a file. Other formats (QuickTime `.mov`, Matroska `.mkv`) are
+  files: convert them to MP4 (H.264 and AAC plays in every browser) before
+  or after the upload.
+
+Add the extensions to the upload, and a size limit for videos:
+
+```elixir
+allow_upload(:attachments,
+  accept: ~w(.png .jpg .jpeg .gif .webp .pdf .mp4 .webm),
+  max_file_size: 100_000_000,
+  ...
+)
+```
+
+### Preview images
+
+A PDF can show an image of its first page, and a video a poster frame,
+instead. Kotoba does not make them: give `:preview` to
+`Kotoba.Live.consume_uploads/4`, a function of the stored attachment and
+the path of the uploaded file that returns the URL of the image, or `nil`.
+It runs while the file is still there. With Poppler and FFmpeg installed:
+
+```elixir
+Kotoba.Live.consume_uploads(socket, :attachments, "post-body",
+  preview: &MyApp.Previews.make/2
+)
+```
+
+```elixir
+defmodule MyApp.Previews do
+  alias Kotoba.Nodes.Attachment
+
+  # The first page of a PDF (Poppler), the first frame of a video (FFmpeg).
+  def make(%Attachment{} = node, path) do
+    cond do
+      Attachment.pdf?(node) -> store(node, ".png", &pdftoppm(path, &1))
+      Attachment.video?(node) -> store(node, ".jpg", &ffmpeg(path, &1))
+      true -> nil
+    end
+  end
+
+  defp pdftoppm(path, image),
+    do: System.cmd("pdftoppm", ["-png", "-singlefile", "-r", "72", path, Path.rootname(image)])
+
+  defp ffmpeg(path, image),
+    do: System.cmd("ffmpeg", ["-v", "error", "-i", path, "-frames:v", "1", image])
+
+  # Renders the image to a temporary file and stores it next to the file.
+  defp store(node, extension, render) do
+    image = Path.join(System.tmp_dir!(), "preview-#{System.unique_integer([:positive])}#{extension}")
+
+    try do
+      with {_output, 0} <- render.(image),
+           {:ok, %File.Stat{size: bytes}} <- File.stat(image),
+           meta = %{
+             name: node.name,
+             content_type: Kotoba.Attachments.content_type(extension),
+             bytes: bytes
+           },
+           {:ok, url} <- Kotoba.Storage.adapter().put(node.key <> extension, image, meta) do
+        url
+      else
+        _error -> nil
+      end
+    after
+      File.rm(image)
+    end
+  end
+end
+```
+
+The URL goes into the attachment's `preview`. A result that is not a safe
+URL, or an exception, gives no preview and logs a warning: the upload is
+stored either way. The function runs in the LiveView process: give the
+tools a time limit (for example in a `Task` with `Task.yield/2`), and run
+them only on the checked PDFs and videos (`pdf?/1` and `video?/1` read the
+checked type, as above).
+
+### Serving PDFs and videos
+
+The editor and the rendered page load the file from its URL, so:
+
+* **Same origin, private files**: a URL on your app (the local plug, or a
+  controller that checks access) works as it is: the browser sends the
+  page's cookies with the `object` and `video` requests.
+* **Signed URLs**: a URL that expires breaks the preview of a stored
+  document. Give a path in your app that redirects to a fresh signed URL.
+* **Range requests**: a video needs them to seek, and Safari to play at
+  all. `Kotoba.Storage.Local.Plug` answers `Range` with `206`; S3 and most
+  stores do too. A controller that sends a file with `send_file/3` does
+  not: use `Plug.Static`'s range handling or `Kotoba.Storage.Local.Plug`.
+* **Headers**: `Content-Type` from the checked type, and
+  `Content-Disposition: inline` (`Kotoba.Attachments.inline?/1` is `true`
+  for PDF, MP4 and WebM). `Content-Security-Policy: default-src 'none';
+  sandbox` on the file does not stop the PDF viewer or the player.
+* **Your page's CSP**: if your app sends a `Content-Security-Policy`, allow
+  the files' origin in `object-src` (PDF), `media-src` (video) and
+  `img-src` (images and previews).
 
 ## Direct uploads are not supported
 

@@ -69,7 +69,7 @@ less than one frame apart, which a person does not type:
 
 ## Bundle size
 
-The editor bundle is about 578 KB, 188 KB with gzip. It has Lexical, its
+The editor bundle is about 579 KB, 188 KB with gzip. It has Lexical, its
 plugins (tables, about 70 KB of it), the Prism grammars of the 28 code
 languages of `Kotoba.CodeLanguages` (about 45 KB) and suggestions (about
 17 KB). The bundle is part of your `app.js`, so every page that
@@ -82,6 +82,16 @@ image buttons, not with the mouse: there is no drag and drop. A gallery is
 valid only under the root (not in a list item or a table cell), and has no
 caption of its own or layout options: `kotoba.css` shows it as a grid of
 cropped images, which your CSS can change (`.kotoba-gallery`).
+
+## PDF and video previews are the browser's
+
+A PDF shows in the browser's own viewer: most phones have none, and show
+the download link. A video plays only in a format the browser has: MP4
+with H.264 plays everywhere, WebM with VP8 or VP9 everywhere but some
+Safari versions. Kotoba does not convert videos or render preview images;
+the `:preview` option of `Kotoba.Live.consume_uploads/4` lets your app do
+it (see the [Uploads](uploads.md) guide). QuickTime and Matroska files are
+stored as files.
 
 ## Tables have no merged cells, colours or widths
 

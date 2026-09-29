@@ -53,7 +53,7 @@ before it renders. See the [Security](security.md) guide.
 | line break, rule | `br`, `hr` |
 | table | `div.kotoba-table-scroll` with a `table.kotoba-table`: `thead` for a header row, `tbody`, `th scope="col"`/`scope="row"`, `colspan` and `rowspan` |
 | link | `a` with `href` and `rel="noopener nofollow"` |
-| attachment | `figure.kotoba-attachment` with an `img` or a download link, and a `figcaption` |
+| attachment | `figure.kotoba-attachment` with an `img`, and a `figcaption`; a PDF (`figure.kotoba-attachment-pdf`) has an `object` (or a link to it with the `preview` image), a video (`figure.kotoba-attachment-video`) a `video` with controls; other files a download link |
 | gallery | `div.kotoba-gallery` with the `figure` of each attachment (a grid in `kotoba.css`) |
 | mention | `span.kotoba-mention` with `data-kind` and `data-id` |
 | an app node | what its `render_html/2` gives (see [Custom nodes](custom_nodes.md)) |

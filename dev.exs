@@ -409,7 +409,7 @@ defmodule KotobaDev.EditorLive do
        suggestions: []
      )
      |> allow_upload(:body,
-       accept: ~w(.png .jpg .jpeg .gif .webp .pdf),
+       accept: ~w(.png .jpg .jpeg .gif .webp .pdf .mp4 .webm),
        max_entries: 4,
        max_file_size: 5_000_000,
        auto_upload: true,

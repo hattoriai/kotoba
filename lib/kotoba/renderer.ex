@@ -25,7 +25,7 @@ defmodule Kotoba.Renderer do
   | table row          | `tr`                                                   |
   | table cell         | `td`, or `th` with `scope="col"` (header row) or `scope="row"` (header column); `colspan` and `rowspan` when they are more than 1 |
   | link, autolink     | `a` with `rel="noopener nofollow"`, or the text when the URL is not safe |
-  | attachment         | `figure.kotoba-attachment` with an `img`, or a download link, and a `figcaption` |
+  | attachment         | `figure.kotoba-attachment` with an `img`, an `object` (PDF), a `video`, or a download link, and a `figcaption` |
   | gallery            | `div.kotoba-gallery` with the `figure` of each attachment |
   | mention            | `span.kotoba-mention` with `data-kind` and `data-id`   |
   | tab                | a tab character, escaped                               |

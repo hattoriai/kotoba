@@ -218,13 +218,73 @@ defmodule Kotoba.RendererTest do
 
     test "file attachment" do
       input = [
-        attachment(%{"contentType" => "application/pdf", "name" => "a.pdf", "url" => "/f/a.pdf"})
+        attachment(%{"contentType" => "application/zip", "name" => "a.zip", "url" => "/f/a.zip"})
         |> Map.drop(["width", "height"])
       ]
 
       assert html(input) ==
                ~s(<figure class="kotoba-attachment"><figcaption>) <>
-                 ~s(<a href="/f/a.pdf" download rel="noopener nofollow">a.pdf</a></figcaption></figure>)
+                 ~s(<a href="/f/a.zip" download rel="noopener nofollow">a.zip</a></figcaption></figure>)
+    end
+
+    test "PDF attachment: the browser's viewer, with a download link" do
+      input = [
+        attachment(%{"contentType" => "application/pdf", "name" => "a.pdf", "url" => "/f/a.pdf"})
+        |> Map.drop(["width", "height"])
+      ]
+
+      link = ~s(<a href="/f/a.pdf" download rel="noopener nofollow">a.pdf</a>)
+
+      assert html(input) ==
+               ~s(<figure class="kotoba-attachment kotoba-attachment-pdf">) <>
+                 ~s(<object data="/f/a.pdf" type="application/pdf" aria-label="a.pdf">#{link}</object>) <>
+                 "<figcaption>#{link}</figcaption></figure>"
+    end
+
+    test "PDF attachment with a preview image" do
+      input = [
+        attachment(%{
+          "contentType" => "application/pdf",
+          "name" => "a.pdf",
+          "url" => "/f/a.pdf",
+          "preview" => "/f/a.png"
+        })
+        |> Map.drop(["width", "height"])
+      ]
+
+      assert html(input) ==
+               ~s(<figure class="kotoba-attachment kotoba-attachment-pdf">) <>
+                 ~s(<a href="/f/a.pdf" rel="noopener nofollow"><img src="/f/a.png" alt="Preview of a.pdf"></a>) <>
+                 ~s(<figcaption><a href="/f/a.pdf" download rel="noopener nofollow">a.pdf</a></figcaption></figure>)
+    end
+
+    test "video attachment: controls, metadata only, no autoplay, the preview as its poster" do
+      input = [
+        attachment(%{
+          "contentType" => "video/webm",
+          "name" => "clip.webm",
+          "url" => "/f/clip.webm",
+          "preview" => "/f/clip.jpg"
+        })
+        |> Map.drop(["width", "height"])
+      ]
+
+      link = ~s(<a href="/f/clip.webm" download rel="noopener nofollow">clip.webm</a>)
+
+      assert html(input) ==
+               ~s(<figure class="kotoba-attachment kotoba-attachment-video">) <>
+                 ~s(<video src="/f/clip.webm" controls preload="metadata" playsinline poster="/f/clip.jpg" aria-label="clip.webm">) <>
+                 "#{link}</video><figcaption>#{link}</figcaption></figure>"
+
+      refute html(input) =~ "autoplay"
+    end
+
+    test "an attachment with a preview that is not a safe URL renders as unknown" do
+      input = [
+        attachment(%{"contentType" => "video/mp4", "preview" => "javascript:alert(1)"})
+      ]
+
+      assert html(input) == ~s(<span class="kotoba-unknown" data-type="attachment"></span>)
     end
 
     test "mention" do

@@ -1,7 +1,14 @@
 // The `attachment` node: a file in the document, for example an image.
 //
 // The JSON keys mirror `Kotoba.Nodes.Attachment`: `key`, `url`, `name`,
-// `contentType`, `bytes`, and `width` and `height` for an image.
+// `contentType`, `bytes`, `width` and `height` for an image, and `preview`
+// (an image of a PDF's first page, a video's poster frame).
+//
+// In the editor, an image shows as an image, a PDF in the browser's PDF
+// viewer (or its preview image), and a video as a player with controls,
+// no autoplay, that loads only its metadata. The viewer and the player are
+// out of the tab order: the person selects the attachment, and plays or
+// reads it in the saved page. A video that does not load shows as a file.
 
 import {
   $applyNodeReplacement,
@@ -22,6 +29,7 @@ export interface AttachmentPayload {
   bytes: number;
   width?: number | null;
   height?: number | null;
+  preview?: string | null;
 }
 
 export type SerializedAttachmentNode = Spread<AttachmentPayload, SerializedLexicalNode>;
@@ -47,7 +55,7 @@ export class AttachmentNode extends KotobaDecoratorNode {
   }
 
   exportJSON(): SerializedAttachmentNode {
-    const { key, url, name, contentType, bytes, width, height } = this.getLatest().__attachment;
+    const { key, url, name, contentType, bytes, width, height, preview } = this.getLatest().__attachment;
     const json: SerializedAttachmentNode = {
       type: "attachment",
       version: 1,
@@ -59,6 +67,7 @@ export class AttachmentNode extends KotobaDecoratorNode {
     };
     if (typeof width === "number") json.width = width;
     if (typeof height === "number") json.height = height;
+    if (typeof preview === "string") json.preview = preview;
     return json;
   }
 
@@ -79,13 +88,18 @@ export class AttachmentNode extends KotobaDecoratorNode {
   }
 
   className(): string {
+    const { contentType } = this.__attachment;
+    if (contentType === "application/pdf") return "kotoba-attachment kotoba-attachment-pdf";
+    if (VIDEO_TYPES.has(contentType)) return "kotoba-attachment kotoba-attachment-video";
     return "kotoba-attachment";
   }
 
   render(): HTMLElement {
-    const { url, name, contentType, bytes, width, height } = this.__attachment;
+    const { url, name, contentType, bytes, width, height, preview } = this.__attachment;
     const figure = element("figure", "kotoba-attachment-figure");
     const src = safeUrl(url);
+    const poster = typeof preview === "string" ? safeUrl(preview) : null;
+    const icon = () => element("span", "kotoba-attachment-icon", fileExtension(name));
 
     if (contentType.startsWith("image/") && src !== null) {
       const image = element("img", "kotoba-attachment-image");
@@ -96,8 +110,44 @@ export class AttachmentNode extends KotobaDecoratorNode {
       if (typeof width === "number") image.width = width;
       if (typeof height === "number") image.height = height;
       figure.append(image);
+    } else if (contentType === "application/pdf" && src !== null && poster !== null) {
+      const image = element("img", "kotoba-attachment-preview");
+      image.src = poster;
+      image.alt = `Preview of ${name}`;
+      image.draggable = false;
+      image.loading = "lazy";
+      figure.append(image);
+    } else if (contentType === "application/pdf" && src !== null) {
+      // The browser's PDF viewer; with none, the object shows its content.
+      const object = element("object", "kotoba-attachment-viewer");
+      object.data = src;
+      object.type = "application/pdf";
+      object.tabIndex = -1;
+      object.setAttribute("aria-label", name);
+      object.append(icon());
+      figure.append(object);
+    } else if (VIDEO_TYPES.has(contentType) && src !== null) {
+      const video = element("video", "kotoba-attachment-player");
+      video.src = src;
+      video.controls = true;
+      video.preload = "metadata";
+      video.playsInline = true;
+      video.tabIndex = -1;
+      video.setAttribute("aria-label", name);
+      if (poster !== null) video.poster = poster;
+      // A video that does not load (a format the browser cannot play, a
+      // missing file) shows as a file.
+      video.addEventListener(
+        "error",
+        () => {
+          figure.classList.add("kotoba-attachment-failed");
+          video.replaceWith(icon());
+        },
+        { once: true },
+      );
+      figure.append(video);
     } else {
-      figure.append(element("span", "kotoba-attachment-icon", fileExtension(name)));
+      figure.append(icon());
     }
 
     const caption = element("figcaption", "kotoba-attachment-caption");
@@ -116,6 +166,8 @@ export function $isAttachmentNode(node: LexicalNode | null | undefined): node is
   return node instanceof AttachmentNode;
 }
 
+const VIDEO_TYPES = new Set(["video/mp4", "video/webm"]);
+
 function readAttachment(json: SerializedPartial<SerializedAttachmentNode>): AttachmentPayload {
   return {
     key: String(json.key ?? ""),
@@ -125,6 +177,7 @@ function readAttachment(json: SerializedPartial<SerializedAttachmentNode>): Atta
     bytes: typeof json.bytes === "number" ? json.bytes : 0,
     width: typeof json.width === "number" ? json.width : null,
     height: typeof json.height === "number" ? json.height : null,
+    preview: typeof json.preview === "string" ? json.preview : null,
   };
 }
 

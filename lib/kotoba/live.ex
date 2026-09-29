@@ -349,12 +349,20 @@ defmodule Kotoba.Live do
     * `:key` - a function of the upload entry and the checked content
       type that returns a storage key. The default is
       `&Kotoba.Storage.key(&1.client_name, &2)`.
+    * `:preview` - a function of the stored attachment
+      (`Kotoba.Nodes.Attachment`) and the path of the uploaded file that
+      returns the URL of a preview image, or `nil`: the first page of a
+      PDF, the poster frame of a video. It runs after the file is stored,
+      while its temporary file is still there; the app renders and stores
+      the image. A result that is not a safe URL, or an exception, gives no
+      preview and logs a warning. See the Uploads guide.
   """
   @spec consume_uploads(Socket.t(), atom() | String.t(), String.t(), keyword()) :: Socket.t()
   def consume_uploads(%Socket{} = socket, upload_name, editor_id, opts \\ [])
       when is_binary(editor_id) do
     storage = Keyword.get_lazy(opts, :storage, &Storage.adapter/0)
     key_fun = Keyword.get(opts, :key, &Storage.key(&1.client_name, &2))
+    preview_fun = Keyword.get(opts, :preview)
     entries = entries(socket, upload_name)
 
     socket = Enum.reduce(entries.invalid, socket, &drop_invalid(&2, upload_name, editor_id, &1))
@@ -376,7 +384,8 @@ defmodule Kotoba.Live do
     socket = %{socket | private: Map.put(socket.private, key, kept)}
 
     Enum.reduce(done, socket, fn entry, socket ->
-      result = consume_uploaded_entry(socket, entry, &store(&1, entry, storage, key_fun))
+      result =
+        consume_uploaded_entry(socket, entry, &store(&1, entry, storage, key_fun, preview_fun))
 
       case result do
         {:ok, attachment} ->
@@ -415,14 +424,14 @@ defmodule Kotoba.Live do
   # The consume callback always returns {:ok, _}: a file that could not be
   # stored is still consumed (its temporary file is removed), and the
   # result says what happened.
-  defp store(%{path: path}, entry, storage, key_fun) do
+  defp store(%{path: path}, entry, storage, key_fun, preview_fun) do
     name = Attachments.clean_name(entry.client_name)
 
     with {:ok, description} <- Attachments.describe(path, entry.client_type),
          {:ok, key} <- key(key_fun, entry, description.content_type),
          meta = %{name: name, content_type: description.content_type, bytes: description.bytes},
          {:ok, node} <- put_node(storage, key, path, meta, description) do
-      {:ok, {:ok, node}}
+      {:ok, {:ok, preview(node, path, preview_fun)}}
     else
       {:error, reason} -> {:ok, {:error, reason}}
     end
@@ -447,6 +456,31 @@ defmodule Kotoba.Live do
       other ->
         discard(storage, key, {:error, {:invalid_storage_result, other}})
     end
+  end
+
+  defp preview(node, _path, nil), do: node
+
+  defp preview(node, path, preview_fun) do
+    case preview_fun.(node, path) do
+      nil ->
+        node
+
+      url when is_binary(url) ->
+        if Sanitizer.link_url(url),
+          do: %{node | preview: url},
+          else: no_preview(node, {:unsafe_url, url})
+
+      other ->
+        no_preview(node, {:invalid_preview, other})
+    end
+  rescue
+    exception -> no_preview(node, exception)
+  end
+
+  defp no_preview(node, reason) do
+    Logger.warning("Kotoba: no preview for the upload #{inspect(node.name)}: #{inspect(reason)}")
+
+    node
   end
 
   defp discard(storage, key, error) do
