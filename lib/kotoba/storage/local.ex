@@ -31,7 +31,7 @@ defmodule Kotoba.Storage.Local do
   Serve the files with `Kotoba.Storage.Local.Plug`. Any other way to serve
   them must send `X-Content-Type-Options: nosniff`, a content type from the
   allow-list of `Kotoba.Attachments`, and `Content-Disposition: attachment`
-  for every type that is not an image or a PDF, as the plug does. A key is
+  for every type that is not an image, a PDF or a video, as the plug does. A key is
   always a relative path under the root: a key that
   `Kotoba.Storage.valid_key?/1` refuses gives `{:error, :invalid_key}`, so
   a key cannot reach a file outside the root.

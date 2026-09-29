@@ -29,18 +29,14 @@ defmodule KotobaTest.EditorLive do
 
   @impl true
   def mount(params, _session, socket) do
-    storage =
-      case params["storage"] do
-        "failing" -> KotobaTest.FailingStorage
-        "unsafe" -> KotobaTest.UnsafeStorage
-        "broken" -> KotobaTest.BrokenStorage
-        _other -> Kotoba.Storage.Local
-      end
+    storage = storage(params["storage"])
+    preview = preview(params["preview"])
 
     {:ok,
      socket
      |> assign(
        storage: storage,
+       preview: preview,
        form: to_form(%{"body" => nil}, as: :post)
      )
      |> allow_upload(:attachments,
@@ -51,6 +47,20 @@ defmodule KotobaTest.EditorLive do
        progress: &handle_progress/3
      )}
   end
+
+  defp storage("failing"), do: KotobaTest.FailingStorage
+  defp storage("unsafe"), do: KotobaTest.UnsafeStorage
+  defp storage("broken"), do: KotobaTest.BrokenStorage
+  defp storage(_other), do: Kotoba.Storage.Local
+
+  # ?preview=ok gives each upload a preview URL, ?preview=unsafe an unsafe
+  # one, ?preview=raise an exception.
+  defp preview("ok"), do: &ok_preview/2
+  defp preview("unsafe"), do: fn _node, _path -> "javascript:alert(1)" end
+  defp preview("raise"), do: fn _node, _path -> raise "no renderer" end
+  defp preview(_other), do: nil
+
+  defp ok_preview(node, path), do: if(File.exists?(path), do: "/previews/#{node.name}.jpg")
 
   @impl true
   def render(assigns) do
@@ -129,7 +139,10 @@ defmodule KotobaTest.EditorLive do
   defp handle_progress(:attachments, entry, socket) do
     if entry.done? do
       {:noreply,
-       Kotoba.Live.consume_uploads(socket, :attachments, @editor, storage: socket.assigns.storage)}
+       Kotoba.Live.consume_uploads(socket, :attachments, @editor,
+         storage: socket.assigns.storage,
+         preview: socket.assigns.preview
+       )}
     else
       {:noreply, socket}
     end

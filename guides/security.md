@@ -69,7 +69,7 @@ and shows it with no new rendering. So:
 
 Kotoba reads the first bytes of each uploaded file on the server and
 keeps a content type only when the bytes prove it: PNG, JPEG, GIF, WebP,
-PDF, UTF-8 plain text, ZIP and Office files. Every other file is
+PDF, MP4 and WebM video, UTF-8 plain text, ZIP and Office files. Every other file is
 `application/octet-stream`. The type that the browser sends is not used.
 The storage key takes its extension from the checked type, so a key never
 ends in `.html` or `.svg`. The file name is cleaned of control and
@@ -80,8 +80,8 @@ a script on your origin:
 
 * `X-Content-Type-Options: nosniff`.
 * The checked content type, never the type that the browser sent.
-* `Content-Disposition: attachment` for every type that is not an image
-  or a PDF (`Kotoba.Attachments.inline?/1`).
+* `Content-Disposition: attachment` for every type that is not an image,
+  a PDF or a video (`Kotoba.Attachments.inline?/1`).
 * `Content-Security-Policy: default-src 'none'; sandbox`.
 
 `Kotoba.Storage.Local.Plug` sends all of these headers, and

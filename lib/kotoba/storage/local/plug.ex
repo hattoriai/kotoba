@@ -29,8 +29,15 @@ defmodule Kotoba.Storage.Local.Plug do
     * `Cache-Control: private, max-age=…`, `X-Content-Type-Options: nosniff`
       and `Content-Security-Policy: default-src 'none'; sandbox`, so a file
       cannot run a script on the app's origin.
-    * PNG, JPEG, GIF and WebP images and PDF files are served inline;
-      every other file has `Content-Disposition: attachment`.
+    * PNG, JPEG, GIF and WebP images, PDF files and MP4 and WebM videos
+      are served inline; every other file has
+      `Content-Disposition: attachment`.
+    * `Accept-Ranges: bytes`, and a `GET` with a single `Range`
+      (`bytes=0-99`, `bytes=100-`, `bytes=-100`) gives `206` with that part
+      of the file and `Content-Range`. A range that starts after the end of
+      the file gives `416`. Several ranges, or a header that is not valid,
+      give the whole file. Browsers need ranges to seek in a video, and
+      Safari to play one.
     * A path with a segment that is not a valid key segment (`..`, `.`, or
       a character other than ASCII letters, digits, `.`, `-` and `_`) gives
       `400`. A key with no regular file gives `404`: a directory, a symbolic
@@ -73,7 +80,7 @@ defmodule Kotoba.Storage.Local.Plug do
       root = opts |> Keyword.get_lazy(:root, &Local.root/0) |> Path.expand()
 
       case regular_file(root, segments) do
-        {:ok, path} -> send_regular_file(conn, path, opts)
+        {:ok, path, size} -> send_regular_file(conn, path, size, opts)
         :error -> halt_with(conn, 404)
       end
     else
@@ -98,14 +105,14 @@ defmodule Kotoba.Storage.Local.Plug do
 
     with directory when is_binary(directory) <- directory,
          path = Path.join(directory, file),
-         {:ok, %File.Stat{type: :regular}} <- File.lstat(path) do
-      {:ok, path}
+         {:ok, %File.Stat{type: :regular, size: size}} <- File.lstat(path) do
+      {:ok, path, size}
     else
       _other -> :error
     end
   end
 
-  defp send_regular_file(conn, path, opts) do
+  defp send_regular_file(conn, path, size, opts) do
     type = Attachments.content_type(Path.extname(path))
 
     conn
@@ -114,12 +121,57 @@ defmodule Kotoba.Storage.Local.Plug do
     |> put_resp_header("x-content-type-options", "nosniff")
     |> put_resp_header("content-security-policy", "default-src 'none'; sandbox")
     |> put_resp_header("content-disposition", disposition(type))
-    |> send_body(path)
+    |> put_resp_header("accept-ranges", "bytes")
+    |> send_body(path, size)
     |> halt()
   end
 
-  defp send_body(%Plug.Conn{method: "HEAD"} = conn, _path), do: send_resp(conn, 200, "")
-  defp send_body(conn, path), do: send_file(conn, 200, path)
+  defp send_body(%Plug.Conn{method: "HEAD"} = conn, _path, _size), do: send_resp(conn, 200, "")
+
+  defp send_body(conn, path, size) do
+    case range(get_req_header(conn, "range"), size) do
+      {first, last} ->
+        conn
+        |> put_resp_header("content-range", "bytes #{first}-#{last}/#{size}")
+        |> send_file(206, path, first, last - first + 1)
+
+      :unsatisfiable ->
+        conn
+        |> put_resp_header("content-range", "bytes */#{size}")
+        |> send_resp(416, "")
+
+      :all ->
+        send_file(conn, 200, path)
+    end
+  end
+
+  # One `bytes` range: `first-last`, `first-` or `-suffix`. Anything else
+  # (several ranges, another unit, a header that is not valid) is the whole
+  # file, as RFC 9110 allows.
+  defp range([header], size) do
+    case Regex.run(~r/\Abytes=(\d*)-(\d*)\z/, String.trim(header), capture: :all_but_first) do
+      ["", ""] -> :all
+      ["", suffix] -> suffix_range(String.to_integer(suffix), size)
+      [first, last] -> first_range(String.to_integer(first), last, size)
+      nil -> :all
+    end
+  end
+
+  defp range(_headers, _size), do: :all
+
+  defp suffix_range(0, _size), do: :unsatisfiable
+  defp suffix_range(_suffix, 0), do: :unsatisfiable
+  defp suffix_range(suffix, size), do: {max(size - suffix, 0), size - 1}
+
+  defp first_range(first, _last, size) when first >= size, do: :unsatisfiable
+  defp first_range(first, "", size), do: {first, size - 1}
+
+  defp first_range(first, last, size) do
+    case String.to_integer(last) do
+      last when last < first -> :all
+      last -> {first, min(last, size - 1)}
+    end
+  end
 
   defp disposition(type), do: if(Attachments.inline?(type), do: "inline", else: "attachment")
 

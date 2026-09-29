@@ -24,7 +24,7 @@ defmodule Kotoba.Storage do
   An uploaded file is content from a user. Serve it with
   `X-Content-Type-Options: nosniff`, with its checked content type, and
   with `Content-Disposition: attachment` for every type that is not an
-  image or a PDF (see `Kotoba.Attachments.inline?/1`).
+  image, a PDF or a video (see `Kotoba.Attachments.inline?/1`).
   `Kotoba.Storage.Local.Plug` does this for the local adapter; the example
   below does it for S3.
 

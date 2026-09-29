@@ -75,6 +75,38 @@ defmodule Kotoba.AttachmentsTest do
              describe_bytes(dir, "not a pdf", "application/pdf")
   end
 
+  # The start of a WebM file: the EBML header, with the "webm" DocType.
+  @webm <<0x1A, 0x45, 0xDF, 0xA3, 0x9F, 0x42, 0x86, 0x81, 0x01, 0x42, 0xF7, 0x81, 0x01, 0x42,
+          0xF2, 0x81, 0x04, 0x42, 0xF3, 0x81, 0x08, 0x42, 0x82, 0x84, "webm", 0x42, 0x87, 0x81,
+          0x04, 0x42, 0x85, 0x81, 0x02, 0x18, 0x53, 0x80, 0x67>>
+
+  defp ftyp(major, compatible) do
+    body = major <> <<0::32>> <> Enum.join(compatible)
+    <<8 + byte_size(body)::32, "ftyp", body::binary, 0, 0, 0, 8, "free">>
+  end
+
+  test "MP4 and WebM videos are proven by their bytes", %{dir: dir} do
+    assert %{content_type: "video/webm", width: nil} = describe_bytes(dir, @webm, nil)
+    assert %{content_type: "video/mp4"} = describe_bytes(dir, ftyp("isom", ["isom", "avc1"]), "")
+    assert %{content_type: "video/mp4"} = describe_bytes(dir, ftyp("abcd", ["mp42"]), "")
+
+    matroska = :binary.replace(@webm, "webm", "mkvx")
+
+    for {bytes, claim} <- [
+          {matroska, "video/webm"},
+          {ftyp("qt  ", ["qt  "]), "video/quicktime"},
+          {ftyp("M4A ", ["isom"]), "video/mp4"},
+          {ftyp("heic", ["mif1"]), "video/mp4"},
+          {ftyp("abcd", ["abcd"]), "video/mp4"},
+          {<<0x1A, 0x45, 0xDF, 0xA3>>, "video/webm"},
+          {<<0::32, "ftyp">>, "video/mp4"},
+          {"not a video", "video/mp4"}
+        ] do
+      assert %{content_type: "application/octet-stream"} = describe_bytes(dir, bytes, claim),
+             "#{inspect(bytes)} is not a video"
+    end
+  end
+
   test "a renamed PNG is a PNG, whatever the claim", %{dir: dir} do
     for claim <- ["text/html", "image/svg+xml", "application/pdf", nil] do
       assert %{content_type: "image/png", width: 2, height: 3} = describe_bytes(dir, @png, claim)

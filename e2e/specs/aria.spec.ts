@@ -57,7 +57,7 @@ test("the upload input has a label for assistive technology", async ({ page }) =
   const input = page.getByLabel("Attach files");
   await expect(input).toHaveAttribute("type", "file");
   await expect(input).toHaveAttribute("tabindex", "-1");
-  await expect(input).toHaveAttribute("accept", ".png,.jpg,.jpeg,.gif,.webp,.pdf");
+  await expect(input).toHaveAttribute("accept", ".png,.jpg,.jpeg,.gif,.webp,.pdf,.mp4,.webm");
   // The editor's own picker is hidden from assistive technology; the
   // toolbar button opens it.
   await expect(page.locator("#post_body_editor .kotoba-file-picker")).toHaveAttribute("aria-hidden", "true");

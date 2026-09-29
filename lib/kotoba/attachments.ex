@@ -11,6 +11,11 @@ defmodule Kotoba.Attachments do
       width and height when the header has them. The browser's claim does
       not matter: a PNG sent as `text/html` is a PNG.
     * PDF, from `%PDF-`.
+    * MP4 video (`video/mp4`), from its `ftyp` box with an MP4 brand
+      (`isom`, `mp41`, `mp42`, `avc1`, `M4V `, …), and WebM video
+      (`video/webm`), from its EBML header with the `webm` document type.
+      A QuickTime (`.mov`), Matroska (`.mkv`) or audio-only (`M4A `) file
+      is not in the list.
     * ZIP files (`PK\\x03\\x04`): the Office Open XML and OpenDocument
       types when the browser claims one of them, else `application/zip`.
     * The older Office files (the OLE2 signature): `application/msword`,
@@ -26,7 +31,7 @@ defmodule Kotoba.Attachments do
 
   `extension/1` gives the file extension of each checked type, and
   `inline?/1` tells which types a browser can show in the page (the
-  images and PDF). Serve every other file with
+  images, PDF and the videos). Serve every other file with
   `Content-Disposition: attachment`.
   """
 
@@ -44,6 +49,8 @@ defmodule Kotoba.Attachments do
     "image/gif" => ".gif",
     "image/webp" => ".webp",
     "application/pdf" => ".pdf",
+    "video/mp4" => ".mp4",
+    "video/webm" => ".webm",
     "text/plain" => ".txt",
     "application/zip" => ".zip",
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document" => ".docx",
@@ -69,7 +76,37 @@ defmodule Kotoba.Attachments do
 
   @ole_types ["application/msword", "application/vnd.ms-excel", "application/vnd.ms-powerpoint"]
 
-  @inline ["image/png", "image/jpeg", "image/gif", "image/webp", "application/pdf"]
+  @inline [
+    "image/png",
+    "image/jpeg",
+    "image/gif",
+    "image/webp",
+    "application/pdf",
+    "video/mp4",
+    "video/webm"
+  ]
+
+  # The major and compatible brands of an MP4 file's `ftyp` box. QuickTime
+  # (`qt  `), audio-only (`M4A `, `M4B `) and HEIF/AVIF image brands are not
+  # MP4 video.
+  @mp4_brands [
+    "isom",
+    "iso2",
+    "iso3",
+    "iso4",
+    "iso5",
+    "iso6",
+    "mp41",
+    "mp42",
+    "avc1",
+    "dash",
+    "mmp4",
+    "M4V ",
+    "M4VH",
+    "M4VP",
+    "msnv"
+  ]
+  @not_video_brands ["qt  ", "M4A ", "M4B ", "M4P ", "heic", "heix", "mif1", "msf1", "avif"]
 
   @typedoc "What `describe/2` finds."
   @type description :: %{
@@ -135,10 +172,13 @@ defmodule Kotoba.Attachments do
 
   @doc """
   Returns `true` for a checked type that a browser can show in the page:
-  the images and PDF. Serve every other type with
+  the images, PDF and the videos. Serve every other type with
   `Content-Disposition: attachment`.
 
   ## Examples
+
+      iex> Kotoba.Attachments.inline?("video/webm")
+      true
 
       iex> Kotoba.Attachments.inline?("application/pdf")
       true
@@ -162,7 +202,8 @@ defmodule Kotoba.Attachments do
       content_type: description.content_type,
       bytes: description.bytes,
       width: description.width,
-      height: description.height
+      height: description.height,
+      preview: Keyword.get(attrs, :preview)
     }
   end
 
@@ -217,6 +258,19 @@ defmodule Kotoba.Attachments do
 
   defp other_type(<<"%PDF-", _rest::binary>>, _claim), do: "application/pdf"
 
+  defp other_type(<<size::32, "ftyp", major::binary-size(4), _minor::32, rest::binary>>, _claim)
+       when size >= 16 do
+    cond do
+      major in @not_video_brands -> @octet
+      Enum.any?([major | brands(rest, size - 16)], &(&1 in @mp4_brands)) -> "video/mp4"
+      true -> @octet
+    end
+  end
+
+  defp other_type(<<0x1A, 0x45, 0xDF, 0xA3, rest::binary>> = _head, _claim) do
+    if ebml_doc_type(rest) == "webm", do: "video/webm", else: @octet
+  end
+
   defp other_type(<<"PK", 3, 4, _rest::binary>>, claim),
     do: if(claim in @zip_types, do: claim, else: "application/zip")
 
@@ -228,6 +282,68 @@ defmodule Kotoba.Attachments do
   end
 
   defp other_type(_head, _claim), do: @octet
+
+  # The compatible brands of an `ftyp` box: 4 bytes each, in `length` bytes.
+  defp brands(rest, length) do
+    available = min(length, byte_size(rest))
+    whole = available - rem(available, 4)
+    for <<brand::binary-size(4) <- binary_part(rest, 0, whole)>>, do: brand
+  end
+
+  # The EBML header: its size, then elements; the DocType element (ID 0x4282)
+  # names the format. Sizes are variable-length integers.
+  defp ebml_doc_type(rest) do
+    with {size, body} <- vint(rest),
+         true <- byte_size(body) >= size do
+      doc_type(binary_part(body, 0, size))
+    else
+      _other -> nil
+    end
+  end
+
+  defp doc_type(<<0x42, 0x82, rest::binary>>) do
+    case element_value(rest) do
+      {value, _next} -> value
+      nil -> nil
+    end
+  end
+
+  defp doc_type(<<id, rest::binary>>) when id >= 0x80, do: skip_element(rest)
+  defp doc_type(<<id, _second, rest::binary>>) when id >= 0x40, do: skip_element(rest)
+  defp doc_type(_other), do: nil
+
+  defp skip_element(rest) do
+    case element_value(rest) do
+      {_value, next} -> doc_type(next)
+      nil -> nil
+    end
+  end
+
+  # The value of an element (after its ID): its size, then that many bytes.
+  defp element_value(rest) do
+    case vint(rest) do
+      {size, data} when byte_size(data) >= size ->
+        {binary_part(data, 0, size), binary_part(data, size, byte_size(data) - size)}
+
+      _other ->
+        nil
+    end
+  end
+
+  # An EBML variable-length integer: the number of leading zero bits of the
+  # first byte gives its length. Returns the value and the rest.
+  defp vint(<<first, _rest::binary>> = data) when first > 0 do
+    length = 9 - bit_length(first)
+
+    if byte_size(data) >= length do
+      value = :binary.decode_unsigned(binary_part(data, 0, length))
+      {value &&& (1 <<< (7 * length)) - 1, binary_part(data, length, byte_size(data) - length)}
+    end
+  end
+
+  defp vint(_data), do: nil
+
+  defp bit_length(byte), do: byte |> Integer.digits(2) |> length()
 
   # The head can end inside a UTF-8 sequence: up to three bytes at the end
   # may be cut off.

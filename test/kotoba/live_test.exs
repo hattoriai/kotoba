@@ -377,6 +377,39 @@ defmodule Kotoba.LiveTest do
       assert Process.alive?(view.pid)
     end
 
+    test ":preview gives the attachment a preview URL, made while the file is there" do
+      {:ok, view, _html} = live(build_conn(), "/editor?preview=ok")
+
+      upload =
+        file_input(view, "#post-form", :attachments, [
+          %{name: "cat.png", content: @png, type: "image/png"}
+        ])
+
+      render_upload(upload, "cat.png")
+      assert_push_event(view, "insert_node", %{node: %{"preview" => "/previews/cat.png.jpg"}})
+    end
+
+    for {preview, reason} <- [{"unsafe", "unsafe_url"}, {"raise", "no renderer"}] do
+      test ":preview that gives #{preview} leaves the attachment with no preview" do
+        {:ok, view, _html} = live(build_conn(), "/editor?preview=#{unquote(preview)}")
+
+        upload =
+          file_input(view, "#post-form", :attachments, [
+            %{name: "cat.png", content: @png, type: "image/png"}
+          ])
+
+        log =
+          capture_log(fn ->
+            render_upload(upload, "cat.png")
+            assert_push_event(view, "insert_node", %{node: node})
+            refute Map.has_key?(node, "preview")
+          end)
+
+        assert log =~ ~s(no preview for the upload "cat.png")
+        assert log =~ unquote(reason)
+      end
+    end
+
     test "does not trust the browser's image type", %{view: view} do
       upload =
         file_input(view, "#post-form", :attachments, [

@@ -9,6 +9,18 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- PDF and video previews (#6, #7). A PDF shows in the browser's viewer (an
+  `object` with a download link for a browser that has none), in the
+  editor and in the rendered HTML. MP4 and WebM videos are checked from
+  their bytes (`video/mp4`, `video/webm`; QuickTime, Matroska and audio-only
+  files stay `application/octet-stream`), served inline, and play in a
+  `video` with controls, `preload="metadata"` and no autoplay; in the
+  editor, a video that does not load shows as a file. An attachment's new
+  `preview` (a PDF's first page, a video's poster) comes from the
+  `:preview` option of `Kotoba.Live.consume_uploads/4`, and must be a safe
+  URL. `Kotoba.Storage.Local.Plug` answers `Range` requests (`206`,
+  `416`), which video seeking needs. `Kotoba.Nodes.Attachment.pdf?/1` and
+  `video?/1` are new.
 - Image galleries (#5): a `gallery` node (`Kotoba.Nodes.Gallery`, part of
   the `attachments` feature, valid only under the root) that holds
   attachments, rendered as a `div.kotoba-gallery` grid. Images uploaded

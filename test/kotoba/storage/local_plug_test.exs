@@ -16,6 +16,7 @@ defmodule Kotoba.Storage.Local.PlugTest do
     File.write!(Path.join(root, "2026/09/run.js"), "alert(1)")
     File.write!(Path.join(root, "2026/09/doc.pdf"), "%PDF-1.7")
     File.write!(Path.join(root, "2026/09/notes.txt"), "notes")
+    File.write!(Path.join(root, "2026/09/clip.webm"), "0123456789")
     File.write!(Path.join(Path.dirname(root), "secret.txt"), "secret")
     on_exit(fn -> File.rm_rf!(base) end)
 
@@ -55,6 +56,41 @@ defmodule Kotoba.Storage.Local.PlugTest do
     conn = call("/files/2026/09/notes.txt", opts)
     assert get_resp_header(conn, "content-type") == ["text/plain"]
     assert get_resp_header(conn, "content-disposition") == ["attachment"]
+  end
+
+  test "serves a video inline, and accepts byte ranges", %{opts: opts} do
+    conn = call("/files/2026/09/clip.webm", opts)
+    assert conn.status == 200
+    assert conn.resp_body == "0123456789"
+    assert get_resp_header(conn, "content-type") == ["video/webm"]
+    assert get_resp_header(conn, "content-disposition") == ["inline"]
+    assert get_resp_header(conn, "accept-ranges") == ["bytes"]
+  end
+
+  for {range, status, body, content_range} <- [
+        {"bytes=2-5", 206, "2345", "bytes 2-5/10"},
+        {"bytes=7-", 206, "789", "bytes 7-9/10"},
+        {"bytes=-3", 206, "789", "bytes 7-9/10"},
+        {"bytes=8-100", 206, "89", "bytes 8-9/10"},
+        {"bytes=-100", 206, "0123456789", "bytes 0-9/10"},
+        {"bytes=10-", 416, "", "bytes */10"},
+        {"bytes=-0", 416, "", "bytes */10"},
+        {"bytes=5-2", 200, "0123456789", nil},
+        {"bytes=0-1,4-5", 200, "0123456789", nil},
+        {"items=0-1", 200, "0123456789", nil}
+      ] do
+    test "Range: #{range} gives #{status}", %{opts: opts} do
+      conn =
+        conn(:get, "/files/2026/09/clip.webm")
+        |> put_req_header("range", unquote(range))
+        |> FilePlug.call(opts)
+
+      assert conn.status == unquote(status)
+      assert conn.resp_body == unquote(body)
+
+      assert get_resp_header(conn, "content-range") ==
+               if(unquote(content_range), do: [unquote(content_range)], else: [])
+    end
   end
 
   test "answers HEAD with no body", %{opts: opts} do
