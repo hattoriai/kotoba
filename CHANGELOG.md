@@ -149,6 +149,12 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- `Kotoba.Live.consume_uploads/4` consumes an entry once. LiveView drops
+  a consumed entry a message later, so a second call before that (the
+  next file done, a form change) consumed it again and crashed the
+  LiveView: of several files that finished one after the other, only the
+  first was stored.
+
 - A rendered check list (`ul.kotoba-check`) shows a box, checked or not,
   in front of each item, as the editor does; before, `kotoba.css` hid the
   bullets and drew no box.
