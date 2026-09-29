@@ -322,8 +322,7 @@ defmodule Kotoba.Attachments do
   # The value of an element (after its ID): its size, then that many bytes.
   defp element_value(rest) do
     with {size, data} when byte_size(data) >= size <- vint(rest) do
-      <<value::binary-size(size), next::binary>> = data
-      {value, next}
+      {binary_part(data, 0, size), binary_part(data, size, byte_size(data) - size)}
     else
       _other -> nil
     end
@@ -334,12 +333,9 @@ defmodule Kotoba.Attachments do
   defp vint(<<first, _rest::binary>> = data) when first > 0 do
     length = 9 - bit_length(first)
 
-    case data do
-      <<value::size(length * 8), rest::binary>> ->
-        {value &&& (1 <<< (7 * length)) - 1, rest}
-
-      _short ->
-        nil
+    if byte_size(data) >= length do
+      value = :binary.decode_unsigned(binary_part(data, 0, length))
+      {value &&& (1 <<< (7 * length)) - 1, binary_part(data, length, byte_size(data) - length)}
     end
   end
 
