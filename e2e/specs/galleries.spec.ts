@@ -111,13 +111,13 @@ test("Backspace and Delete remove an image; a gallery of one image becomes that 
 
   await page.keyboard.press("Delete");
   await expect(live(page)).toHaveText("Removed a.png");
-  await expect.poll(() => blocks(page)).toEqual(["c.png", "paragraph"]);
+  await expect.poll(() => blocks(page)).toEqual(["paragraph", "c.png", "paragraph"]);
   await expect(editable.locator(".kotoba-attachment.kotoba-selected")).toHaveCount(1);
 
   await page.keyboard.press(`${MOD}+Z`);
-  await expect.poll(() => blocks(page)).toEqual([["a.png", "c.png"], "paragraph"]);
+  await expect.poll(() => blocks(page)).toEqual(["paragraph", ["a.png", "c.png"], "paragraph"]);
   await page.keyboard.press(`${MOD}+Z`);
-  await expect.poll(() => blocks(page)).toEqual([["a.png", "b.png", "c.png"], "paragraph"]);
+  await expect.poll(() => blocks(page)).toEqual(["paragraph", ["a.png", "b.png", "c.png"], "paragraph"]);
 });
 
 test("the Image group of the toolbar groups images, moves them and ungroups them", async ({ page }) => {
@@ -168,5 +168,5 @@ test("an image uploaded while an image of a gallery is selected joins the galler
   await images(page).first().click();
   await attachFiles(page, EDITOR, [png("c.png", 4, 4)]);
   await expectNodes(page, "attachment", 3);
-  await expect.poll(() => blocks(page)).toEqual([["a.png", "c.png", "b.png"], "paragraph"]);
+  await expect.poll(() => blocks(page)).toEqual(["paragraph", ["a.png", "c.png", "b.png"], "paragraph"]);
 });
