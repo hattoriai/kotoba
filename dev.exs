@@ -129,13 +129,13 @@ defmodule KotobaDev.Assist do
 
     socket
     |> Kotoba.Live.stream_start(id, ref, Keyword.merge(answer_opts, opts))
-    |> Phoenix.Component.update(:streams, &MapSet.put(&1, ref))
+    |> Phoenix.Component.update(:assist_refs, &MapSet.put(&1, ref))
   end
 
   @doc "Sends the next chunk, or ends the stream (a \"fail\" stream is cancelled after two chunks)."
   def next(socket, id, ref, action, rest) do
     cond do
-      ref not in socket.assigns.streams ->
+      ref not in socket.assigns.assist_refs ->
         socket
 
       rest == "" ->
@@ -152,7 +152,8 @@ defmodule KotobaDev.Assist do
   end
 
   @doc "Stops a stream: its next chunks are dropped."
-  def stop(socket, ref), do: Phoenix.Component.update(socket, :streams, &MapSet.delete(&1, ref))
+  def stop(socket, ref),
+    do: Phoenix.Component.update(socket, :assist_refs, &MapSet.delete(&1, ref))
 end
 
 defmodule KotobaDev.Prompts do
@@ -404,7 +405,7 @@ defmodule KotobaDev.EditorLive do
        reverse: params["uploads"] == "reverse",
        hold: false,
        reject_next: false,
-       streams: MapSet.new(),
+       assist_refs: MapSet.new(),
        suggestions: []
      )
      |> allow_upload(:body,
