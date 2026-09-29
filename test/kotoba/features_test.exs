@@ -75,6 +75,10 @@ defmodule Kotoba.FeaturesTest do
       assert Features.used(doc(input)) == []
     end
 
+    test "a gallery is attachments" do
+      assert Features.used(doc([gallery([attachment()])])) == [:attachments]
+    end
+
     test "a bulleted list is lists, not check_lists" do
       assert Features.used(doc([list("bullet", [item([text("x")])])])) == [:lists]
     end

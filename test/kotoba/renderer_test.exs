@@ -618,6 +618,52 @@ defmodule Kotoba.RendererTest do
     end
   end
 
+  describe "galleries" do
+    setup do
+      dog = attachment(%{"name" => "dog.png", "url" => "/uploads/k/dog.png", "key" => "k2"})
+      %{images: [attachment(), dog |> Map.drop(["width", "height"])]}
+    end
+
+    test "a gallery is a div with the figure of each image", %{images: images} do
+      assert html([gallery(images)]) ==
+               ~s(<div class="kotoba-gallery">) <>
+                 ~s(<figure class="kotoba-attachment"><img src="/uploads/k/cat.png" alt="cat.png" width="640" height="480">) <>
+                 "<figcaption>cat.png</figcaption></figure>" <>
+                 ~s(<figure class="kotoba-attachment"><img src="/uploads/k/dog.png" alt="dog.png">) <>
+                 "<figcaption>dog.png</figcaption></figure></div>"
+    end
+
+    test "its text and Markdown have one image a line", %{images: images} do
+      doc = doc([paragraph([text("Look")]), gallery(images), paragraph([text("end")])])
+
+      assert Renderer.to_text(doc) == "Look\ncat.png\ndog.png\nend"
+
+      assert Renderer.to_markdown(doc) ==
+               "Look\n\n![cat.png](/uploads/k/cat.png)\n![dog.png](/uploads/k/dog.png)\n\nend"
+    end
+
+    test ":untrusted renders the names in a paragraph", %{images: images} do
+      input = [gallery([attachment(%{"name" => "<b>.png"}) | images])]
+
+      assert html(input, policy: :untrusted) == "<p>&lt;b&gt;.png, cat.png, dog.png</p>"
+    end
+
+    test "a gallery is valid only under the root, and holds only attachments", %{images: images} do
+      assert html([list("bullet", [item([gallery(images)])])]) ==
+               ~s(<ul><li><span class="kotoba-unknown" data-type="gallery"></span></li></ul>)
+
+      assert html([gallery([paragraph([text("no")]), hd(images)])]) ==
+               ~s(<div class="kotoba-gallery"><span class="kotoba-unknown" data-type="paragraph"></span>) <>
+                 ~s(<figure class="kotoba-attachment"><img src="/uploads/k/cat.png" alt="cat.png" width="640" height="480">) <>
+                 "<figcaption>cat.png</figcaption></figure></div>"
+    end
+
+    test "an attachment with a URL that is not safe renders as unknown in a gallery" do
+      assert html([gallery([attachment(%{"url" => "javascript:alert(1)"})])]) ==
+               ~s(<div class="kotoba-gallery"><span class="kotoba-unknown" data-type="attachment"></span></div>)
+    end
+  end
+
   describe "to_text/2" do
     test "joins the blocks with a new line" do
       input = [

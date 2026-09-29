@@ -129,6 +129,8 @@ defmodule Kotoba.TestJSON do
     )
   end
 
+  def gallery(attachments), do: element("gallery", attachments)
+
   def unknown(type), do: %{"type" => type, "version" => 1, "children" => [text("hidden")]}
 
   def element(type, children, attrs \\ %{}) do

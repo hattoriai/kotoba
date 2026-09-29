@@ -9,6 +9,18 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Image galleries (#5): a `gallery` node (`Kotoba.Nodes.Gallery`, part of
+  the `attachments` feature, valid only under the root) that holds
+  attachments, rendered as a `div.kotoba-gallery` grid. Images uploaded
+  together make a gallery, each in the place of its own marker (the order
+  stays when uploads finish in another order); an image uploaded with an
+  image of a gallery selected joins it. The arrow keys move between the
+  images and out of the gallery, `Alt+Left` and `Alt+Right` move an
+  image, Backspace and Delete remove one, and the live region says the
+  position ("2 of 3: cat.png"). The toolbar's Image group (`gallery`,
+  `image-previous`, `image-next`) shows while an image is selected: it
+  groups the image with the images next to it, ungroups a gallery, and
+  moves an image. A gallery of one image becomes that image.
 - Suggestions (#26): text that the server streams into the editor, for
   example the answer of a language model. `Kotoba.Live.stream_start/4`
   (`at: :selection | :caret | :after | :end`, `format: :markdown | :text`,

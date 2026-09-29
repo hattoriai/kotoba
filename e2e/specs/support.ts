@@ -136,6 +136,11 @@ export interface FileSpec {
 }
 
 /** A PNG image of the given size, one colour. */
+/** A small PDF file. */
+export function pdf(name: string): FileSpec {
+  return { name, mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n%%EOF\n") };
+}
+
 export function png(name: string, width: number, height: number): FileSpec {
   const chunk = (type: string, data: Buffer): Buffer => {
     const length = Buffer.alloc(4);

@@ -4,6 +4,7 @@
 
 export { Kotoba } from "./hook";
 export { AttachmentNode } from "./nodes/attachment";
+export { GalleryNode } from "./nodes/gallery";
 export { MentionNode } from "./nodes/mention";
 // The types of an extension module (see the Extensions guide).
 export type { ExtensionAPI, ExtensionContext, KotobaExtension, ToolbarControl } from "./extensions";

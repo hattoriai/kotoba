@@ -444,6 +444,9 @@ defmodule KotobaDev.EditorLive do
 
     <div class="row" role="group" aria-label="Server events">
       <button type="button" id="load-sample" phx-click="load_sample">Load sample</button>
+      <button :if={@stored} type="button" id="load-stored" phx-click="load_stored">
+        Load stored
+      </button>
       <button
         type="button"
         id="toggle-readonly"
@@ -550,6 +553,11 @@ defmodule KotobaDev.EditorLive do
 
   def handle_event("load_sample", _params, socket),
     do: {:noreply, Kotoba.Live.push_content(socket, @editor, KotobaDev.Sample.document())}
+
+  # The stored document back in the editor, as a page that edits a saved
+  # record loads it.
+  def handle_event("load_stored", _params, socket),
+    do: {:noreply, Kotoba.Live.push_content(socket, @editor, socket.assigns.stored)}
 
   def handle_event("toggle_readonly", _params, socket),
     do: {:noreply, update(socket, :readonly, &(not &1))}

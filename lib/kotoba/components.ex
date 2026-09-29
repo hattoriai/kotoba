@@ -53,6 +53,9 @@ defmodule Kotoba.Components do
     {"table-delete-row", "Delete row", "Table"},
     {"table-delete-column", "Delete column", "Table"},
     {"table-delete", "Delete table", "Table"},
+    {"gallery", "Gallery", "Image"},
+    {"image-previous", "Move image left", "Image"},
+    {"image-next", "Move image right", "Image"},
     {"undo", "Undo", "History"},
     {"redo", "Redo", "History"}
   ]
@@ -361,7 +364,9 @@ defmodule Kotoba.Components do
   it a `label`); another command raises `ArgumentError`. The editor hides
   the buttons of the features that it does not have (see
   `Kotoba.Features`), and the buttons of the `table-*` commands (the ones that act on the table at the selection)
-  when the selection is not in a table. `code-language` renders a
+  when the selection is not in a table, and the buttons of `gallery`,
+  `image-previous` and `image-next` (the ones that act on the selected
+  image) when no image is selected. `code-language` renders a
   `<select>`, the code language picker: the editor fills its options, and
   hides it when the selection is not in a code block. `highlight` opens the
   color palette of the editor (`aria-haspopup="dialog"`).

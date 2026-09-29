@@ -20,12 +20,14 @@ defmodule Kotoba.Sanitizer do
       renders as unknown, even when it repeats the first). A table is
       valid only under the root and holds only table rows; a table row is
       valid only in a table and holds only table cells; a table cell is
-      valid only in a table row, and holds no table. A code block
+      valid only in a table row, and holds no table. A gallery is valid only
+      under the root and holds only attachments. A code block
       holds only code highlight, text, line break and tab nodes. A
       paragraph, a heading, a quote and a link hold only inline nodes and
       decorators, and a link holds no other link. A decorator has no
       children. `horizontalrule` and `attachment` (block decorators) are
-      valid only under the root, a list item or a table cell; elsewhere
+      valid only under the root, a list item or a table cell (and an
+      attachment in a gallery); elsewhere
       they render as unknown.
     * **Links.** `link_url/2` accepts a URL with an allowed scheme, or a
       relative URL. A link with a URL that is not safe renders as its text.
@@ -285,6 +287,17 @@ defmodule Kotoba.Sanitizer do
 
   defp check_parent(%Nodes.Table{}, _other_parent, _opts),
     do: {:error, "a table is valid only under the root"}
+
+  # A gallery under the root holds attachments.
+  defp check_parent(%Nodes.Attachment{}, %Nodes.Gallery{}, _opts), do: :ok
+
+  defp check_parent(_node, %Nodes.Gallery{}, _opts),
+    do: {:error, "a gallery holds only attachments"}
+
+  defp check_parent(%Nodes.Gallery{}, %Nodes.Root{}, _opts), do: :ok
+
+  defp check_parent(%Nodes.Gallery{}, _other_parent, _opts),
+    do: {:error, "a gallery is valid only under the root"}
 
   defp check_parent(_node, nil, _opts), do: :ok
   defp check_parent(_node, %Nodes.List{}, _opts), do: {:error, "a list holds only list items"}

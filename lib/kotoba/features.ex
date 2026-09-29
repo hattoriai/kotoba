@@ -26,7 +26,7 @@ defmodule Kotoba.Features do
   | `code_blocks` | code blocks and their language picker | `code`, `code-highlight` |
   | `horizontal_rules` | horizontal rules | `horizontalrule` |
   | `tables` | tables | `table`, `tablerow`, `tablecell` |
-  | `attachments` | file uploads (with the `uploads` attribute) | `attachment` |
+  | `attachments` | file uploads and image galleries (with the `uploads` attribute) | `attachment`, `gallery` |
   | `mentions` | prompts and mentions (with the `prompts` attribute) | `mention` |
 
   Paragraphs, line breaks, tabs, undo and redo are always there. The case
@@ -103,6 +103,7 @@ defmodule Kotoba.Features do
     Nodes.TableRow => :tables,
     Nodes.TableCell => :tables,
     Nodes.Attachment => :attachments,
+    Nodes.Gallery => :attachments,
     Nodes.Mention => :mentions
   }
 

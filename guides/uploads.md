@@ -171,6 +171,28 @@ Two rules for an adapter:
 The `:key` option of `Kotoba.Live.consume_uploads/4` changes how the keys
 are made.
 
+## Galleries
+
+Images uploaded together (picked, dropped or pasted at once) go in a
+gallery: a `gallery` node that holds their attachments, shown in a grid.
+Each image takes the place of its own marker in the gallery, so the order
+of the files stays when the uploads finish in another order, and a failed
+upload leaves the others in place. An image uploaded while an image of a
+gallery is selected joins that gallery, after it.
+
+The person groups and ungroups images with the Gallery button of the
+toolbar's Image group, which shows while an image is selected: Gallery
+makes a gallery of the selected image and the images next to it (empty
+paragraphs between them go), and in a gallery puts its images back as
+blocks of their own. Move image left and Move image right (and
+`Alt+Left`, `Alt+Right`) reorder the images; Backspace and Delete remove
+one. A gallery with one image left becomes that image.
+
+A gallery is part of the `attachments` feature, and valid only under the
+root. Its HTML is a `div.kotoba-gallery` with the `figure` of each image,
+and `kotoba.css` lays it out as a grid. `Kotoba.Document.attachments/1`
+returns the attachments of galleries too, in order.
+
 ## Direct uploads are not supported
 
 LiveView's `external:` uploads (the browser sends the file straight to a
