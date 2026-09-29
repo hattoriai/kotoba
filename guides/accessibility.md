@@ -32,7 +32,7 @@ can come and go with the error:
 
 The toolbar has `role="toolbar"`, with a `group` for each set of buttons
 (Text, Blocks, Lists, Insert, Assist, History, and one for each extension,
-named after it). A Code group is there only while the selection is in a code
+named after it). An Image group is there only while an image is selected. A Code group is there only while the selection is in a code
 block, and a Table group only while it is in a table.
 
 * The toolbar is one tab stop. Tab goes to the toolbar, and Tab again goes
@@ -176,6 +176,28 @@ is visually hidden and out of the tab order, because the toolbar button
 does the same thing. It has a label for assistive technology
 (`upload_label`, "Attach files" by default). The live region tells when an
 upload starts.
+
+## Galleries
+
+A gallery is a group (`role="group"`, named "Gallery") of images. The
+caret does not go in it; the person selects its images.
+
+* Left and Right select the previous or the next image, and past the
+  first or the last one, leave the gallery (as Up and Down do). Right or
+  Down at the end of the block before a gallery selects its first image;
+  Left or Up at the start of the block after it, its last image.
+* The live region says the position of the selected image: "2 of 3:
+  cat.png".
+* `Alt+Left` and `Alt+Right` move the selected image ("Moved to 3 of 3:
+  cat.png", "Already the last image"). Each move is an undo step.
+* Backspace and Delete remove the selected image ("Removed cat.png") and
+  select the image next to it.
+* The toolbar's Image group shows while an image is selected: Gallery
+  (`aria-pressed`: the image is in a gallery) groups the image with the
+  images next to it ("Gallery of 3 images"), or ungroups its gallery
+  ("Gallery ungrouped"); Move image left and Move image right move it, and
+  have `aria-disabled` at the ends of the gallery. After one of them, the
+  focus stays on its button, so that the person can move the image again.
 
 ## Attachments and mentions
 

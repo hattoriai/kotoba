@@ -62,6 +62,7 @@ import {
 
 import { registerCodeLanguageAliases } from "./code_languages";
 import { AttachmentNode } from "./nodes/attachment";
+import { GalleryNode } from "./nodes/gallery";
 import { UnknownNode, UploadMarkerNode } from "./nodes/internal";
 import { MentionNode } from "./nodes/mention";
 import { UNKNOWN_TYPE, UPLOAD_MARKER_TYPE } from "./protocol";
@@ -101,6 +102,7 @@ export const BUILT_IN_NODES: readonly Klass<LexicalNode>[] = [
   TableRowNode,
   TableCellNode,
   AttachmentNode,
+  GalleryNode,
   MentionNode,
   UploadMarkerNode,
   UnknownNode,

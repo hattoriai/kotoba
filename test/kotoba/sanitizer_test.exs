@@ -174,6 +174,22 @@ defmodule Kotoba.SanitizerTest do
       end
     end
 
+    test "a gallery is valid only under the root, and holds only attachments" do
+      attachment = %Nodes.Attachment{key: "k", url: "/a", name: "a", content_type: "t", bytes: 1}
+      gallery = %Nodes.Gallery{}
+
+      assert :ok = Sanitizer.check(gallery, %Nodes.Root{})
+      assert :ok = Sanitizer.check(attachment, gallery)
+
+      for parent <- [%Nodes.ListItem{}, %Nodes.TableCell{}, %Nodes.Quote{}, %Nodes.Gallery{}] do
+        assert {:error, _reason} = Sanitizer.check(gallery, parent)
+      end
+
+      for child <- [%Nodes.Paragraph{}, %Nodes.Text{text: "a"}, %Nodes.HorizontalRule{}] do
+        assert {:error, "a gallery holds only attachments"} = Sanitizer.check(child, gallery)
+      end
+    end
+
     test "a table is valid only under the root, and holds only rows" do
       table = %Nodes.Table{}
       row = %Nodes.TableRow{}

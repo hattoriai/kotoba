@@ -69,11 +69,19 @@ less than one frame apart, which a person does not type:
 
 ## Bundle size
 
-The editor bundle is about 571 KB, 186 KB with gzip. It has Lexical, its
+The editor bundle is about 578 KB, 188 KB with gzip. It has Lexical, its
 plugins (tables, about 70 KB of it), the Prism grammars of the 28 code
 languages of `Kotoba.CodeLanguages` (about 45 KB) and suggestions (about
 17 KB). The bundle is part of your `app.js`, so every page that
 loads `app.js` pays for its size.
+
+## Galleries are reordered with the keyboard and the toolbar
+
+An image of a gallery moves with `Alt+Left` and `Alt+Right` or the Move
+image buttons, not with the mouse: there is no drag and drop. A gallery is
+valid only under the root (not in a list item or a table cell), and has no
+caption of its own or layout options: `kotoba.css` shows it as a grid of
+cropped images, which your CSS can change (`.kotoba-gallery`).
 
 ## Tables have no merged cells, colours or widths
 

@@ -41,6 +41,7 @@ defmodule Kotoba.Nodes do
     Nodes.TableRow,
     Nodes.TableCell,
     Nodes.Attachment,
+    Nodes.Gallery,
     Nodes.Mention
   ]
 

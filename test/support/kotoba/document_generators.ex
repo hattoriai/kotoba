@@ -27,6 +27,7 @@ defmodule Kotoba.DocumentGenerators do
         code(),
         decorator("horizontalrule", %{}),
         attachment(),
+        gallery(),
         unknown()
       ] ++
         if(depth > 0, do: [list(depth - 1)], else: []) ++
@@ -191,6 +192,12 @@ defmodule Kotoba.DocumentGenerators do
           label <- string(:printable, min_length: 1, max_length: 10)
         ) do
       decorator_json("mention", %{"kind" => kind, "id" => id, "label" => label})
+    end
+  end
+
+  defp gallery do
+    gen all(attachments <- list_of(attachment(), min_length: 1, max_length: 3)) do
+      element("gallery", attachments)
     end
   end
 

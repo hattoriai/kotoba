@@ -25,6 +25,12 @@
 // the default toolbar's Table group) are hidden when the selection is not
 // in a table.
 //
+// The image commands (`gallery`, `image-previous`, `image-next`) act on the
+// attachment that is selected alone (see gallery.ts). Their buttons (and an
+// element with `data-kotoba-context="image"`, such as the default toolbar's
+// Image group) are hidden when no attachment is selected. After one of them,
+// the focus stays on its button, so that the person can move an image again.
+//
 // `code-language` is a `<select>` (with `data-kotoba-command="code-language"`)
 // that sets the language of the code block at the selection. It (and an
 // element with `data-kotoba-context="code"`) is hidden when the selection is
@@ -87,6 +93,7 @@ import {
 import { CODE_LANGUAGES, type CodeLanguage, PLAIN_TEXT, findCodeLanguage } from "./code_languages";
 import type { ResolvedControl } from "./extensions";
 import { FEATURES, type Feature } from "./features";
+import { $readImageState, $runGalleryCommand, type GalleryCommand, type ImageState } from "./gallery";
 import { TOOLBAR_ICONS, renderIcon } from "./icons";
 import { $domSelection, $selectedLinkUrl } from "./link";
 
@@ -121,6 +128,8 @@ export interface SelectionState {
    * for none), or `null` when the selection is not in a code block.
    */
   code: { language: string | null } | null;
+  /** The attachment that is selected alone, or `null`. */
+  image: ImageState | null;
 }
 
 export type ToolbarCommand =
@@ -156,6 +165,9 @@ export type ToolbarCommand =
   | "table-delete-row"
   | "table-delete-column"
   | "table-delete"
+  | "gallery"
+  | "image-previous"
+  | "image-next"
   | "undo"
   | "redo";
 
@@ -175,6 +187,7 @@ interface ToolbarItem {
 const MAC = typeof navigator !== "undefined" && /Mac|iP(hone|ad)/.test(navigator.platform);
 const MOD = MAC ? "⌘" : "Ctrl+";
 const SHIFT_MOD = MAC ? "⇧⌘" : "Ctrl+Shift+";
+const ALT = MAC ? "⌥" : "Alt+";
 
 export const TOOLBAR_ITEMS: readonly ToolbarItem[] = [
   { command: "bold", label: "Bold", group: "Text", shortcut: `${MOD}B`, feature: "bold" },
@@ -209,6 +222,9 @@ export const TOOLBAR_ITEMS: readonly ToolbarItem[] = [
   { command: "table-delete-row", label: "Delete row", group: "Table", done: "Row deleted", feature: "tables" },
   { command: "table-delete-column", label: "Delete column", group: "Table", done: "Column deleted", feature: "tables" },
   { command: "table-delete", label: "Delete table", group: "Table", done: "Table deleted", feature: "tables" },
+  { command: "gallery", label: "Gallery", group: "Image", feature: "attachments" },
+  { command: "image-previous", label: "Move image left", group: "Image", shortcut: `${ALT}←`, feature: "attachments" },
+  { command: "image-next", label: "Move image right", group: "Image", shortcut: `${ALT}→`, feature: "attachments" },
   { command: "undo", label: "Undo", group: "History", shortcut: `${MOD}Z` },
   { command: "redo", label: "Redo", group: "History" },
 ];
@@ -224,6 +240,8 @@ const TABLE_COMMANDS = new Set<string>(
   TOOLBAR_ITEMS.filter((item) => item.group === "Table").map((item) => item.command),
 );
 const TABLE_TOGGLES = new Set<string>(["table-header-row", "table-header-column"]);
+/** The commands that act on the selected attachment. */
+const IMAGE_COMMANDS = new Set<string>(["gallery", "image-previous", "image-next"]);
 
 /** The rows and columns of a new table. */
 export const NEW_TABLE_ROWS = 3;
@@ -283,7 +301,14 @@ export function $setCodeLanguage(id: string): void {
 
 /** Reads the formats, the block type, the link, the table and the code block at the selection. */
 export function $readSelectionState(): SelectionState {
-  const state: SelectionState = { formats: new Set(), block: "paragraph", link: false, table: null, code: null };
+  const state: SelectionState = {
+    formats: new Set(),
+    block: "paragraph",
+    link: false,
+    table: null,
+    code: null,
+    image: $readImageState(),
+  };
   const table = $selectedTable();
   if (table !== null) state.table = $readTableState(table);
 
@@ -392,6 +417,9 @@ export function runCommand(editor: LexicalEditor, command: ToolbarCommand, state
     case "redo":
       editor.dispatchCommand(REDO_COMMAND, undefined);
       return;
+    case "gallery":
+    case "image-previous":
+    case "image-next":
     case "link":
     case "upload":
     case "code-language":
@@ -582,7 +610,14 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
     select.value = current?.id ?? UNKNOWN_LANGUAGE;
   };
 
-  let state: SelectionState = { formats: new Set(), block: "paragraph", link: false, table: null, code: null };
+  let state: SelectionState = {
+    formats: new Set(),
+    block: "paragraph",
+    link: false,
+    table: null,
+    code: null,
+    image: null,
+  };
   let disabled = false;
   const history = { undo: false, redo: false };
 
@@ -595,6 +630,10 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
     }
     for (const element of toolbar.querySelectorAll<HTMLElement>('[data-kotoba-context="code"]')) {
       element.hidden = !inCode;
+    }
+    const image = state.image;
+    for (const element of toolbar.querySelectorAll<HTMLElement>('[data-kotoba-context="image"]')) {
+      element.hidden = image === null;
     }
 
     for (const button of commandButtons()) {
@@ -614,6 +653,7 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
         continue;
       }
       if (TABLE_COMMANDS.has(command)) button.hidden = !inTable;
+      if (IMAGE_COMMANDS.has(command)) button.hidden = image === null;
 
       if (button instanceof HTMLSelectElement) {
         button.hidden = !inCode;
@@ -631,6 +671,8 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
         button.setAttribute("aria-pressed", String(state.block === command));
       } else if (command === "link") {
         button.setAttribute("aria-pressed", String(state.link));
+      } else if (command === "gallery") {
+        button.setAttribute("aria-pressed", String(image?.inGallery === true));
       } else if (command === "highlight" && options.onColors !== undefined) {
         button.setAttribute("aria-haspopup", "dialog");
         if (!button.hasAttribute("aria-expanded")) button.setAttribute("aria-expanded", "false");
@@ -644,7 +686,10 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
         (command === "undo" && !history.undo) ||
         (command === "redo" && !history.redo) ||
         (command === "upload" && !options.uploads) ||
-        (command === "table" && inTable);
+        (command === "table" && inTable) ||
+        (command === "gallery" && !(image?.inGallery === true || image?.canGroup === true)) ||
+        (command === "image-previous" && image?.canMovePrevious !== true) ||
+        (command === "image-next" && image?.canMoveNext !== true);
       button.setAttribute("aria-disabled", String(unavailable));
     }
 
@@ -702,6 +747,10 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
       options.onUpload();
     } else if (command === "undo" || command === "redo") {
       runCommand(editor, command, state);
+    } else if (IMAGE_COMMANDS.has(command)) {
+      // The selection is the image: the DOM selection is not.
+      editor.update(() => $runGalleryCommand(command as GalleryCommand, options.announce));
+      return;
     } else {
       // The DOM selection, when Lexical has not read its last change yet.
       // Lexical then puts the focus back in the editor, with the selection;
@@ -892,6 +941,9 @@ function buildToolbar(
         group.hidden = true;
       } else if (SELECT_COMMANDS.has(item.command)) {
         group.dataset.kotobaContext = "code";
+        group.hidden = true;
+      } else if (IMAGE_COMMANDS.has(item.command)) {
+        group.dataset.kotobaContext = "image";
         group.hidden = true;
       }
     }

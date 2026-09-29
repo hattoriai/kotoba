@@ -1,6 +1,19 @@
 import { expect, test, type Locator } from "@playwright/test";
 
-import { attachFiles, documentEnd, expectNodes, nodes, openEditor, png, readDocument, sendFiles, settle, textFile, type Envelope } from "./support";
+import {
+  attachFiles,
+  documentEnd,
+  expectNodes,
+  nodes,
+  openEditor,
+  pdf,
+  png,
+  readDocument,
+  sendFiles,
+  settle,
+  textFile,
+  type Envelope,
+} from "./support";
 
 const EDITOR = "post_body_editor";
 
@@ -15,7 +28,8 @@ function blocks(doc: Envelope): string[] {
 }
 
 // Holds two uploads at the end of "one", deletes the marker of the first
-// from the keyboard, and moves the caret to the end of "two".
+// from the keyboard, and moves the caret to the end of "two". The second is
+// a PDF: two images would go in a gallery (see galleries.spec.ts).
 async function holdTwoAndDeleteFirstMarker(page: import("@playwright/test").Page, reject: boolean) {
   const editable = await openEditor(page);
   await page.getByLabel("Hold uploads").check();
@@ -28,9 +42,9 @@ async function holdTwoAndDeleteFirstMarker(page: import("@playwright/test").Page
   await page.keyboard.press("ArrowUp");
   await page.keyboard.press("End");
   await settle(page);
-  await attachFiles(page, EDITOR, [png("a.png", 2, 2), png("b.png", 3, 3)]);
+  await attachFiles(page, EDITOR, [png("a.png", 2, 2), pdf("b.pdf")]);
   const markers = editable.locator(".kotoba-upload-marker");
-  await expect(markers).toHaveText(["Uploading a.png…", "Uploading b.png…"]);
+  await expect(markers).toHaveText(["Uploading a.png…", "Uploading b.pdf…"]);
   await expect(page.locator("#held-count")).toHaveText("2");
 
   // Put the caret after "one", before marker a, and delete marker a with
@@ -40,7 +54,7 @@ async function holdTwoAndDeleteFirstMarker(page: import("@playwright/test").Page
   await one.click({ position: { x: box.width - 1, y: box.height / 2 } });
   await settle(page);
   await page.keyboard.press("Delete");
-  await expect(markers).toHaveText(["Uploading b.png…"]);
+  await expect(markers).toHaveText(["Uploading b.pdf…"]);
 
   // The caret goes to the end of "two".
   await documentEnd(page);
@@ -127,7 +141,7 @@ test("an upload whose marker the user deleted goes to the selection, not to anot
   await expect(editable.locator(".kotoba-upload-marker")).toHaveCount(0);
   // b takes its own marker's place; a, whose marker is gone, goes to the
   // selection (after "two").
-  expect(blocks(await readDocument(page))).toEqual(["one", "b.png", "two", "a.png"]);
+  expect(blocks(await readDocument(page))).toEqual(["one", "b.pdf", "two", "a.png"]);
 });
 
 test("a rejected upload whose marker the user deleted inserts nothing and leaves the other marker", async ({
@@ -137,9 +151,9 @@ test("a rejected upload whose marker the user deleted inserts nothing and leaves
   await page.getByRole("button", { name: "Release" }).click();
 
   const [attachment] = await expectNodes(page, "attachment", 1);
-  expect(attachment?.name).toBe("b.png");
+  expect(attachment?.name).toBe("b.pdf");
   await expect(editable.locator(".kotoba-upload-marker")).toHaveCount(0);
-  expect(blocks(await readDocument(page))).toEqual(["one", "b.png", "two"]);
+  expect(blocks(await readDocument(page))).toEqual(["one", "b.pdf", "two"]);
 });
 
 test("a rejected upload loses its marker, and no other marker is replaced", async ({ page }) => {
@@ -188,8 +202,7 @@ test("a file that the upload does not accept loses its marker", async ({ page })
 test("a PDF becomes a file attachment, not an image", async ({ page }) => {
   const editable = await openEditor(page);
   await editable.click();
-  const pdf = { name: "paper.pdf", mimeType: "application/pdf", buffer: Buffer.from("%PDF-1.4\n%%EOF\n") };
-  await attachFiles(page, EDITOR, [pdf]);
+  await attachFiles(page, EDITOR, [pdf("paper.pdf")]);
 
   await expect(editable.locator(".kotoba-attachment-name")).toHaveText("paper.pdf");
   await expect(editable.locator(".kotoba-attachment-icon")).toHaveText("PDF");

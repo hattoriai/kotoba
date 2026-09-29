@@ -50,7 +50,9 @@ import { MARKDOWN_TRANSFORMERS, registerCodeBlocks, registerListTab, registerTab
 import { $normalizeColors } from "./colors";
 import type { KotobaExtension } from "./extensions";
 import { isAbsoluteLinkUrl, isAllowedLinkUrl } from "./links";
+import { registerGallery } from "./gallery";
 import { AttachmentNode } from "./nodes/attachment";
+import { GalleryNode } from "./nodes/gallery";
 import { registerDecorators } from "./nodes/decorator";
 import { UnknownNode, UploadMarkerNode } from "./nodes/internal";
 import { MentionNode } from "./nodes/mention";
@@ -103,7 +105,7 @@ export const FEATURE_NODES: Partial<Record<Feature, readonly Klass<LexicalNode>[
   code_blocks: [CodeNode, CodeHighlightNode],
   horizontal_rules: [HorizontalRuleNode],
   tables: [TableNode, TableRowNode, TableCellNode],
-  attachments: [AttachmentNode, UploadMarkerNode],
+  attachments: [AttachmentNode, GalleryNode, UploadMarkerNode],
   mentions: [MentionNode],
 };
 
@@ -274,7 +276,11 @@ export function builtInExtensions(features: ReadonlySet<Feature>, options: Featu
         ),
     },
     tables: { name: "tables", nodes: FEATURE_NODES.tables, register: (editor) => registerTables(editor) },
-    attachments: { name: "attachments", nodes: FEATURE_NODES.attachments },
+    attachments: {
+      name: "attachments",
+      nodes: FEATURE_NODES.attachments,
+      register: (editor, context) => registerGallery(editor, { announce: (message) => context.announce(message) }),
+    },
     mentions: { name: "mentions", nodes: FEATURE_NODES.mentions },
   };
 

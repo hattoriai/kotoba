@@ -357,6 +357,26 @@ defmodule Kotoba.LiveTest do
       assert File.read!(Path.join(root, key)) == @png
     end
 
+    test "stores files that finish one after the other, each once", %{view: view} do
+      upload =
+        file_input(view, "#post-form", :attachments, [
+          %{name: "a.png", content: @png, type: "image/png"},
+          %{name: "b.png", content: @png, type: "image/png"}
+        ])
+
+      [a, b] = entry_refs(upload)
+      render_upload(upload, "a.png")
+      assert_push_event(view, "insert_node", %{ref: ^a, node: %{"name" => "a.png"}})
+
+      # A form change before LiveView drops the first entry, then the second
+      # file: the first is not consumed again.
+      view |> element("#post-form") |> render_change(%{"post" => %{"body" => ""}})
+      render_upload(upload, "b.png")
+      assert_push_event(view, "insert_node", %{ref: ^b, node: %{"name" => "b.png"}})
+      refute_push_event(view, "insert_node", %{ref: ^a})
+      assert Process.alive?(view.pid)
+    end
+
     test "does not trust the browser's image type", %{view: view} do
       upload =
         file_input(view, "#post-form", :attachments, [

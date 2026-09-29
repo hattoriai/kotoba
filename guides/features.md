@@ -29,7 +29,7 @@ not (`Kotoba.Features`):
 | `code_blocks` | code blocks, highlighted, with a language picker | Code block, Code language | Tab inserts a tab | ` ``` `, ` ```elixir ` |
 | `horizontal_rules` | horizontal rules | Horizontal rule | | `---`, `***`, `___` |
 | `tables` | tables | Table, and the Table group | Tab, Shift+Tab | |
-| `attachments` | files and images (with `uploads`) | Attach a file | drop, paste | |
+| `attachments` | files, images and galleries (with `uploads`) | Attach a file, and the Image group | drop, paste; `Alt+Left`, `Alt+Right` in a gallery | |
 | `mentions` | prompts and mentions (with `prompts`) | | the trigger | |
 
 Suggestions are not a feature: an editor with `assist` has an Assist
@@ -162,6 +162,15 @@ on the page, for example Prism with a Prism theme: the editor's own copy of
 Prism does not touch the page's `window.Prism` (see the
 [Theming](theming.md) guide).
 
+## Galleries
+
+Images uploaded together make a gallery, a grid of images. Select an image
+(a click, or the arrow keys from the text next to it) for the Image group
+of the toolbar: Gallery groups the image with the images next to it, or
+ungroups its gallery, and Move image left and Move image right (or
+`Alt+Left` and `Alt+Right`) reorder it. See the [Uploads](uploads.md)
+guide.
+
 ## Tables
 
 The Table button inserts a table of three rows and three columns, with a
@@ -186,7 +195,8 @@ The default toolbar has the buttons of the editor's features, in groups:
 Text (formats and Link), Blocks (headings and Quote), Lists, Insert (Code
 block, Horizontal rule, Table, Attach a file), Assist (with `assist`), the
 extensions' buttons, and History (Undo, Redo). The Code group (the language picker) shows in a
-code block, and the Table group in a table. The toolbar is one tab stop,
+code block, the Table group in a table, and the Image group (Gallery, Move
+image left, Move image right) when an image is selected. The toolbar is one tab stop,
 with the arrow keys between the buttons (see the
 [Accessibility](accessibility.md) guide).
 
@@ -222,7 +232,8 @@ commands:
 `italic`, `underline`, `strikethrough`, `highlight`, `code`,
 `subscript`, `superscript`, `link`, `h1` to `h4`, `quote`, `bullet`,
 `number`, `check`, `code-block`, `rule`, `table`, `upload`, `assist`,
-`code-language`, the `table-*` commands, `undo` and `redo`. An
+`code-language`, the `table-*` commands, `gallery`, `image-previous`,
+`image-next`, `undo` and `redo`. An
 extension's control is `<extension>:<command>` (see the
 [Extensions](extensions.md) guide). Another command raises
 `ArgumentError`.
@@ -231,7 +242,9 @@ extension's control is `<extension>:<command>` (see the
   and `aria-disabled`; `label` names the toolbar ("Formatting" by
   default), and `class` adds classes.
 * The buttons of a feature that the editor does not have are hidden.
-* The `table-*` buttons are hidden when the selection is not in a table.
+* The `table-*` buttons are hidden when the selection is not in a table,
+  and `gallery`, `image-previous` and `image-next` when no image is
+  selected.
 * `code-language` renders a `<select>`, the code language picker: the
   editor fills it, and shows it in a code block.
 * `highlight` opens the color palette.

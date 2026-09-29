@@ -144,7 +144,8 @@
   cursor: default;
 }
 
-/* The table and code controls are hidden outside a table or a code block. */
+/* The table, code and image controls are hidden outside a table, a code
+   block or a selected image. */
 .kotoba-toolbar-group[hidden],
 .kotoba-toolbar-button[hidden],
 .kotoba-toolbar-select[hidden] {
@@ -495,6 +496,60 @@ mark.kotoba-highlight-gray { background: var(--kotoba-highlight-gray); color: in
 
 .kotoba-attachment-size {
   color: var(--kotoba-muted);
+}
+
+/* Galleries: the editor's (a div of attachment nodes) and the rendered
+   HTML's (a div of figures). */
+.kotoba-gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
+  gap: calc(var(--kotoba-space) / 2);
+  margin: 0 0 var(--kotoba-space);
+}
+
+.kotoba-gallery > .kotoba-attachment {
+  min-width: 0;
+  margin: 0;
+}
+
+.kotoba-gallery .kotoba-attachment-figure,
+.kotoba-gallery > figure.kotoba-attachment {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--kotoba-space) / 2);
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+.kotoba-gallery img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  border-radius: calc(var(--kotoba-radius) - 2px);
+}
+
+.kotoba-gallery figcaption {
+  overflow: hidden;
+  font-size: var(--kotoba-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kotoba-gallery .kotoba-attachment-caption > * {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.kotoba-gallery > .kotoba-upload-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 6rem;
+  text-align: center;
 }
 
 .kotoba-upload-marker,

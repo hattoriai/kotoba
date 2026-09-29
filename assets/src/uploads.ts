@@ -8,10 +8,16 @@
 // (or of the oldest marker, when there is no `ref`). When the upload fails,
 // the server pushes `remove_marker` with the entry's `ref`.
 //
+// Images uploaded together go in a new gallery (see gallery.ts), and images
+// uploaded while an image of a gallery is selected join that gallery. Their
+// markers are in the gallery, in the order of the files, and each image
+// takes the place of its own marker.
+//
 // LiveView gives each File a `_phxRef` when it tracks it; the entry's `ref`
 // on the server is the same string.
 
 import { DRAG_DROP_PASTE } from "@lexical/rich-text";
+import { $insertNodeToNearestRoot } from "@lexical/utils";
 import {
   $createParagraphNode,
   $getNodeByKey,
@@ -26,6 +32,8 @@ import {
   type NodeKey,
 } from "lexical";
 
+import { $selectedAttachment } from "./gallery";
+import { $createGalleryNode, $isGalleryNode } from "./nodes/gallery";
 import { $createUploadMarkerNode, $isUploadMarkerNode } from "./nodes/internal";
 
 export interface Uploads {
@@ -68,6 +76,8 @@ interface Marker {
   file: File;
 }
 
+const isImageFile = (file: File): boolean => file.type.startsWith("image/");
+
 function entryRef(file: File): string | undefined {
   const ref = (file as File & { _phxRef?: unknown })._phxRef;
   return typeof ref === "string" ? ref : undefined;
@@ -109,10 +119,51 @@ export function createUploads(editor: LexicalEditor, options: UploadOptions): Up
 
     editor.update(
       () => {
+        // Images uploaded together make a gallery, and images uploaded with
+        // an image of a gallery selected join that gallery, after it. Each
+        // marker holds the place of its file, so the order stays when the
+        // uploads finish in another order.
+        const created = new Map<File, LexicalNode>();
+        const images = files.filter(isImageFile);
+        const selected = $selectedAttachment();
+        const inGallery = selected !== null && $isGalleryNode(selected.getParent());
+
+        if (images.length > 0 && (inGallery || images.length > 1)) {
+          let place: LexicalNode;
+          let rest = images;
+          if (selected !== null && inGallery) {
+            place = selected;
+          } else {
+            const gallery = $createGalleryNode();
+            place = $createUploadMarkerNode(images[0]?.name ?? "");
+            gallery.append(place);
+            created.set(images[0] as File, place);
+            $insertNodeToNearestRoot(gallery);
+            // A place to write after a gallery that ends the document.
+            if (gallery.getNextSibling() === null) {
+              const paragraph = $createParagraphNode();
+              gallery.insertAfter(paragraph);
+              paragraph.select();
+            }
+            rest = images.slice(1);
+          }
+          for (const file of rest) {
+            const marker = $createUploadMarkerNode(file.name);
+            place.insertAfter(marker);
+            place = marker;
+            created.set(file, marker);
+          }
+        }
+
         for (const file of files) {
+          if (created.has(file)) continue;
           const marker = $createUploadMarkerNode(file.name);
           $insertAtSelection(marker);
-          markers.push({ key: marker.getKey(), file });
+          created.set(file, marker);
+        }
+        for (const file of files) {
+          const marker = created.get(file);
+          if (marker !== undefined) markers.push({ key: marker.getKey(), file });
         }
       },
       { tag: "history-merge" },
@@ -162,7 +213,7 @@ export function createUploads(editor: LexicalEditor, options: UploadOptions): Up
       const marker = $takeMarker(ref);
       if (marker === null) {
         $insertAtSelection(node);
-      } else if (node.isInline()) {
+      } else if (node.isInline() || $isGalleryNode(marker.getParent())) {
         marker.replace(node);
       } else {
         marker.selectPrevious();

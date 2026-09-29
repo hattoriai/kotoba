@@ -71,6 +71,9 @@ defmodule Kotoba.Live do
 
   @v 1
 
+  # The private key of the entries that `consume_uploads/4` has consumed.
+  @consumed :kotoba_consumed_uploads
+
   @doc """
   Answers a `kotoba:prompt` event: runs the search of the prompt with the
   query, and pushes `kotoba:prompt_results` to the editor.
@@ -334,6 +337,11 @@ defmodule Kotoba.Live do
       this call to show the error.
     * An entry still in progress is left alone.
 
+  An entry is consumed once: a call before LiveView has dropped an entry
+  that an earlier call consumed leaves it alone. So the function can run
+  in the progress callback and in the form's change handler, with files
+  that finish at different times.
+
   ## Options
 
     * `:storage` - the storage adapter. The default is
@@ -351,7 +359,23 @@ defmodule Kotoba.Live do
 
     socket = Enum.reduce(entries.invalid, socket, &drop_invalid(&2, upload_name, editor_id, &1))
 
-    Enum.reduce(entries.done, socket, fn entry, socket ->
+    # LiveView drops a consumed entry only when its upload channel has
+    # closed, a message later. A second call before that (the next file
+    # done, a form change) must not consume it again: its channel is gone,
+    # and the call would crash the LiveView.
+    key = {@consumed, upload_name}
+    consumed = Map.get(socket.private, key, MapSet.new())
+    done = Enum.reject(entries.done, &MapSet.member?(consumed, &1.ref))
+
+    kept =
+      entries.all
+      |> MapSet.new(& &1.ref)
+      |> MapSet.intersection(consumed)
+      |> MapSet.union(MapSet.new(done, & &1.ref))
+
+    socket = %{socket | private: Map.put(socket.private, key, kept)}
+
+    Enum.reduce(done, socket, fn entry, socket ->
       result = consume_uploaded_entry(socket, entry, &store(&1, entry, storage, key_fun))
 
       case result do
@@ -372,6 +396,7 @@ defmodule Kotoba.Live do
     case socket.assigns[:uploads] do
       %{^upload_name => %UploadConfig{} = conf} ->
         %{
+          all: conf.entries,
           invalid: Enum.reject(conf.entries, & &1.valid?),
           done: Enum.filter(conf.entries, &(&1.valid? and &1.done?))
         }

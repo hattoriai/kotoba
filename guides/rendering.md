@@ -54,6 +54,7 @@ before it renders. See the [Security](security.md) guide.
 | table | `div.kotoba-table-scroll` with a `table.kotoba-table`: `thead` for a header row, `tbody`, `th scope="col"`/`scope="row"`, `colspan` and `rowspan` |
 | link | `a` with `href` and `rel="noopener nofollow"` |
 | attachment | `figure.kotoba-attachment` with an `img` or a download link, and a `figcaption` |
+| gallery | `div.kotoba-gallery` with the `figure` of each attachment (a grid in `kotoba.css`) |
 | mention | `span.kotoba-mention` with `data-kind` and `data-id` |
 | an app node | what its `render_html/2` gives (see [Custom nodes](custom_nodes.md)) |
 | a node that fails a check, or of an unknown type | an empty `span.kotoba-unknown` with `data-type` |
