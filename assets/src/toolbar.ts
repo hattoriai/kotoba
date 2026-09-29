@@ -145,6 +145,7 @@ export type ToolbarCommand =
   | "rule"
   | "table"
   | "upload"
+  | "assist"
   | "code-language"
   | "table-row-before"
   | "table-row-after"
@@ -197,6 +198,7 @@ export const TOOLBAR_ITEMS: readonly ToolbarItem[] = [
   { command: "rule", label: "Horizontal rule", group: "Insert", feature: "horizontal_rules" },
   { command: "table", label: "Table", group: "Insert", done: "Table inserted", feature: "tables" },
   { command: "upload", label: "Attach a file", group: "Insert", feature: "attachments" },
+  { command: "assist", label: "Assist", group: "Assist" },
   { command: "code-language", label: "Code language", group: "Code", feature: "code_blocks" },
   { command: "table-row-before", label: "Insert row above", group: "Table", done: "Row inserted", feature: "tables" },
   { command: "table-row-after", label: "Insert row below", group: "Table", done: "Row inserted", feature: "tables" },
@@ -481,6 +483,8 @@ interface ToolbarOptions {
   onUpload(): void;
   /** Opens the color palette for the Highlight button. Without it, the button toggles the default highlight. */
   onColors?(button: HTMLElement): void;
+  /** Opens the Assist menu. Without it, the editor has no Assist button. */
+  onAssist?(button: HTMLElement): void;
   announce(message: string): void;
   /** The languages of the code language picker. The default is every language. */
   codeLanguages?: readonly CodeLanguage[];
@@ -506,7 +510,8 @@ const UNKNOWN_LANGUAGE = "kotoba-unknown-language";
 export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): Toolbar {
   const features: ReadonlySet<Feature> = options.features ?? new Set(FEATURES);
   const controls = new Map((options.controls ?? []).map((control) => [control.id, control]));
-  const toolbar = options.existing ?? buildToolbar(options.uploads, features, [...controls.values()]);
+  const assist = options.onAssist !== undefined;
+  const toolbar = options.existing ?? buildToolbar(options.uploads, assist, features, [...controls.values()]);
   if (options.existing === null) options.host.prepend(toolbar);
 
   toolbar.setAttribute("role", "toolbar");
@@ -527,6 +532,7 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
 
   // A command of a feature that is off.
   const off = (command: string): boolean => {
+    if (command === "assist") return !assist;
     const feature = TOOLBAR_ITEMS.find((item) => item.command === command)?.feature;
     return feature !== undefined && !features.has(feature);
   };
@@ -628,6 +634,9 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
       } else if (command === "highlight" && options.onColors !== undefined) {
         button.setAttribute("aria-haspopup", "dialog");
         if (!button.hasAttribute("aria-expanded")) button.setAttribute("aria-expanded", "false");
+      } else if (command === "assist") {
+        button.setAttribute("aria-haspopup", "menu");
+        if (!button.hasAttribute("aria-expanded")) button.setAttribute("aria-expanded", "false");
       }
 
       const unavailable =
@@ -687,6 +696,8 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
       options.onLink();
     } else if (command === "highlight" && options.onColors !== undefined) {
       options.onColors(button);
+    } else if (command === "assist") {
+      options.onAssist?.(button);
     } else if (command === "upload") {
       options.onUpload();
     } else if (command === "undo" || command === "redo") {
@@ -702,7 +713,7 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
       });
     }
 
-    if (command !== "link" && command !== "upload" && command !== "highlight") {
+    if (command !== "link" && command !== "upload" && command !== "highlight" && command !== "assist") {
       const item = TOOLBAR_ITEMS.find((entry) => entry.command === command);
       if (item && (TOGGLE_FORMATS.has(command) || BLOCK_COMMANDS.has(command) || TABLE_TOGGLES.has(command))) {
         const pressed = button.getAttribute("aria-pressed") !== "true";
@@ -820,6 +831,7 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
 
 function buildToolbar(
   uploads: boolean,
+  assist: boolean,
   features: ReadonlySet<Feature>,
   controls: readonly ResolvedControl[],
 ): HTMLElement {
@@ -868,6 +880,7 @@ function buildToolbar(
 
   for (const item of TOOLBAR_ITEMS) {
     if (item.command === "upload" && !uploads) continue;
+    if (item.command === "assist" && !assist) continue;
     if (item.feature !== undefined && !features.has(item.feature)) continue;
     if (item.inDefault === false) continue;
     if (item.group === "History" && !extensionsPlaced) placeExtensions();

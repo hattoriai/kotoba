@@ -167,6 +167,32 @@ defmodule Kotoba.ComponentsTest do
              }
     end
 
+    test "renders the actions of the Assist menu" do
+      assert attr(html(field: field(nil)), "[phx-hook]", "data-assist") == nil
+      assert attr(html(field: field(nil), assist: false), "[phx-hook]", "data-assist") == nil
+      assert attr(html(field: field(nil), assist: true), "[phx-hook]", "data-assist") == "[]"
+
+      html =
+        html(
+          field: field(nil),
+          assist: [
+            {:rewrite, "Rewrite"},
+            {"tone", "Friendlier"},
+            %{id: "sum", label: "Summarize"}
+          ]
+        )
+
+      assert JSON.decode!(attr(html, "[phx-hook]", "data-assist")) == [
+               %{"id" => "rewrite", "label" => "Rewrite"},
+               %{"id" => "tone", "label" => "Friendlier"},
+               %{"id" => "sum", "label" => "Summarize"}
+             ]
+
+      for assist <- [[rewrite: ""], [{"", "Rewrite"}], [:rewrite], "rewrite", [%{id: "x"}]] do
+        assert_raise ArgumentError, fn -> html(field: field(nil), assist: assist) end
+      end
+    end
+
     test "renders the languages of the code language picker, as ids" do
       assert attr(html(field: field(nil)), "[phx-hook]", "data-code-languages") == nil
 

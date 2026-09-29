@@ -72,6 +72,12 @@ export interface ExtensionContext {
   announce(message: string): void;
   /** Pushes an event to the LiveView (or the `phx-target` component). The payload gets the editor's `id`. */
   push(event: string, payload: Record<string, unknown>): void;
+  /**
+   * Asks the app for a suggestion for the selection (`kotoba:assist` with
+   * `action`, the selected text and `detail`), as the Assist menu does.
+   * Returns the suggestion's ref, or `null` when the editor has no `assist`.
+   */
+  assist(action: string, detail?: Record<string, unknown>): string | null;
 }
 
 export interface KotobaExtension {
@@ -256,13 +262,8 @@ export function registerExtensions(
     }
   }
 
-  const transformers = extensions.flatMap((extension) =>
-    (extension.markdown ?? []).filter((transformer) => {
-      const dependencies = "dependencies" in transformer ? transformer.dependencies : [];
-      if (editor.hasNodes(dependencies as Klass<LexicalNode>[])) return true;
-      console.error(`Kotoba: a Markdown shortcut of the extension "${extension.name}" needs a node the editor does not have`);
-      return false;
-    }),
+  const transformers = markdownTransformers(editor, extensions, (extension) =>
+    console.error(`Kotoba: a Markdown shortcut of the extension "${extension.name}" needs a node the editor does not have`),
   );
   if (transformers.length > 0) cleanups.push(registerMarkdownShortcuts(editor, transformers));
 
@@ -275,4 +276,23 @@ export function registerExtensions(
       }
     }
   };
+}
+
+/**
+ * The Markdown shortcuts of the extensions, in order, whose nodes the
+ * editor has. `onMissing` hears of the extensions with one that it has not.
+ */
+export function markdownTransformers(
+  editor: LexicalEditor,
+  extensions: readonly KotobaExtension[],
+  onMissing: (extension: KotobaExtension) => void = () => {},
+): Transformer[] {
+  return extensions.flatMap((extension) =>
+    (extension.markdown ?? []).filter((transformer) => {
+      const dependencies = "dependencies" in transformer ? transformer.dependencies : [];
+      if (editor.hasNodes(dependencies as Klass<LexicalNode>[])) return true;
+      onMissing(extension);
+      return false;
+    }),
+  );
 }

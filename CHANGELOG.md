@@ -9,6 +9,21 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Suggestions (#26): text that the server streams into the editor, for
+  example the answer of a language model. `Kotoba.Live.stream_start/4`
+  (`at: :selection | :caret | :after | :end`, `format: :markdown | :text`,
+  `label`), `stream_chunk/4`, `stream_end/3`, `stream_cancel/3` and
+  `stream_ref/0`. The text shows in a panel as it streams, rendered from
+  the whole text at each chunk (a Markdown format cut by a chunk is never
+  half a format), with only the editor's features; Accept
+  (`Cmd/Ctrl+Enter`) inserts it as one undo step, Reject (Escape) leaves
+  the document and the selection as they were, and Stop keeps what has
+  come. The `assist` attribute gives the toolbar an Assist menu of the
+  app's actions: an action pushes `kotoba:assist` (`ref`, `action`, the
+  selected text), and the editor pushes `kotoba:suggestion` (`accept`,
+  `reject`, `stop`). Extensions ask with `context.assist/2`. The dev
+  server has a fake model, and the Suggestions guide streams Claude with
+  Req.
 - Guides: Editing features (every feature, its toolbar button, keyboard
   and Markdown shortcuts, colors, links, code blocks, tables and custom
   toolbars) and Rendering (the HTML of each node, styling, HTML/text/

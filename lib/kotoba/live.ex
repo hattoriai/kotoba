@@ -218,6 +218,93 @@ defmodule Kotoba.Live do
   @spec focus(Socket.t(), String.t()) :: Socket.t()
   def focus(socket, id) when is_binary(id), do: push_event(socket, "focus", payload(id, %{}))
 
+  @stream_targets [:selection, :caret, :after, :end]
+  @stream_formats [:markdown, :text]
+
+  @doc """
+  Returns a new ref for a stream that the server starts by itself. A
+  stream that answers a `kotoba:assist` event takes the event's `"ref"`.
+  """
+  @spec stream_ref() :: String.t()
+  def stream_ref, do: "k" <> Base.url_encode64(:crypto.strong_rand_bytes(9), padding: false)
+
+  @doc """
+  Starts a suggestion in the editor `id`: text that the server streams
+  with `stream_chunk/4` and ends with `stream_end/3`. See the
+  [Suggestions](suggestions.md) guide.
+
+  The text is not in the document while it streams: the editor shows it in
+  a panel, and the person accepts it (it goes into the document, as one
+  undo step) or rejects it. A new stream in the same editor replaces the
+  open suggestion.
+
+  `ref` is the ref of the `kotoba:assist` event that asked for it, or a new
+  one from `stream_ref/0`.
+
+  ## Options
+
+    * `:at` - where the text goes: `:selection` (in place of the
+      selection, the default), `:caret`, `:after` (after the block of the
+      selection) or `:end` (at the end of the document). The selection is
+      the one of the `kotoba:assist` request, or the editor's selection
+      when the stream starts.
+    * `:format` - `:markdown` (the default) or `:text`. Markdown has only
+      the formats and blocks of the editor's features.
+    * `:label` - the name of the suggestion, for example `"Rewrite"`.
+  """
+  @spec stream_start(Socket.t(), String.t(), String.t(), keyword()) :: Socket.t()
+  def stream_start(socket, id, ref, opts \\ []) when is_binary(id) and is_binary(ref) do
+    at = Keyword.get(opts, :at, :selection)
+    format = Keyword.get(opts, :format, :markdown)
+
+    unless at in @stream_targets,
+      do:
+        raise(
+          ArgumentError,
+          "stream :at must be one of #{inspect(@stream_targets)}, got: #{inspect(at)}"
+        )
+
+    unless format in @stream_formats,
+      do:
+        raise(
+          ArgumentError,
+          "stream :format must be one of #{inspect(@stream_formats)}, got: #{inspect(format)}"
+        )
+
+    fields = %{ref: ref, op: "start", at: Atom.to_string(at), format: Atom.to_string(format)}
+    fields = if label = opts[:label], do: Map.put(fields, :label, to_string(label)), else: fields
+    push_event(socket, "kotoba:stream", payload(id, fields))
+  end
+
+  @doc """
+  Adds text to the suggestion `ref` of the editor `id`. The chunks can cut
+  the text anywhere, Markdown syntax included: the editor reads the whole
+  text again at each chunk.
+  """
+  @spec stream_chunk(Socket.t(), String.t(), String.t(), String.t()) :: Socket.t()
+  def stream_chunk(socket, id, ref, text)
+      when is_binary(id) and is_binary(ref) and is_binary(text) do
+    push_event(socket, "kotoba:stream", payload(id, %{ref: ref, op: "chunk", text: text}))
+  end
+
+  @doc """
+  Ends the suggestion `ref` of the editor `id`: the person can accept or
+  reject it.
+  """
+  @spec stream_end(Socket.t(), String.t(), String.t()) :: Socket.t()
+  def stream_end(socket, id, ref) when is_binary(id) and is_binary(ref) do
+    push_event(socket, "kotoba:stream", payload(id, %{ref: ref, op: "end"}))
+  end
+
+  @doc """
+  Cancels the suggestion `ref` of the editor `id`, for example when the
+  model failed: the editor closes it, and the document stays as it was.
+  """
+  @spec stream_cancel(Socket.t(), String.t(), String.t()) :: Socket.t()
+  def stream_cancel(socket, id, ref) when is_binary(id) and is_binary(ref) do
+    push_event(socket, "kotoba:stream", payload(id, %{ref: ref, op: "cancel"}))
+  end
+
   @doc """
   Removes the upload marker of the LiveView upload entry `ref` from the
   editor `id` (`remove_marker`), for an upload that failed.
