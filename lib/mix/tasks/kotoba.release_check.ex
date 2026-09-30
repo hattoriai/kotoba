@@ -1,5 +1,5 @@
 defmodule Mix.Tasks.Kotoba.ReleaseCheck do
-  @shortdoc "Checks that priv/static holds the four bundle files and nothing else"
+  @shortdoc "Checks that priv/static holds the six bundle files and nothing else"
 
   @moduledoc """
   Checks the built files before a release of Kotoba.
@@ -10,8 +10,9 @@ defmodule Mix.Tasks.Kotoba.ReleaseCheck do
   after `mix kotoba.build` and before `mix hex.publish`. In any project
   but Kotoba, it stops with an error. It fails when:
 
-    * one of the four bundle files (`kotoba.esm.js`, `kotoba.cjs.js`,
-      `kotoba.css` and `kotoba-sumi.css`) is missing from `priv/static`,
+    * one of the six bundle files (`kotoba.esm.js`, `kotoba.cjs.js`,
+      `kotoba-collab.esm.js`, `kotoba-collab.cjs.js`, `kotoba.css` and
+      `kotoba-sumi.css`) is missing from `priv/static`,
       or is empty (the empty files that CI makes are not a build);
     * `priv/static` holds any other file or directory;
     * the `version` of `package.json` is not the version of `mix.exs`.
@@ -20,7 +21,7 @@ defmodule Mix.Tasks.Kotoba.ReleaseCheck do
   use Mix.Task
 
   @static "priv/static"
-  @files ~w(kotoba.esm.js kotoba.cjs.js kotoba.css kotoba-sumi.css)
+  @files ~w(kotoba.esm.js kotoba.cjs.js kotoba-collab.esm.js kotoba-collab.cjs.js kotoba.css kotoba-sumi.css)
 
   @impl Mix.Task
   def run(_args) do
@@ -31,7 +32,7 @@ defmodule Mix.Tasks.Kotoba.ReleaseCheck do
     case check(@static, "package.json", version) do
       :ok ->
         Mix.shell().info(
-          "#{@static} holds the four bundle files, and nothing else, and package.json has version #{version}"
+          "#{@static} holds the six bundle files, and nothing else, and package.json has version #{version}"
         )
 
       {:error, problems} ->

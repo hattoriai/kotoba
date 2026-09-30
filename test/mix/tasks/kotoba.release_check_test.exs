@@ -3,7 +3,7 @@ defmodule Mix.Tasks.Kotoba.ReleaseCheckTest do
 
   alias Mix.Tasks.Kotoba.ReleaseCheck
 
-  @files ~w(kotoba.esm.js kotoba.cjs.js kotoba.css kotoba-sumi.css)
+  @files ~w(kotoba.esm.js kotoba.cjs.js kotoba-collab.esm.js kotoba-collab.cjs.js kotoba.css kotoba-sumi.css)
 
   @moduletag :tmp_dir
 
@@ -16,7 +16,7 @@ defmodule Mix.Tasks.Kotoba.ReleaseCheckTest do
     %{static: static, package: package}
   end
 
-  test "passes with the four built files and the same version", %{
+  test "passes with the six built files and the same version", %{
     static: static,
     package: package
   } do
@@ -45,7 +45,7 @@ defmodule Mix.Tasks.Kotoba.ReleaseCheckTest do
   test "fails when there is no priv/static", %{tmp_dir: tmp_dir, package: package} do
     static = Path.join(tmp_dir, "none")
     assert {:error, problems} = ReleaseCheck.check(static, package, "1.2.3")
-    assert length(problems) == 4
+    assert length(problems) == length(@files)
   end
 
   test "fails when package.json has another version", %{static: static, package: package} do

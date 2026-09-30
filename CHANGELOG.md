@@ -9,6 +9,10 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Optional collaboration: shared documents with participant cursors,
+  read-only viewers, per-author undo and redo, local draft recovery after
+  reconnect or reload, and form submission of an accepted server revision.
+  See the [Collaboration guide](guides/collaboration.md) for setup and storage.
 - PDF and video previews (#6, #7). A PDF shows in the browser's viewer (an
   `object` with a download link for a browser that has none), in the
   editor and in the rendered HTML. MP4 and WebM videos are checked from

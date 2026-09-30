@@ -180,6 +180,7 @@ function registerFormatShortcut(
 export interface FeatureOptions {
   /** The allowed link schemes, as `Kotoba.Sanitizer` has them. */
   linkSchemes: readonly string[];
+  history?: boolean;
 }
 
 /**
@@ -200,7 +201,7 @@ export function builtInExtensions(features: ReadonlySet<Feature>, options: Featu
     register: (editor) =>
       mergeRegister(
         registerRichText(editor),
-        registerHistory(editor, createEmptyHistoryState(), 300),
+        options.history === false ? () => {} : registerHistory(editor, createEmptyHistoryState(), 300),
         registerDecorators(editor),
         editor.registerCommand(
           FORMAT_TEXT_COMMAND,

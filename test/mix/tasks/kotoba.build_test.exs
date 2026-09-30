@@ -6,8 +6,8 @@ defmodule Mix.Tasks.Kotoba.BuildTest do
 
   @root Path.expand("../../..", __DIR__)
   @static Path.join(@root, "priv/static")
-  @files ~w(kotoba.esm.js kotoba.cjs.js kotoba.css kotoba-sumi.css)
-  @exports ~w(AttachmentNode Kotoba MentionNode)
+  @files ~w(kotoba.esm.js kotoba.cjs.js kotoba-collab.esm.js kotoba-collab.cjs.js kotoba.css kotoba-sumi.css)
+  @exports ~w(AttachmentNode GalleryNode Kotoba MentionNode registerCollaboration)
 
   @moduletag :build
   @moduletag timeout: 600_000
@@ -48,7 +48,7 @@ defmodule Mix.Tasks.Kotoba.BuildTest do
     end
   end
 
-  test "priv/static holds only the four files of the package" do
+  test "priv/static holds only the six files of the package" do
     assert @static |> File.ls!() |> Enum.sort() == Enum.sort(@files)
   end
 

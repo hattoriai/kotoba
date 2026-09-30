@@ -328,14 +328,17 @@ defmodule KotobaDev.Layouts do
             "imports": {
               "phoenix": "/vendor/phoenix/phoenix.mjs",
               "phoenix_live_view": "/vendor/phoenix_live_view/phoenix_live_view.esm.js",
-              "kotoba": "/assets/kotoba.esm.js"
+              "kotoba": "/assets/kotoba.esm.js",
+              "kotoba/collab": "/assets/kotoba-collab.esm.js"
             }
           }
         </script>
         <script type="module">
           import { Socket } from "phoenix"
           import { LiveSocket } from "phoenix_live_view"
-          import { Kotoba } from "kotoba"
+          import { Kotoba, registerCollaboration } from "kotoba"
+          import { enableCollaboration } from "kotoba/collab"
+          enableCollaboration(registerCollaboration)
 
           const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
           const liveSocket = new LiveSocket("/live", Socket, {
@@ -349,7 +352,7 @@ defmodule KotobaDev.Layouts do
       <body class={@sumi && "sumi"}>
         <main>
           <nav>
-            <a href="/">Editor</a><a href="/two">Two editors</a><a href="/nodes">Nodes</a><a href="/?theme=sumi">Sumi theme</a>
+            <a href="/">Editor</a><a href="/two">Two editors</a><a href="/nodes">Nodes</a><a href="/collab">Collaboration</a><a href="/?theme=sumi">Sumi theme</a>
           </nav>
           {@inner_content}
         </main>
@@ -927,6 +930,83 @@ defmodule KotobaDev.ExtensionsLive do
       {:noreply, Kotoba.Live.push_content(socket, "comment_editor", KotobaDev.Sample.document())}
 end
 
+defmodule KotobaDev.CollabChannel do
+  use Kotoba.Collab.Channel, supervisor: KotobaDev.CollabSupervisor
+  # Demo only. Production authorization must consult the application's ACL
+  # using the verified token identity assigned during channel join.
+  def authorize(_socket, _document, _action), do: :ok
+end
+
+defmodule KotobaDev.CollabSocket do
+  use Phoenix.Socket
+  channel("kotoba:*", KotobaDev.CollabChannel)
+  def connect(_params, socket, _connect_info), do: {:ok, socket}
+  def id(_socket), do: nil
+end
+
+defmodule KotobaDev.CollabLive do
+  use Phoenix.LiveView
+  import Kotoba.Components
+
+  def mount(params, _session, socket) do
+    id = Map.get(params, "document", "demo")
+    name = Map.get(params, "name", "Ada")
+    user = %{id: name, name: name, color: if(name == "Ada", do: "#2563eb", else: "#be185d")}
+    role = if params["role"] == "read", do: :read, else: :write
+    collab = Kotoba.Collab.token(socket, id, user: user, role: role)
+
+    {:ok,
+     assign(socket,
+       document_id: id,
+       user: user,
+       role: role,
+       collab: collab,
+       form: to_form(%{"body" => nil}, as: :shared),
+       saved: nil
+     )}
+  end
+
+  def render(assigns) do
+    ~H"""
+    <h1>Shared document</h1>
+    <p>Open this document in another tab with a different <code>?name=</code> to collaborate.</p>
+    <.form for={@form} id="collab-form" phx-submit="save">
+      <.kotoba field={@form[:body]} id="shared_editor" label="Shared document" collab={@collab} nodes={["/assets/nodes/tag.js"]} />
+      <button type="submit" id="collab-save">Publish accepted revision</button>
+    </.form>
+    <button id="collab-insert" phx-click="insert">Insert tag</button>
+    <.kotoba_content :if={@saved} content={@saved} id="collab-saved" />
+    <p :if={@saved} id="collab-saved-text">{@saved.text}</p>
+    """
+  end
+
+  def handle_event("kotoba:collab_token", %{"document_id" => id}, socket) do
+    if id == socket.assigns.document_id do
+      credentials =
+        Kotoba.Collab.token(socket, id, user: socket.assigns.user, role: socket.assigns.role)
+
+      {:reply, credentials, socket}
+    else
+      {:reply, %{}, socket}
+    end
+  end
+
+  def handle_event("save", %{"kotoba_collab" => %{"shared_editor" => json}}, socket) do
+    with {:ok, revision} <- JSON.decode(json),
+         {:ok, content} <-
+           Kotoba.Collab.content(KotobaDev.CollabSupervisor, socket.assigns.document_id, revision) do
+      {:noreply, assign(socket, saved: content)}
+    else
+      _ -> {:noreply, put_flash(socket, :error, "The revision is unavailable")}
+    end
+  end
+
+  def handle_event("insert", _params, socket),
+    do:
+      {:noreply,
+       Kotoba.Live.insert_node(socket, "shared_editor", %KotobaDev.Nodes.Tag{label: "shared"})}
+end
+
 defmodule KotobaDev.Router do
   use Phoenix.Router
 
@@ -946,6 +1026,7 @@ defmodule KotobaDev.Router do
     live("/two", KotobaDev.TwoEditorsLive)
     live("/nodes", KotobaDev.NodesLive)
     live("/extensions", KotobaDev.ExtensionsLive)
+    live("/collab", KotobaDev.CollabLive)
   end
 end
 
@@ -959,6 +1040,7 @@ defmodule KotobaDev.Endpoint do
   @session [store: :cookie, key: "_kotoba_dev", signing_salt: "kotoba-dev"]
 
   socket("/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session]])
+  socket("/kotoba/socket", KotobaDev.CollabSocket, websocket: [max_frame_size: 1_000_000])
 
   if System.get_env("KOTOBA_DEV_WATCH") != "false" do
     socket("/phoenix/live_reload/socket", Phoenix.LiveReloader.Socket)
@@ -988,7 +1070,14 @@ Task.async(fn ->
 
   {:ok, _pid} =
     Supervisor.start_link(
-      [{Phoenix.PubSub, name: KotobaDev.PubSub}, KotobaDev.Endpoint],
+      [
+        {Phoenix.PubSub, name: KotobaDev.PubSub},
+        {Kotoba.Collab.Store.Memory, name: KotobaDev.CollabStore},
+        {Kotoba.Collab.Supervisor,
+         name: KotobaDev.CollabSupervisor,
+         store: {Kotoba.Collab.Store.Memory, KotobaDev.CollabStore}},
+        KotobaDev.Endpoint
+      ],
       strategy: :one_for_one
     )
 

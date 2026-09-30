@@ -18,12 +18,12 @@ defmodule Mix.Tasks.Kotoba.Build do
     2. Empties `priv/static`, so that it holds only the files of this
        build.
     3. Runs esbuild (the `esbuild` Mix package) with the `:kotoba_esm` and
-       `:kotoba_cjs` profiles, which write `priv/static/kotoba.esm.js` and
-       `priv/static/kotoba.cjs.js`.
+       `:kotoba_cjs` profiles for the core editor, and `:kotoba_collab_esm`
+       and `:kotoba_collab_cjs` for the optional collaboration bundles.
     4. Copies `assets/css/kotoba.css` and `assets/css/kotoba-sumi.css` to
        `priv/static/`.
 
-  After the task, `priv/static` holds exactly these four files, which are
+  After the task, `priv/static` holds exactly these six files, which are
   the files of the Hex package.
 
   It needs `npm` on the path and the `:esbuild` dependency, which is
@@ -37,7 +37,7 @@ defmodule Mix.Tasks.Kotoba.Build do
   @assets "assets"
   @static "priv/static"
   @lock_hash "node_modules/.kotoba-lock-sha256"
-  @profiles [:kotoba_esm, :kotoba_cjs]
+  @profiles [:kotoba_esm, :kotoba_cjs, :kotoba_collab_esm, :kotoba_collab_cjs]
   @stylesheets ["kotoba.css", "kotoba-sumi.css"]
 
   @impl Mix.Task
