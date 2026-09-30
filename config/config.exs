@@ -26,6 +26,20 @@ if config_env() == :dev do
       cd: Path.expand("../assets", __DIR__),
       env: %{"NODE_PATH" => nil}
     ],
+    kotoba_collab_esm: [
+      args:
+        ["src/collab/index.ts" | tl(esbuild_args)] ++
+          ~w(--format=esm --outfile=../priv/static/kotoba-collab.esm.js),
+      cd: Path.expand("../assets", __DIR__),
+      env: %{"NODE_PATH" => nil}
+    ],
+    kotoba_collab_cjs: [
+      args:
+        ["src/collab/index.ts" | tl(esbuild_args)] ++
+          ~w(--format=cjs --outfile=../priv/static/kotoba-collab.cjs.js),
+      cd: Path.expand("../assets", __DIR__),
+      env: %{"NODE_PATH" => nil}
+    ],
     # The JavaScript halves of the development server's nodes (dev.exs).
     # They go to tmp/, never to priv/static, so the package cannot ship them.
     kotoba_dev_nodes: [

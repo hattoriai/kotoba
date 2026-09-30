@@ -88,6 +88,7 @@ import {
   loadExtensions,
   markdownTransformers,
   registerExtensions,
+  EXTENSION_API,
   type KotobaExtension,
 } from "./extensions";
 import { type Feature, builtInExtensions, parseFeatures } from "./features";
@@ -109,6 +110,7 @@ import {
 import { createSuggestions, type AssistAction, type Suggestions } from "./suggestions";
 import { createToolbar, type Toolbar } from "./toolbar";
 import { createUploads, type Uploads } from "./uploads";
+import { attachCollaboration, readCollabCredentials, type Collaboration, type CollabCredentials } from "./collaboration";
 
 /**
  * The part of a LiveView hook that Kotoba uses. LiveView calls the hook's
@@ -116,8 +118,8 @@ import { createUploads, type Uploads } from "./uploads";
  */
 export interface LiveViewHook {
   el: HTMLElement;
-  pushEvent(event: string, payload: object): unknown;
-  pushEventTo(target: string | HTMLElement, event: string, payload: object): unknown;
+  pushEvent(event: string, payload: object, reply?: (payload: unknown) => void): unknown;
+  pushEventTo(target: string | HTMLElement, event: string, payload: object, reply?: (payload: unknown) => void): unknown;
   handleEvent(event: string, callback: (payload: unknown) => void): unknown;
   removeHandleEvent(ref: unknown): void;
 }
@@ -143,6 +145,7 @@ export interface Config {
   linkSchemes: string[];
   /** The Assist menu's actions, or `null` for an editor with no assist. */
   assist: AssistAction[] | null;
+  collab: CollabCredentials | null;
 }
 
 /** Reads the hook's configuration from the data attributes of its element. */
@@ -166,6 +169,7 @@ export function readConfig(el: HTMLElement): Config {
     debounce: Number.isFinite(debounce) && debounce >= 0 ? debounce : 300,
     linkSchemes: parseLinkSchemes(data.linkSchemes),
     assist: parseAssist(data.assist),
+    collab: readCollabCredentials(data.collab),
   };
 }
 
@@ -248,6 +252,8 @@ class Instance {
   private prompts: Prompts | null = null;
   private uploads: Uploads | null = null;
   private suggestions: Suggestions | null = null;
+  private collaboration: Collaboration | null = null;
+  private appReadonly = false;
 
   private json = "";
   private pushed = "";
@@ -262,6 +268,7 @@ class Instance {
     this.hook = hook;
     this.el = hook.el;
     this.config = readConfig(hook.el);
+    this.appReadonly = this.config.readonly;
     this.readonlyAttribute = hook.el.dataset.readonly;
     this.change = this.config.change;
     instances += 1;
@@ -292,6 +299,7 @@ class Instance {
 
     this.ready = this.mount().catch((error: unknown) => {
       console.error("Kotoba: the editor could not mount", error);
+      if (this.config.collab) { this.applyReadonly(true); this.announce("The shared editor could not connect."); }
     });
   }
 
@@ -317,7 +325,7 @@ class Instance {
     // The built-in features, then the app's extensions. An extension node
     // cannot take the type of a built-in node (of any feature) or of a node
     // module's node.
-    const builtIns = builtInExtensions(features, { linkSchemes: this.config.linkSchemes });
+    const builtIns = builtInExtensions(features, { linkSchemes: this.config.linkSchemes, history: this.config.collab === null });
     const reserved = new Set<string>([...CORE_TYPES, ...BUILT_IN_NODES.map((klass) => klass.getType())]);
     const builtIn = composeExtensions(builtIns, new Set(CORE_TYPES));
     const moduleTypes = appNodes.flatMap((klass) => {
@@ -330,7 +338,7 @@ class Instance {
     const app = composeExtensions(appExtensions, new Set([...reserved, ...moduleTypes]));
     let extensions: KotobaExtension[] = [...builtIn.extensions, ...app.extensions];
 
-    const options = { namespace: this.id, editable: !this.config.readonly, builtInNodes: builtIn.nodes };
+    const options = { namespace: this.id, editable: !this.config.readonly && this.config.collab === null, builtInNodes: builtIn.nodes };
     let editor: LexicalEditor;
     try {
       editor = createKotobaEditor({ ...options, nodes: [...appNodes, ...app.nodes] });
@@ -346,13 +354,13 @@ class Instance {
 
     const editable = this.el.querySelector<HTMLElement>("[data-kotoba-editable]") ?? document.createElement("div");
     editable.classList.add("kotoba-editable");
-    editable.contentEditable = String(!this.config.readonly);
+    editable.contentEditable = String(options.editable);
     editable.setAttribute("role", "textbox");
     editable.setAttribute("aria-multiline", "true");
     editable.spellcheck = true;
     copyLabel(this.el, editable);
     syncAria(this.el, editable);
-    if (this.config.readonly) editable.setAttribute("aria-readonly", "true");
+    if (!options.editable) editable.setAttribute("aria-readonly", "true");
     if (this.config.placeholder !== "") editable.setAttribute("aria-placeholder", this.config.placeholder);
     this.editable = editable;
 
@@ -423,7 +431,7 @@ class Instance {
       features,
       controls: extensionControls(app.extensions.filter((extension) => extensions.includes(extension))),
     });
-    this.toolbar.setDisabled(this.config.readonly);
+    this.toolbar.setDisabled(!options.editable);
 
     if (this.config.prompts.size > 0 && features.has("mentions")) {
       this.prompts = createPrompts(editor, {
@@ -444,7 +452,7 @@ class Instance {
         // loaded; it must not reach the hidden input or the server.
         if (!this.loaded) return;
         this.updatePlaceholder();
-        const remote = tags.has(REMOTE_TAG);
+        const remote = tags.has(REMOTE_TAG) || tags.has("kotoba-collab");
         if (!remote && dirtyElements.size === 0 && dirtyLeaves.size === 0) return;
 
         this.json = JSON.stringify(toEnvelope(editorState));
@@ -477,7 +485,30 @@ class Instance {
     const initial = this.config.input?.value ?? "";
     editor.setRootElement(editable);
     this.loaded = true;
-    this.load(initial);
+    if (this.config.collab) {
+      this.collaboration = await attachCollaboration({
+        editor, api: EXTENSION_API, element: this.el, surface, editable,
+        credentials: this.config.collab, initialReadonly: this.config.readonly,
+        readDocument: () => toEnvelope(editor.getEditorState()),
+        announce: this.announce,
+        setReadonly: (value) => this.applyReadonly(value || this.appReadonly),
+        refreshCredentials: () => new Promise((resolve, reject) => {
+          const timer = setTimeout(() => reject(new Error("Collaboration credentials could not be renewed")), 10_000);
+          const reply = (payload: unknown): void => {
+            clearTimeout(timer);
+            try {
+              const credentials = readCollabCredentials(JSON.stringify(payload));
+              if (credentials) resolve(credentials); else reject(new Error("Access changed"));
+            } catch { reject(new Error("Access changed")); }
+          };
+          const target = this.el.getAttribute("phx-target");
+          const payload = { v: 1, id: this.id, document_id: this.config.collab!.document_id };
+          if (target) this.hook.pushEventTo(target, "kotoba:collab_token", payload, reply);
+          else this.hook.pushEvent("kotoba:collab_token", payload, reply);
+        }),
+      });
+      if (this.destroyed) this.collaboration.dispose();
+    } else this.load(initial);
   }
 
   // Reads a document into the editor (the first document, or one from
@@ -511,6 +542,10 @@ class Instance {
   }
 
   private setContent(doc: unknown): void {
+    if (this.config.collab) {
+      this.announce("Use Kotoba.Collab.transact to change a shared document.");
+      return;
+    }
     // A suggestion's place may not be in the new document.
     this.suggestions?.discard();
     this.load(doc);
@@ -543,8 +578,15 @@ class Instance {
   }
 
   private setReadonly(readonly: boolean): void {
+    this.appReadonly = readonly;
+    this.applyReadonly(readonly || this.collaboration?.readonly === true);
+  }
+
+  private applyReadonly(readonly: boolean): void {
     const { editor, editable } = this;
     if (editor === null || editable === null) return;
+    editable.contentEditable = String(!readonly);
+    if (readonly) editable.setAttribute("aria-readonly", "true"); else editable.removeAttribute("aria-readonly");
     editor.setEditable(!readonly);
     this.toolbar?.setDisabled(readonly);
     if (readonly) this.prompts?.close();
@@ -666,6 +708,7 @@ class Instance {
 
   destroy(): void {
     this.destroyed = true;
+    this.collaboration?.dispose();
     clearTimeout(this.timer);
     for (const ref of this.handlers) this.hook.removeHandleEvent(ref);
     this.prompts?.dispose();

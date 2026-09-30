@@ -5,8 +5,14 @@
   "module": "./priv/static/kotoba.esm.js",
   "main": "./priv/static/kotoba.cjs.js",
   "exports": {
-    "import": "./priv/static/kotoba.esm.js",
-    "require": "./priv/static/kotoba.cjs.js"
+    ".": {
+      "import": "./priv/static/kotoba.esm.js",
+      "require": "./priv/static/kotoba.cjs.js"
+    },
+    "./collab": {
+      "import": "./priv/static/kotoba-collab.esm.js",
+      "require": "./priv/static/kotoba-collab.cjs.js"
+    }
   },
   "files": [
     "priv/static"

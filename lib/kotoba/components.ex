@@ -127,6 +127,10 @@ defmodule Kotoba.Components do
 
   attr :placeholder, :string, default: nil, doc: "the text of an empty editor"
 
+  attr :collab, :map,
+    default: nil,
+    doc: "credentials from Kotoba.Collab.token/3; enables the optional collaboration bundle"
+
   attr :nodes, :list,
     default: [],
     doc: "app nodes: `{module, js_url}` tuples, or JavaScript module URLs"
@@ -192,6 +196,7 @@ defmodule Kotoba.Components do
         id: id,
         input_id: input_id,
         value: field_json(field.value),
+        collab: assigns.collab && JSON.encode!(assigns.collab),
         node_urls: node_urls(assigns.nodes),
         triggers: json_map(Prompts.triggers(assigns.prompts)),
         prompt_labels: json_map(Prompts.labels(assigns.prompts)),
@@ -216,6 +221,7 @@ defmodule Kotoba.Components do
         phx-hook="Kotoba"
         phx-update="ignore"
         data-input={@input_id}
+        data-collab={@collab}
         data-readonly={to_string(@readonly)}
         data-change={to_string(@change)}
         data-placeholder={@placeholder}

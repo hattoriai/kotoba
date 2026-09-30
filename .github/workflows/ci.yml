@@ -45,7 +45,7 @@ jobs:
       - name: Seed fake assets
         run: |
           mkdir -p priv/static
-          touch priv/static/kotoba.esm.js priv/static/kotoba.cjs.js priv/static/kotoba.css priv/static/kotoba-sumi.css
+          touch priv/static/kotoba.esm.js priv/static/kotoba.cjs.js priv/static/kotoba-collab.esm.js priv/static/kotoba-collab.cjs.js priv/static/kotoba.css priv/static/kotoba-sumi.css
 
       - run: mix format --check-formatted
 
@@ -100,7 +100,7 @@ jobs:
       - name: Seed fake assets
         run: |
           mkdir -p priv/static
-          touch priv/static/kotoba.esm.js priv/static/kotoba.cjs.js priv/static/kotoba.css priv/static/kotoba-sumi.css
+          touch priv/static/kotoba.esm.js priv/static/kotoba.cjs.js priv/static/kotoba-collab.esm.js priv/static/kotoba-collab.cjs.js priv/static/kotoba.css priv/static/kotoba-sumi.css
 
       - run: mix deps.get
 

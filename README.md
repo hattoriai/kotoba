@@ -1,5 +1,7 @@
 # Kotoba
 
+![Kotoba — Rich text for Phoenix](https://raw.githubusercontent.com/hattoriai/kotoba/main/media/banner.png)
+
 Kotoba (言葉, "words") is rich text for Phoenix. It gives your app:
 
 * a rich-text editor for LiveView forms, built on
@@ -29,6 +31,7 @@ does not run Node.js for it: you add the hook and one style sheet.
 | Files | drop, paste or pick images and files; image galleries, reordered from the keyboard; PDFs in the browser's viewer, MP4 and WebM videos; LiveView uploads, a storage adapter with byte ranges |
 | Prompts | `@` mentions, emoji, tags: server searches (async too) or local lists, with queries that have spaces |
 | Suggestions | text streamed from the server (a language model), shown as it comes, then accepted as one undo step or rejected; an Assist menu |
+| Collaboration | shared documents, participant cursors, read-only viewers, per-author undo, offline draft recovery and accepted revisions for form submission; [setup](guides/collaboration.md) |
 | Shortcuts | the usual keyboard shortcuts, and Markdown as you type (`## `, `- `, `**bold**`, ` ``` `) |
 | Per field | the features of each editor (`features={~w(bold links lists)}`), checked on the server |
 | Your own | nodes (`mix kotoba.gen.node`), extensions with commands, toolbar buttons and shortcuts, custom toolbars |

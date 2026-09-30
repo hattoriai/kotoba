@@ -908,3 +908,11 @@ div.kotoba-unknown {
     animation: none !important;
   }
 }
+/* Collaboration is optional; these selectors only apply to shared editors. */
+.kotoba-collab-bar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .75rem; padding: .5rem .75rem; font-size: .8125rem; border-bottom: 1px solid var(--kotoba-border, #d1d5db); }
+.kotoba-collab-people { display: flex; flex-wrap: wrap; gap: .75rem; list-style: none; margin: 0; padding: 0; }
+.kotoba-collab-people li { border-inline-start: 3px solid var(--collab-color); padding-inline-start: .4rem; }
+.kotoba-collab-cursors { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.kotoba-collab-caret { position: absolute; border-inline-start: 2px solid var(--collab-color); }
+.kotoba-collab-caret span { position: absolute; left: -2px; bottom: 100%; background: var(--collab-color); color: #fff; font: 11px/1.4 system-ui; white-space: nowrap; padding: 1px 4px; border-radius: 3px; }
+.kotoba-collab-selection { position: absolute; background: var(--collab-color); opacity: .15; }

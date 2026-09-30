@@ -69,12 +69,14 @@ defmodule Kotoba.MixProject do
       name: "kotoba",
       licenses: ["MIT"],
       links: %{"GitHub" => @source_url},
-      # The four bundle files by name: other build output in priv/static
+      # The six bundle files by name: other build output in priv/static
       # never goes into the package.
       files: ~w(
         lib
         priv/static/kotoba.esm.js
         priv/static/kotoba.cjs.js
+        priv/static/kotoba-collab.esm.js
+        priv/static/kotoba-collab.cjs.js
         priv/static/kotoba.css
         priv/static/kotoba-sumi.css
         package.json
@@ -98,6 +100,7 @@ defmodule Kotoba.MixProject do
         "README.md",
         "guides/quickstart.md",
         "guides/forms.md",
+        "guides/collaboration.md",
         "guides/features.md",
         "guides/rendering.md",
         "guides/uploads.md",
@@ -115,6 +118,7 @@ defmodule Kotoba.MixProject do
         Guides: [
           "guides/quickstart.md",
           "guides/forms.md",
+          "guides/collaboration.md",
           "guides/features.md",
           "guides/rendering.md",
           "guides/uploads.md",
@@ -167,7 +171,7 @@ defmodule Kotoba.MixProject do
       # compiles in this VM, Mix no longer finds the tasks of the Hex archive
       # (Elixir 1.20, Hex 2.5). hex.publish stays in this VM so that it can
       # read the two-factor code from the terminal. The check refuses a
-      # priv/static with anything but the four bundle files.
+      # priv/static with anything but the six bundle files.
       release: [
         "cmd mix kotoba.build",
         "cmd mix kotoba.release_check",
