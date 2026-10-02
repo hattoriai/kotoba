@@ -19,6 +19,17 @@ Kotoba (言葉, "words") is rich text for Phoenix. It gives your app:
 The editor is a prebuilt JavaScript bundle in the Hex package. Your app
 does not run Node.js for it: you add the hook and one style sheet.
 
+## Try it: Notebook
+
+![The Kotoba editor in Notebook: a toolbar, a second writer's live cursor, the selection menu over selected text, and a highlighted code block](https://raw.githubusercontent.com/hattoriai/kotoba/main/media/notebook-editor.png)
+
+[Notebook](https://github.com/hattoriai/notebook) is a complete Phoenix
+app made with Kotoba: shared pages with live collaboration, a selection
+menu with the app's own icons, mentions, galleries, PDFs, a custom
+callout node, and a reader view of the rendered content. Clone it, run
+`mix setup` and `mix phx.server`, and sign in as Hattori Hanzo (its
+README has the details) to try every feature in your browser.
+
 ## What the editor does
 
 | | |
@@ -27,7 +38,8 @@ does not run Node.js for it: you add the hook and one style sheet.
 | Blocks | headings, quotes, bulleted, numbered and check lists, horizontal rules |
 | Code | code blocks highlighted as you type in 28 languages, with a language picker |
 | Tables | insert, rows and columns, header rows and columns, pasted tables |
-| Links | a link form, paste a URL over text, autolinks, allowed schemes |
+| Links | a link form, paste a URL over text, autolinks, allowed schemes; a link card to open, edit or remove the link at the caret |
+| Selection menu | a menu over the selected text, with the toolbar's commands or the app's own buttons, themed with CSS properties |
 | Files | drop, paste or pick images and files; image galleries, reordered from the keyboard; PDFs in the browser's viewer, MP4 and WebM videos; LiveView uploads, a storage adapter with byte ranges |
 | Prompts | `@` mentions, emoji, tags: server searches (async too) or local lists, with queries that have spaces |
 | Suggestions | text streamed from the server (a language model), shown as it comes, then accepted as one undo step or rejected; an Assist menu |
@@ -54,7 +66,7 @@ Add `kotoba` to the deps in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:kotoba, "~> 0.1"}
+    {:kotoba, "~> 0.2"}
   ]
 end
 ```

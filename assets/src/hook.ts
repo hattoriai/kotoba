@@ -29,6 +29,10 @@
 //   * `data-debounce` - milliseconds between `kotoba:change` pushes (300).
 //   * `data-link-schemes` - comma-separated allowed link schemes
 //     ("http,https,mailto"); the same list as the server's sanitizer.
+//   * `data-selection-menu` - "true" for the selection menu with its default
+//     commands, or comma-separated commands (see selection_menu.ts). An
+//     `[data-kotoba-selection-menu]` element in the hook element is the
+//     app's own menu, and needs no attribute.
 //   * `data-assist` - JSON: the actions of the Assist menu (`[{id, label}]`,
 //     `[]` for none). With it, the editor pushes `kotoba:assist` and
 //     `kotoba:suggestion` (see suggestions.ts).
@@ -108,7 +112,8 @@ import {
   type JSONNode,
 } from "./protocol";
 import { createSuggestions, type AssistAction, type Suggestions } from "./suggestions";
-import { createToolbar, type Toolbar } from "./toolbar";
+import { buildCommandBar, createToolbar, type Toolbar } from "./toolbar";
+import { SELECTION_MENU_COMMANDS, attachLinkCard, attachSelectionMenu, type Floating } from "./selection_menu";
 import { createUploads, type Uploads } from "./uploads";
 import { attachCollaboration, readCollabCredentials, type Collaboration, type CollabCredentials } from "./collaboration";
 
@@ -143,6 +148,8 @@ export interface Config {
   change: boolean;
   debounce: number;
   linkSchemes: string[];
+  /** The commands of the selection menu, or `null` for an editor with no selection menu. */
+  selectionMenu: string[] | null;
   /** The Assist menu's actions, or `null` for an editor with no assist. */
   assist: AssistAction[] | null;
   collab: CollabCredentials | null;
@@ -168,9 +175,18 @@ export function readConfig(el: HTMLElement): Config {
     change: data.change === "true",
     debounce: Number.isFinite(debounce) && debounce >= 0 ? debounce : 300,
     linkSchemes: parseLinkSchemes(data.linkSchemes),
+    selectionMenu: parseSelectionMenu(data.selectionMenu),
     assist: parseAssist(data.assist),
     collab: readCollabCredentials(data.collab),
   };
+}
+
+/** Reads `data-selection-menu`: "true" for the default commands, or a list of commands. */
+export function parseSelectionMenu(value: string | undefined): string[] | null {
+  if (value === undefined || value === "false") return null;
+  if (value === "" || value === "true") return [...SELECTION_MENU_COMMANDS];
+  const commands = urls(value);
+  return commands.length > 0 ? commands : null;
 }
 
 /** Reads `data-assist`: a JSON list of `{id, label}` actions. No attribute gives `null`. */
@@ -247,6 +263,8 @@ class Instance {
   private editable: HTMLElement | null = null;
   private placeholder: HTMLElement | null = null;
   private toolbar: Toolbar | null = null;
+  private selectionToolbar: Toolbar | null = null;
+  private floating: Floating[] = [];
   private link: LinkForm | null = null;
   private colors: ColorMenu | null = null;
   private prompts: Prompts | null = null;
@@ -433,6 +451,51 @@ class Instance {
     });
     this.toolbar.setDisabled(!options.editable);
 
+    // The selection menu: the app's element, or the commands of
+    // `data-selection-menu`. It is a second toolbar, with the same commands.
+    const appMenu = this.el.querySelector<HTMLElement>("[data-kotoba-selection-menu]");
+    const controls = extensionControls(app.extensions.filter((extension) => extensions.includes(extension)));
+    if (appMenu !== null || this.config.selectionMenu !== null) {
+      const menu =
+        appMenu ??
+        buildCommandBar(this.config.selectionMenu ?? [], {
+          uploads: this.uploads.enabled,
+          assist: assist !== null && assist.length > 0,
+          features,
+          controls,
+        });
+      this.selectionToolbar = createToolbar(editor, {
+        existing: menu,
+        host: surface,
+        label: menu.getAttribute("aria-label") ?? "Selection formatting",
+        uploads: this.uploads.enabled,
+        onLink: () => this.link?.open(),
+        onUpload: () => this.uploads?.open(),
+        onColors: this.colors === null ? undefined : (button) => this.colors?.open(button),
+        onAssist: assist !== null && assist.length > 0 ? (button) => this.suggestions?.openMenu(button) : undefined,
+        announce: this.announce,
+        codeLanguages: this.config.codeLanguages,
+        features,
+        controls,
+        className: "kotoba-selection-menu",
+        focusShortcut: false,
+      });
+      this.selectionToolbar.setDisabled(!options.editable);
+      this.floating.push(attachSelectionMenu(editor, menu, this.selectionToolbar, { host: surface, root: this.el }));
+    }
+    if (this.link !== null) {
+      this.floating.push(
+        attachLinkCard(editor, {
+          host: surface,
+          root: this.el,
+          idPrefix: this.id,
+          linkSchemes: this.config.linkSchemes,
+          onEdit: () => this.link?.open(),
+          announce: this.announce,
+        }),
+      );
+    }
+
     if (this.config.prompts.size > 0 && features.has("mentions")) {
       this.prompts = createPrompts(editor, {
         host: surface,
@@ -589,6 +652,7 @@ class Instance {
     if (readonly) editable.setAttribute("aria-readonly", "true"); else editable.removeAttribute("aria-readonly");
     editor.setEditable(!readonly);
     this.toolbar?.setDisabled(readonly);
+    this.selectionToolbar?.setDisabled(readonly);
     if (readonly) this.prompts?.close();
   }
 
@@ -713,6 +777,11 @@ class Instance {
     for (const ref of this.handlers) this.hook.removeHandleEvent(ref);
     this.prompts?.dispose();
     this.suggestions?.dispose();
+    for (const floating of this.floating) floating.dispose();
+    const menu = this.selectionToolbar?.element;
+    this.selectionToolbar?.dispose();
+    // The menu that the hook built; the app's own element stays.
+    if (menu !== undefined && !menu.hasAttribute("data-kotoba-selection-menu")) menu.remove();
     this.toolbar?.dispose();
     this.link?.dispose();
     this.colors?.dispose();

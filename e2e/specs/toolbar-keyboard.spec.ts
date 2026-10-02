@@ -118,7 +118,7 @@ test("the link button from the keyboard opens the form for the kept selection", 
   await settle(page);
   await page.keyboard.press("Shift+Tab");
   for (let i = 0; i < 6; i += 1) await page.keyboard.press("ArrowRight");
-  await expect(toolbar(page).getByRole("button", { name: "Link" })).toBeFocused();
+  await expect(toolbar(page).getByRole("button", { name: "Link", exact: true })).toBeFocused();
   await page.keyboard.press("Enter");
 
   const input = page.getByRole("dialog", { name: "Link" }).getByLabel("URL");
@@ -129,7 +129,7 @@ test("the link button from the keyboard opens the form for the kept selection", 
   await expect(editable.locator("a")).toHaveText("Kotoba");
   const [link] = await expectNodes(page, "link", 1);
   expect(link?.url).toBe("https://example.com");
-  await expect(toolbar(page).getByRole("button", { name: "Link" })).toHaveAttribute("aria-pressed", "true");
+  await expect(toolbar(page).getByRole("button", { name: "Link", exact: true })).toHaveAttribute("aria-pressed", "true");
 });
 
 test("undo from the toolbar by keyboard", async ({ page }) => {

@@ -60,7 +60,7 @@ import {
   type LexicalNode,
 } from "lexical";
 
-import { registerCodeLanguageAliases } from "./code_languages";
+import { findCodeLanguage, registerCodeLanguageAliases } from "./code_languages";
 import { AttachmentNode } from "./nodes/attachment";
 import { GalleryNode } from "./nodes/gallery";
 import { UnknownNode, UploadMarkerNode } from "./nodes/internal";
@@ -69,8 +69,24 @@ import { UNKNOWN_TYPE, UPLOAD_MARKER_TYPE } from "./protocol";
 
 // Every import above has run, so the editor's Prism and its grammars are
 // loaded: the aliases join them, and the host page gets its own `Prism` back.
-registerCodeLanguageAliases((globalThis as unknown as { Prism: { languages: Record<string, unknown> } }).Prism);
+const readerPrism = (globalThis as unknown as {
+  Prism: { languages: Record<string, unknown>; highlight: (text: string, grammar: unknown, language: string) => string };
+}).Prism;
+registerCodeLanguageAliases(readerPrism);
 restoreHostPrism();
+
+/** Color a server-rendered Kotoba document using the editor's Prism grammars. */
+export function highlightRenderedContent(root: ParentNode = document): void {
+  for (const code of root.querySelectorAll<HTMLElement>(".kotoba-content pre code")) {
+    const languageClass = [...code.classList].find((name) => name.startsWith("language-"));
+    if (!languageClass) continue;
+    const language = findCodeLanguage(languageClass.slice("language-".length));
+    if (!language || language.id === "plain") continue;
+    const grammar = readerPrism.languages[language.id];
+    if (!grammar) continue;
+    code.innerHTML = readerPrism.highlight(code.textContent ?? "", grammar, language.id);
+  }
+}
 
 /**
  * Prism's tokenizer, with no default language: a code block with no

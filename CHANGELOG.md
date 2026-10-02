@@ -7,7 +7,28 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-02
+
 ### Added
+
+- A selection menu: `<.kotoba selection_menu>` shows a menu over the
+  selected text, with the default commands (bold, italic, underline,
+  strikethrough, inline code, highlight, link) or the commands of a list;
+  `<:selection>` with the new `kotoba_selection_menu/1` gives the app's own
+  buttons. Alt+F10 focuses it and Escape closes it. It is themed with the
+  new `--kotoba-floating-*` properties (also in `kotoba-sumi.css`).
+- A link card: with the caret in a link, a card shows the URL (it opens in
+  a new tab) and Edit link and Remove link buttons. Cmd/Ctrl+click opens a
+  link of the editor.
+- `Kotoba.Content.from_markdown/2` reads quotes, check lists, horizontal
+  rules, pipe tables, `*italic*`, `~~strikethrough~~` and `***both***`,
+  nested formats (a link in bold), and the first number of a numbered
+  list: Kotoba's own Markdown now reads back.
+- A readable baseline for `<.kotoba_content>` (headings, paragraphs,
+  lists, quotes, links, code), with the weight of one class so that an
+  element reset such as `a { color: inherit }` does not undo it, and
+  `highlightRenderedContent()` to color rendered code blocks with the
+  editor's grammars.
 
 - Optional collaboration: shared documents with participant cursors,
   read-only viewers, per-author undo and redo, local draft recovery after
@@ -165,6 +186,8 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- An empty table cell keeps the height of a line, in the editor and in the
+  rendered HTML; it showed as a thin strip.
 - `Kotoba.Live.consume_uploads/4` consumes an entry once. LiveView drops
   a consumed entry a message later, so a second call before that (the
   next file done, a form change) consumed it again and crashed the
@@ -244,5 +267,6 @@ The first release.
 - Guides: quickstart, forms, uploads, prompts, custom nodes, theming,
   security, accessibility and known limits.
 
-[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/hattoriai/kotoba/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/hattoriai/kotoba/releases/tag/v0.1.0

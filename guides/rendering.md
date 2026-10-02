@@ -63,8 +63,9 @@ before it renders. See the [Security](security.md) guide.
 
 ## Style the HTML
 
-`kotoba.css` gives the rendered HTML only what it needs to read right,
-and leaves the typography to your app:
+`kotoba.css` gives the rendered HTML a readable baseline. It styles
+headings, paragraphs, lists, quotes, links, inline code and code blocks,
+as well as the structures that need their own layout:
 
 * tables: borders, padding, header cells, and the sideways scroll;
 * check lists: a box, checked or not, in front of each item;
@@ -73,16 +74,33 @@ and leaves the typography to your app:
   [Theming](theming.md));
 * the case formats.
 
-Paragraphs, headings, lists, quotes, code and links take the styles of
-your app. With Tailwind, the typography plugin is a good fit:
+Each rule of the baseline has the weight of one class
+(`.kotoba-content :where(a)`): it wins over element resets such as
+`a { color: inherit }` or Tailwind's preflight, and a rule of your app
+with a class (`.article .kotoba-content a`) wins over it. With Tailwind,
+the typography plugin is an option; import `kotoba.css` in a layer so
+that the plugin's utilities come after it:
+
+```css
+@import "../../deps/kotoba/priv/static/kotoba.css" layer(components);
+```
 
 ```heex
 <.kotoba_content content={@post.body} class="prose dark:prose-invert" />
 ```
 
-A rendered code block has its language in the class (`language-elixir`)
-and no highlighting, so a highlighter such as Prism or highlight.js can
-highlight it in the page.
+A rendered code block has its language in the class (`language-elixir`).
+The server returns plain code text; for syntax colors in a browser, import
+`highlightRenderedContent` from `kotoba` and call it after the page loads
+or LiveView replaces the rendered document. It uses the Prism grammars
+already bundled with the editor and does not change the page's own
+`window.Prism`:
+
+```js
+import { highlightRenderedContent } from "kotoba"
+window.addEventListener("DOMContentLoaded", () => highlightRenderedContent())
+window.addEventListener("phx:page-loading-stop", () => highlightRenderedContent())
+```
 
 ## HTML, text and Markdown anywhere
 

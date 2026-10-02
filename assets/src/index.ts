@@ -3,6 +3,7 @@
 // The Kotoba editor bundle: the LiveView hook and the built-in node classes.
 
 export { Kotoba } from "./hook";
+export { highlightRenderedContent } from "./editor";
 export { registerCollaboration } from "./collaboration";
 export type { Collaboration, CollabCredentials } from "./collaboration";
 export { AttachmentNode } from "./nodes/attachment";

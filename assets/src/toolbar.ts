@@ -497,6 +497,8 @@ function $runTableCommand(command: ToolbarCommand, state: SelectionState): void 
 export interface Toolbar {
   element: HTMLElement;
   setDisabled(disabled: boolean): void;
+  /** Moves the focus to the toolbar's tab stop. */
+  focus(): void;
   dispose(): void;
 }
 
@@ -520,6 +522,10 @@ interface ToolbarOptions {
   features?: ReadonlySet<Feature>;
   /** The toolbar controls of the app's extensions. */
   controls?: readonly ResolvedControl[];
+  /** The class that the toolbar element gets ("kotoba-toolbar"). */
+  className?: string;
+  /** `false` when Alt+F10 does not move the focus to this toolbar. */
+  focusShortcut?: boolean;
 }
 
 /** The state of an extension's control, read from the editor state. */
@@ -544,7 +550,7 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
 
   toolbar.setAttribute("role", "toolbar");
   if (!toolbar.hasAttribute("aria-label")) toolbar.setAttribute("aria-label", options.label);
-  toolbar.classList.add("kotoba-toolbar");
+  toolbar.classList.add(options.className ?? "kotoba-toolbar");
 
   const codeLanguages = options.codeLanguages ?? CODE_LANGUAGES;
 
@@ -831,6 +837,7 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
     editor.registerCommand(
       KEY_DOWN_COMMAND,
       (event: KeyboardEvent) => {
+        if (options.focusShortcut === false) return false;
         if (!event.altKey || event.key !== "F10" || event.ctrlKey || event.metaKey || event.shiftKey) return false;
         if (buttons().length === 0) return false;
         event.preventDefault();
@@ -867,6 +874,9 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
       disabled = value;
       refresh();
     },
+    focus() {
+      rove(undefined, true);
+    },
     dispose() {
       unregister();
       toolbar.removeEventListener("click", onClick);
@@ -876,6 +886,74 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
       if (options.existing === null) toolbar.remove();
     },
   };
+}
+
+/**
+ * Builds the buttons of `commands`, in that order, in groups: a new group
+ * starts where the toolbar group of a command changes. The commands of a
+ * feature that is off, `upload` without uploads, `assist` without an
+ * Assist menu, and names that are not commands are left out. An
+ * extension's command gets its control's button.
+ */
+export function buildCommandBar(
+  commands: readonly string[],
+  options: { uploads: boolean; assist: boolean; features: ReadonlySet<Feature>; controls: readonly ResolvedControl[] },
+): HTMLElement {
+  const bar = document.createElement("div");
+  let group: HTMLElement | null = null;
+  let groupName = "";
+
+  for (const command of commands) {
+    const item = TOOLBAR_ITEMS.find((entry) => entry.command === command);
+    const control = options.controls.find((entry) => entry.id === command);
+    if (item === undefined && control === undefined) continue;
+    if (item !== undefined) {
+      if (SELECT_COMMANDS.has(item.command)) continue;
+      if (item.command === "upload" && !options.uploads) continue;
+      if (item.command === "assist" && !options.assist) continue;
+      if (item.feature !== undefined && !options.features.has(item.feature)) continue;
+    }
+
+    const name = item?.group ?? control?.group ?? "";
+    if (group === null || name !== groupName) {
+      group = document.createElement("div");
+      group.className = "kotoba-toolbar-group";
+      group.setAttribute("role", "group");
+      group.setAttribute("aria-label", name);
+      group.dataset.group = name;
+      groupName = name;
+      bar.append(group);
+    }
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "kotoba-toolbar-button";
+    button.dataset.kotobaCommand = command;
+    button.tabIndex = -1;
+    const label = item?.label ?? control?.label ?? command;
+    button.setAttribute("aria-label", label);
+    button.title = item?.shortcut ? `${label} (${item.shortcut})` : label;
+
+    if (item !== undefined) {
+      button.append(renderIcon(TOOLBAR_ICONS[item.command as Exclude<ToolbarCommand, "code-language">]));
+    } else {
+      let icon: Element | null = null;
+      try {
+        icon = control?.icon?.() ?? null;
+      } catch (error) {
+        console.error(`Kotoba: the icon of the toolbar control "${command}" failed`, error);
+      }
+      if (icon !== null) {
+        icon.setAttribute("aria-hidden", "true");
+        button.append(icon);
+      } else {
+        button.textContent = label;
+      }
+    }
+    group.append(button);
+  }
+
+  return bar;
 }
 
 function buildToolbar(

@@ -292,6 +292,67 @@ defmodule Kotoba.ComponentsTest do
     end
   end
 
+  describe "kotoba/1 with a selection menu" do
+    test "no menu by default" do
+      assert attr(html(%{field: field(nil)}), "[phx-hook=Kotoba]", "data-selection-menu") == nil
+    end
+
+    test "true gives the default commands, a list gives its own" do
+      assert attr(
+               html(%{field: field(nil), selection_menu: true}),
+               "[phx-hook=Kotoba]",
+               "data-selection-menu"
+             ) ==
+               "true"
+
+      assert attr(
+               html(%{field: field(nil), selection_menu: ["bold", :link, "callout:toggle"]}),
+               "[phx-hook=Kotoba]",
+               "data-selection-menu"
+             ) == "bold,link,callout:toggle"
+    end
+
+    test "an unknown command raises" do
+      assert_raise ArgumentError, ~r/unknown Kotoba toolbar command "shout"/, fn ->
+        html(%{field: field(nil), selection_menu: ["shout"]})
+      end
+    end
+
+    test "the selection slot renders the app's menu inside the editor element" do
+      assigns = %{field: field(nil)}
+
+      html =
+        rendered_to_string(~H"""
+        <Components.kotoba field={@field}>
+          <:selection>
+            <Components.kotoba_selection_menu class="mine">
+              <:button command="bold">B</:button>
+              <:button command="link" label="Add a link">L</:button>
+            </Components.kotoba_selection_menu>
+          </:selection>
+        </Components.kotoba>
+        """)
+
+      menu = "[phx-hook=Kotoba] [data-kotoba-selection-menu]"
+      assert attr(html, menu, "class") == "kotoba-selection-menu mine"
+      assert attr(html, menu, "aria-label") == "Selection formatting"
+      assert attr(html, menu, "hidden") == ""
+      buttons = find(html, menu <> " button")
+      assert LazyHTML.attribute(buttons, "data-kotoba-command") == ["bold", "link"]
+      assert LazyHTML.attribute(buttons, "aria-label") == ["Bold", "Add a link"]
+      # It is not the editor's toolbar.
+      assert find(html, "[data-kotoba-toolbar]") |> Enum.count() == 0
+    end
+
+    test "kotoba_selection_menu/1 with no buttons has a text button for each default command" do
+      html = render_component(&Components.kotoba_selection_menu/1, %{})
+      buttons = find(html, "button")
+
+      assert LazyHTML.attribute(buttons, "data-kotoba-command") ==
+               ~w(bold italic underline strikethrough code highlight link)
+    end
+  end
+
   describe "kotoba_toolbar/1" do
     defp toolbar(assigns), do: render_component(&Components.kotoba_toolbar/1, assigns)
 

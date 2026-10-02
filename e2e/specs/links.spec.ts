@@ -76,7 +76,7 @@ test("a bare domain gets https:// and an email gets mailto:", async ({ page }) =
   await page.keyboard.press("Shift+ArrowRight");
   await page.keyboard.press("Shift+ArrowRight");
   await page.keyboard.press("Shift+ArrowRight");
-  await page.getByRole("button", { name: "Link" }).click();
+  await page.getByRole("button", { name: "Link", exact: true }).click();
   await dialog(page).getByLabel("URL").fill("example.com");
   await dialog(page).getByRole("button", { name: "Apply" }).click();
 

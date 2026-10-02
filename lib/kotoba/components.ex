@@ -62,6 +62,8 @@ defmodule Kotoba.Components do
 
   @command_names Enum.map(@commands, &elem(&1, 0))
 
+  @selection_commands ~w(bold italic underline strikethrough code highlight link)
+
   @doc """
   Returns the names of the toolbar commands, in toolbar order.
 
@@ -179,8 +181,17 @@ defmodule Kotoba.Components do
     default: nil,
     doc: "milliseconds between `kotoba:change` pushes; 300 when not given"
 
+  attr :selection_menu, :any,
+    default: false,
+    doc:
+      "a menu over the selected text: `true` for the default commands (#{Enum.join(@selection_commands, ", ")}), or a list of commands, see `toolbar_commands/0`. The `selection` slot gives the app's own menu"
+
   attr :class, :any, default: nil, doc: "classes for the wrapper element"
   attr :rest, :global, doc: "attributes for the editor element"
+
+  slot :selection,
+    doc:
+      "the app's own selection menu, for example `<.kotoba_selection_menu>` with the app's icons"
 
   slot :toolbar,
     doc:
@@ -202,6 +213,7 @@ defmodule Kotoba.Components do
         prompt_labels: json_map(Prompts.labels(assigns.prompts)),
         prompt_config: json_map(Prompts.config(assigns.prompts)),
         assist: assist_actions(assigns.assist),
+        selection_menu: selection_menu(assigns.selection_menu),
         code_languages: code_languages(assigns.code_languages),
         features: assigns.features && Enum.join(Features.names!(assigns.features), ","),
         extension_urls: extension_urls(assigns.extensions),
@@ -230,6 +242,7 @@ defmodule Kotoba.Components do
         data-prompt-labels={@prompt_labels}
         data-prompt-config={@prompt_config}
         data-assist={@assist}
+        data-selection-menu={@selection_menu}
         data-code-languages={@code_languages}
         data-features={@features}
         data-extensions={@extension_urls}
@@ -243,6 +256,7 @@ defmodule Kotoba.Components do
         {@rest}
       >
         {render_slot(@toolbar)}
+        {render_slot(@selection)}
       </div>
       <div :if={@uploads} class="kotoba-visually-hidden">
         <label for={@upload_id}>{@upload_label}</label>
@@ -344,6 +358,19 @@ defmodule Kotoba.Components do
           "an assist action is {id, label} or %{id: id, label: label}, got: #{inspect(other)}"
   end
 
+  # `data-selection-menu`: "true" for the default commands, or the commands.
+  defp selection_menu(value) when value in [nil, false], do: nil
+  defp selection_menu(true), do: "true"
+  defp selection_menu([]), do: nil
+
+  defp selection_menu(commands) when is_list(commands),
+    do: Enum.map_join(commands, ",", &command!(to_string(&1)))
+
+  defp selection_menu(other) do
+    raise ArgumentError,
+          "selection_menu must be true, false or a list of commands, got: #{inspect(other)}"
+  end
+
   defp json_map(map) when map_size(map) == 0, do: nil
   defp json_map(map), do: JSON.encode!(map)
 
@@ -390,21 +417,9 @@ defmodule Kotoba.Components do
   end
 
   def kotoba_toolbar(assigns) do
-    buttons =
-      case assigns.button do
-        [] ->
-          Enum.map(assigns.commands, &%{command: command!(&1), label: label(&1), slot: nil})
-
-        slots ->
-          Enum.map(slots, fn slot ->
-            command = command!(slot.command)
-            %{command: command, label: slot[:label] || label(command), slot: slot}
-          end)
-      end
-
     assigns =
       assign(assigns,
-        buttons: buttons,
+        buttons: buttons(assigns),
         toolbar_id: assigns.for && "#{assigns.for}-toolbar"
       )
 
@@ -417,27 +432,100 @@ defmodule Kotoba.Components do
       class={["kotoba-toolbar" | List.wrap(@class)]}
       {@rest}
     >
-      <%= for button <- @buttons do %>
-        <select
-          :if={button.command == "code-language"}
-          class={["kotoba-toolbar-select" | List.wrap(button.slot && button.slot[:class])]}
-          data-kotoba-command={button.command}
-          aria-label={button.label}
-          title={button.label}
-        >
-        </select>
-        <button
-          :if={button.command != "code-language"}
-          type="button"
-          class={["kotoba-toolbar-button" | List.wrap(button.slot && button.slot[:class])]}
-          data-kotoba-command={button.command}
-          aria-label={button.slot && button.label}
-          title={button.label}
-        >
-          {if button.slot, do: render_slot(button.slot), else: button.label}
-        </button>
-      <% end %>
+      <.command_button :for={button <- @buttons} button={button} />
     </div>
+    """
+  end
+
+  @doc """
+  Renders the app's own selection menu: the menu that floats over the
+  selected text. Put it in the `selection` slot of `kotoba/1`:
+
+      <.kotoba field={@form[:body]} id="post-body">
+        <:selection>
+          <.kotoba_selection_menu class="my-menu">
+            <:button command="bold"><.icon name="hero-bold" /></:button>
+            <:button command="italic"><.icon name="hero-italic" /></:button>
+            <:button command="link" label="Add a link"><.icon name="hero-link" /></:button>
+          </.kotoba_selection_menu>
+        </:selection>
+      </.kotoba>
+
+  With no `button` slots, it renders one text button for each of
+  `commands`. The commands, and what the editor does with the buttons, are
+  the ones of `kotoba_toolbar/1`. The editor shows the menu over a
+  selection of text, gives it the `kotoba-selection-menu` class and
+  `data-placement` (`"top"` or `"bottom"`), and moves the focus to it with
+  Alt+F10.
+  """
+  attr :commands, :list,
+    default: @selection_commands,
+    doc: "the commands, when there are no buttons"
+
+  attr :label, :string,
+    default: "Selection formatting",
+    doc: "the accessible name of the menu"
+
+  attr :class, :any, default: nil, doc: "classes for the menu element"
+  attr :rest, :global, doc: "attributes for the menu element"
+
+  slot :button do
+    attr :command, :string, required: true
+    attr :label, :string
+    attr :class, :any
+  end
+
+  def kotoba_selection_menu(assigns) do
+    assigns = assign(assigns, :buttons, buttons(assigns))
+
+    ~H"""
+    <div
+      data-kotoba-selection-menu
+      aria-label={@label}
+      class={["kotoba-selection-menu" | List.wrap(@class)]}
+      hidden
+      {@rest}
+    >
+      <.command_button :for={button <- @buttons} button={button} />
+    </div>
+    """
+  end
+
+  defp buttons(%{button: [], commands: commands}),
+    do: Enum.map(commands, &%{command: command!(&1), label: label(&1), slot: nil})
+
+  defp buttons(%{button: slots}) do
+    Enum.map(slots, fn slot ->
+      command = command!(slot.command)
+      %{command: command, label: slot[:label] || label(command), slot: slot}
+    end)
+  end
+
+  attr :button, :map, required: true
+
+  defp command_button(%{button: %{command: "code-language"}} = assigns) do
+    ~H"""
+    <select
+      class={["kotoba-toolbar-select" | List.wrap(@button.slot && @button.slot[:class])]}
+      data-kotoba-command={@button.command}
+      aria-label={@button.label}
+      title={@button.label}
+    >
+    </select>
+    """
+  end
+
+  defp command_button(assigns) do
+    ~H"""
+    <button
+      type="button"
+      class={["kotoba-toolbar-button" | List.wrap(@button.slot && @button.slot[:class])]}
+      data-kotoba-command={@button.command}
+      aria-label={@button.slot && @button.label}
+      title={@button.label}
+    >
+      {if @button.slot, do: render_slot(@button.slot), else: @button.label}
+    </button>
     """
   end
 
