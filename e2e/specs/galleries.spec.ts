@@ -74,8 +74,12 @@ test("the arrow keys move between the images and out of the gallery; Alt+arrows 
   await expect.poll(() => blocks(page)).toEqual(["paragraph", ["a.png", "b.png", "c.png"], "paragraph"]);
   await expect(editable.locator("p").last()).toHaveText("After");
 
-  // Back into the gallery from the start of that paragraph.
-  await page.keyboard.press("Home");
+  // Back into the gallery from the start of that paragraph. Not Home: on
+  // macOS, Firefox and WebKit do not move the caret with it. Lexical reads the
+  // caret on selectionchange, and Chromium can send that event after the next
+  // key: then the last ArrowLeft acts from inside "After".
+  for (let i = 0; i < "After".length; i++) await page.keyboard.press("ArrowLeft");
+  await settle(page);
   await page.keyboard.press("ArrowLeft");
   await expect(live(page)).toHaveText("3 of 3: c.png");
   await expect(images(page).nth(2)).toHaveClass(/kotoba-selected/);
