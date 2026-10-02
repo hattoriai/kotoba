@@ -186,8 +186,6 @@ export function attachSelectionMenu(
     if (!element.hidden) schedule();
   };
 
-  const editable = editor.getRootElement();
-  editable?.addEventListener("pointerdown", onPointerDown);
   document.addEventListener("pointerup", onPointerUp);
   root.addEventListener("focusin", schedule);
   root.addEventListener("focusout", onFocusOut);
@@ -196,6 +194,11 @@ export function attachSelectionMenu(
   window.addEventListener("resize", onViewportChange);
 
   const unregister = mergeRegister(
+    // The editable element is set after the menu is made, and can change.
+    editor.registerRootListener((root, previous) => {
+      previous?.removeEventListener("pointerdown", onPointerDown);
+      root?.addEventListener("pointerdown", onPointerDown);
+    }),
     editor.registerUpdateListener(({ editorState }) => {
       const state = editorState.read($read);
       wanted = state.show;
@@ -230,7 +233,7 @@ export function attachSelectionMenu(
     dispose() {
       unregister();
       if (frame !== 0) cancelAnimationFrame(frame);
-      editable?.removeEventListener("pointerdown", onPointerDown);
+      editor.getRootElement()?.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("pointerup", onPointerUp);
       root.removeEventListener("focusin", schedule);
       root.removeEventListener("focusout", onFocusOut);
@@ -411,19 +414,21 @@ export function attachLinkCard(editor: LexicalEditor, options: LinkCardOptions):
     if (!card.hidden) schedule();
   };
 
-  const editable = editor.getRootElement();
   card.addEventListener("mousedown", onMouseDown);
   card.addEventListener("keydown", onKeyDown);
   anchor.addEventListener("click", onAnchorClick);
   edit.addEventListener("click", onEdit);
   remove.addEventListener("click", onRemove);
-  editable?.addEventListener("click", onEditableClick);
   root.addEventListener("focusin", schedule);
   root.addEventListener("focusout", onFocusOut);
   window.addEventListener("scroll", onViewportChange, true);
   window.addEventListener("resize", onViewportChange);
 
   const unregister = mergeRegister(
+    editor.registerRootListener((root, previous) => {
+      previous?.removeEventListener("click", onEditableClick);
+      root?.addEventListener("click", onEditableClick);
+    }),
     editor.registerUpdateListener(({ editorState }) => {
       const next = editorState.read($read);
       if (next?.caret !== link?.caret) dismissed = null;
@@ -466,7 +471,7 @@ export function attachLinkCard(editor: LexicalEditor, options: LinkCardOptions):
       anchor.removeEventListener("click", onAnchorClick);
       edit.removeEventListener("click", onEdit);
       remove.removeEventListener("click", onRemove);
-      editable?.removeEventListener("click", onEditableClick);
+      editor.getRootElement()?.removeEventListener("click", onEditableClick);
       root.removeEventListener("focusin", schedule);
       root.removeEventListener("focusout", onFocusOut);
       window.removeEventListener("scroll", onViewportChange, true);

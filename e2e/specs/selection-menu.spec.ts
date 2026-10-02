@@ -166,3 +166,37 @@ test("the link card is keyboard reachable with Alt+F10", async ({ page }) => {
   await page.keyboard.press("ArrowRight");
   await expect(card(page).getByRole("button", { name: "Edit link" })).toBeFocused();
 });
+
+test("the menu waits for the mouse button to come up", async ({ page }) => {
+  const editable = await openEditor(page, "/?menu=default");
+  await editable.click();
+  await page.keyboard.type("Drag over these words");
+  const box = (await editable.locator("p").first().boundingBox())!;
+  const y = box.y + box.height / 2;
+
+  await page.mouse.move(box.x + 2, y);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2, y, { steps: 5 });
+  await page.mouse.move(box.x + box.width - 2, y, { steps: 5 });
+  await settle(page);
+  await expect(menu(page)).toBeHidden();
+
+  await page.mouse.up();
+  await expect(menu(page)).toBeVisible();
+});
+
+test("Cmd/Ctrl+click on a link of the editor opens it in a new tab", async ({ page, context }) => {
+  const editable = await openEditor(page);
+  await editable.click();
+  await page.keyboard.type("Read the docs");
+  await selectBack(page, 4);
+  await page.keyboard.press(`${MOD}+K`);
+  await page.keyboard.type("https://example.com/kotoba");
+  await page.keyboard.press("Enter");
+
+  const opened = context.waitForEvent("page");
+  await editable.locator("a").click({ modifiers: ["ControlOrMeta"] });
+  const tab = await opened;
+  expect(tab.url()).toContain("example.com/kotoba");
+  await tab.close();
+});
