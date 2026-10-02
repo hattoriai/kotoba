@@ -19,6 +19,17 @@ Kotoba (言葉, "words") is rich text for Phoenix. It gives your app:
 The editor is a prebuilt JavaScript bundle in the Hex package. Your app
 does not run Node.js for it: you add the hook and one style sheet.
 
+## Try it: Notebook
+
+![The Kotoba editor in Notebook: a toolbar, a second writer's live cursor, the selection menu over selected text, and a highlighted code block](https://raw.githubusercontent.com/hattoriai/kotoba/main/media/notebook-editor.png)
+
+[Notebook](https://github.com/hattoriai/notebook) is a complete Phoenix
+app made with Kotoba: shared pages with live collaboration, a selection
+menu with the app's own icons, mentions, galleries, PDFs, a custom
+callout node, and a reader view of the rendered content. Clone it, run
+`mix setup` and `mix phx.server`, and sign in as Hattori Hanzo (its
+README has the details) to try every feature in your browser.
+
 ## What the editor does
 
 | | |
