@@ -308,6 +308,89 @@ defmodule Kotoba.ContentTest do
       assert Content.from_markdown("").text == ""
       assert Content.from_markdown("").doc == envelope([])
     end
+
+    test "* italic and ~~ strikethrough, as Kotoba's Markdown writes them" do
+      assert Content.from_markdown("*italic*").html == "<p><em>italic</em></p>"
+      assert Content.from_markdown("~~gone~~").html == "<p><s>gone</s></p>"
+      assert Content.from_markdown("2 * 3 * 4").html == "<p>2 * 3 * 4</p>"
+    end
+
+    test "formats nest: a link in bold, bold in a link" do
+      assert Content.from_markdown("**see [docs](https://a.dev)**").html ==
+               ~s(<p><strong>see </strong><a href="https://a.dev" rel="noopener nofollow"><strong>docs</strong></a></p>)
+
+      assert Content.from_markdown("[**docs**](https://a.dev)").html ==
+               ~s(<p><a href="https://a.dev" rel="noopener nofollow"><strong>docs</strong></a></p>)
+
+      assert Content.from_markdown("***both***").html == "<p><strong><em>both</em></strong></p>"
+    end
+
+    test "a quote, over several lines" do
+      content = Content.from_markdown("> one\n> two\n\nafter")
+      assert content.html == "<blockquote>one<br>two</blockquote><p>after</p>"
+    end
+
+    test "a check list" do
+      content = Content.from_markdown("- [x] done\n- [ ] to do")
+      assert content.html =~ ~s(<ul class="kotoba-check">)
+      assert content.html =~ ~s(<li class="kotoba-checked")
+      assert content.html =~ ~s(<li class="kotoba-unchecked")
+      assert content.text =~ "done"
+    end
+
+    test "a numbered list keeps its first number" do
+      assert Content.from_markdown("3. three\n4. four").html ==
+               ~s(<ol start="3"><li>three</li><li>four</li></ol>)
+    end
+
+    test "a list of another kind starts a new list" do
+      assert Content.from_markdown("- a\n1. b").html == "<ul><li>a</li></ul><ol><li>b</li></ol>"
+    end
+
+    test "a horizontal rule" do
+      assert Content.from_markdown("a\n\n---\n\nb").html == "<p>a</p><hr><p>b</p>"
+      assert Content.from_markdown("***").html == "<hr>"
+    end
+
+    test "a table, with a header row" do
+      content = Content.from_markdown("| A | B |\n| --- | :-: |\n| 1 | **2** |")
+
+      assert content.html =~
+               ~s(<thead><tr><th scope="col"><p>A</p></th><th scope="col"><p>B</p></th></tr></thead>)
+
+      assert content.html =~
+               "<tbody><tr><td><p>1</p></td><td><p><strong>2</strong></p></td></tr></tbody>"
+    end
+
+    test "Kotoba's own Markdown reads back to the same HTML" do
+      markdown = """
+      # Title
+
+      Some **bold**, *italic*, ~~gone~~ and `code` with a [link](https://a.dev).
+
+      > A quote
+
+      - one
+      - two
+
+      1. first
+      2. second
+
+      - [x] done
+      - [ ] open
+
+      ---
+
+      | A | B |
+      | --- | --- |
+      | 1 | 2 |
+      """
+
+      once = Content.from_markdown(markdown)
+      {:ok, doc} = Kotoba.Document.parse(once.doc)
+      twice = doc |> Kotoba.Renderer.to_markdown() |> Content.from_markdown()
+      assert twice.html == once.html
+    end
   end
 
   describe "Ecto.Type.dump/2 and Ecto.Type.load/2" do

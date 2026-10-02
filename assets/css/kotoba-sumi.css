@@ -121,12 +121,22 @@
   --kotoba-focus-ring: 0 0 0 2px var(--kotoba-background), 0 0 0 4px var(--color-sumi-blade, var(--sumi-accent, #e84a1c));
   --kotoba-shadow: 0 4px 16px color-mix(in oklab, var(--color-sumi-ink, #0a0a0b) 24%, transparent);
 
+  /* The selection menu and the link card: paper, as the editor. */
+  --kotoba-floating-background: var(--color-base-100, var(--sumi-paper, var(--kotoba-sumi-base-100)));
+  --kotoba-floating-text: var(--color-base-content, var(--sumi-ink, var(--kotoba-sumi-content)));
+  --kotoba-floating-border: var(--color-base-300, var(--sumi-line, var(--kotoba-sumi-base-300)));
+  --kotoba-floating-hover: var(--color-base-200, var(--sumi-surface, var(--kotoba-sumi-base-200)));
+  --kotoba-floating-shadow: 0 8px 24px color-mix(in oklab, var(--color-sumi-ink, #0a0a0b) 22%, transparent);
+  --kotoba-floating-radius: var(--radius-box, var(--sumi-radius, 0.25rem));
+
   /* Shape and space */
   --kotoba-radius: var(--radius-box, var(--sumi-radius, 0.25rem));
   --kotoba-space: 0.5rem;
   --kotoba-padding: 0.875rem 1rem;
   --kotoba-min-height: 8rem;
   --kotoba-icon-size: 16px;
+  --kotoba-media-width: 40rem;
+  --kotoba-pdf-height: 28rem;
 
   /* Code highlighting */
   --kotoba-token-comment: var(--sumi-text-muted, var(--sumi-muted, var(--kotoba-sumi-muted)));

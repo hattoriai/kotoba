@@ -118,10 +118,10 @@ then sees the tokens that the theme reads, and puts them in the built CSS.
 ## Rendered content
 
 `Kotoba.Components.kotoba_content/1` renders semantic HTML in a
-`div.kotoba-content`. `kotoba.css` styles only what the HTML needs to read
-right (tables, check list boxes, mentions, attachments, the colors of the
-palette and the case formats), and the rest takes the typography of your
-app, for example:
+`div.kotoba-content`. `kotoba.css` gives it readable default typography,
+alongside styles for tables, checklists, mentions, attachments, and text
+colors. Each typography rule has the weight of one class, so a rule of
+your app with a class replaces it, for example:
 
 ```heex
 <.kotoba_content content={@post.body} class="prose" />

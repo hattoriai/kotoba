@@ -259,6 +259,101 @@ A toolbar can also be outside the editor, anywhere on the page, with
 <.kotoba field={@form[:body]} id="post-body" />
 ```
 
+## The selection menu
+
+A menu can float over the selected text, as in Notion, Medium or Tiptap's
+bubble menu. Turn it on with `selection_menu`:
+
+```heex
+<.kotoba field={@form[:body]} id="post-body" selection_menu />
+```
+
+The default menu has Bold, Italic, Underline, Strikethrough, Inline code,
+Highlight and Link. A list chooses the commands, in order; they are the
+toolbar's commands, and an extension's control is
+`<extension>:<command>`:
+
+```heex
+<.kotoba field={@form[:body]} selection_menu={~w(bold italic link h2 quote callout:toggle)} />
+```
+
+The menu shows above a selection of text, or below it when there is no
+room above (in the editor or in the window). It waits for the mouse button
+to come up, so it does not follow a drag. It does not show for a caret, in
+a code block, in a read-only editor, or while the link form, the palette
+or a prompt menu is open. Its buttons work as the toolbar's buttons:
+`aria-pressed` follows the selection, and the buttons of a feature that
+the editor does not have are left out.
+
+* Alt+F10 moves the focus to the menu (to the toolbar when no menu
+  shows); the arrow keys move between its buttons.
+* Escape closes it until the selection changes.
+
+### An app's own menu
+
+For the app's own icons, labels or classes, give a `selection` slot with
+`Kotoba.Components.kotoba_selection_menu/1`. It takes `button` slots, as
+`kotoba_toolbar/1` does:
+
+```heex
+<.kotoba field={@form[:body]} id="post-body">
+  <:selection>
+    <.kotoba_selection_menu class="my-menu">
+      <:button command="bold"><.icon name="hero-bold" class="size-4" /></:button>
+      <:button command="italic"><.icon name="hero-italic" class="size-4" /></:button>
+      <:button command="link" label="Add a link"><.icon name="hero-link" class="size-4" /></:button>
+    </.kotoba_selection_menu>
+  </:selection>
+</.kotoba>
+```
+
+### Style the menu
+
+The menu is a `div.kotoba-selection-menu` with `data-placement="top"` or
+`"bottom"`; its buttons are `.kotoba-toolbar-button`, in
+`.kotoba-toolbar-group` elements. These custom properties theme it and the
+link card, and each one falls back to the editor's own property:
+
+| Property | Default |
+| --- | --- |
+| `--kotoba-floating-background` | `--kotoba-background` |
+| `--kotoba-floating-text` | `--kotoba-text` |
+| `--kotoba-floating-border` | `--kotoba-border` |
+| `--kotoba-floating-hover` | `--kotoba-surface` |
+| `--kotoba-floating-shadow` | `--kotoba-shadow` |
+| `--kotoba-floating-radius` | `--kotoba-radius` |
+
+For example, a dark menu over a light editor:
+
+```css
+.kotoba-selection-menu,
+.kotoba-link-card {
+  --kotoba-floating-background: #1f2023;
+  --kotoba-floating-text: #f4f4f5;
+  --kotoba-floating-border: #34353a;
+  --kotoba-floating-hover: #34353a;
+  --kotoba-floating-radius: 10px;
+}
+
+.kotoba-selection-menu .kotoba-toolbar-button[aria-pressed="true"] {
+  background: #e8590c;
+  color: white;
+}
+```
+
+The menu shows with a short animation, which is off with
+`prefers-reduced-motion`.
+
+## The link card
+
+When the caret is in a link, a card shows under it: the URL, which opens
+in a new tab, and Edit link (the link form) and Remove link buttons. An
+automatic link (a URL typed in the text) has only the URL. Alt+F10 moves
+the focus to the card, and Escape closes it until the caret moves.
+Cmd/Ctrl+click on a link in the editor opens it in a new tab. The card is
+a `div.kotoba-link-card`, themed with the same properties as the
+selection menu.
+
 ## More
 
 * [Prompts and mentions](prompts.md): `@` menus, emoji, tags.

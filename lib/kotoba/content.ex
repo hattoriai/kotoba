@@ -272,10 +272,14 @@ defmodule Kotoba.Content do
   Builds a `Kotoba.Content` from a Markdown string, on a best-effort
   basis.
 
-  Reads paragraphs, `#` headings, `-`/`*`/`1.` lists (one level), fenced
-  code blocks, and the inline `**bold**`, `_italic_`, `` `code` `` and
-  `[text](url)` syntax. Anything else becomes plain paragraph text. When
-  the built document somehow fails to parse, returns `empty/0`.
+  Reads what `Kotoba.Renderer.to_markdown/2` writes, and the common GitHub
+  Flavored Markdown around it: paragraphs, `#` headings, `>` quotes,
+  horizontal rules, fenced code blocks, `-`/`*`/`1.` lists (one level; a
+  numbered list keeps its first number), `- [ ]` check lists, pipe tables
+  with a header row, and the inline `**bold**`, `*italic*`/`_italic_`,
+  `~~strikethrough~~`, `` `code` `` and `[text](url)` syntax, which nest.
+  Anything else becomes plain paragraph text. When the built document
+  somehow fails to parse, returns `empty/0`.
 
   ## Options
 

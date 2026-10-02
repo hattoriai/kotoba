@@ -1,7 +1,8 @@
 /*
  * Kotoba editor styles.
  *
- * Structure only: every colour, space, radius and font comes from a
+ * Structural editor styles and a readable rendered-content baseline.
+ * Every colour, space, radius and font comes from a
  * --kotoba-* custom property. Set them on .kotoba (or higher) to theme the
  * editor, or load kotoba-sumi.css to map them to the Sumi tokens. The
  * defaults below have no specificity, so a value set on :root, on an
@@ -63,6 +64,9 @@
   --kotoba-h3-size: 1.2em;
   --kotoba-h4-size: 1.05em;
   --kotoba-heading-line-height: 1.25;
+  /* The width of a PDF or a video, and the height of a PDF's viewer. */
+  --kotoba-media-width: 40rem;
+  --kotoba-pdf-height: 28rem;
 }
 
 .kotoba {
@@ -246,6 +250,9 @@
   padding-left: 1.5em;
 }
 
+.kotoba-ul:not(.kotoba-check) { list-style: disc; }
+.kotoba-ol { list-style: decimal; }
+
 .kotoba-li-nested {
   list-style-type: none;
 }
@@ -405,11 +412,14 @@ mark.kotoba-highlight-gray { background: var(--kotoba-highlight-gray); color: in
 .kotoba-table {
   border-collapse: collapse;
   margin: 0;
+  width: 100%;
 }
 
 .kotoba-table th,
 .kotoba-table td {
   min-width: 4em;
+  /* A height is a minimum for a table cell: an empty cell keeps a line. */
+  height: calc(var(--kotoba-line-height) * 1em + var(--kotoba-space) * 1.5);
   padding: calc(var(--kotoba-space) * 0.75) var(--kotoba-space);
   border: 1px solid var(--kotoba-border);
   text-align: start;
@@ -507,14 +517,14 @@ figure.kotoba-attachment-video {
   display: flex;
   flex-direction: column;
   gap: calc(var(--kotoba-space) / 2);
-  max-width: 40rem;
+  max-width: var(--kotoba-media-width, 40rem);
 }
 
 .kotoba-attachment-viewer,
 figure.kotoba-attachment-pdf > object {
   display: block;
   width: 100%;
-  height: 28rem;
+  height: var(--kotoba-pdf-height, 28rem);
   border: 1px solid var(--kotoba-border);
   border-radius: calc(var(--kotoba-radius) - 2px);
   background: var(--kotoba-background);
@@ -547,7 +557,8 @@ figure.kotoba-attachment-pdf > a > img {
    HTML's (a div of figures). */
 .kotoba-gallery {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(min(100%, 10rem), 1fr));
+  /* auto-fit: two or three images share the row, with no empty tracks. */
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
   gap: calc(var(--kotoba-space) / 2);
   margin: 0 0 var(--kotoba-space);
 }
@@ -885,6 +896,141 @@ div.kotoba-unknown {
   box-shadow: var(--kotoba-focus-ring, 0 0 0 2px var(--kotoba-accent));
 }
 
+/* Selection menu and link card: panels that float over the text. Theme
+   them with the floating properties (--kotoba-floating-background, -text,
+   -border, -hover, -shadow and -radius), or with the classes. Each one
+   falls back to the editor's own property. */
+
+.kotoba-selection-menu,
+.kotoba-link-card {
+  position: absolute;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--kotoba-floating-border, var(--kotoba-border));
+  border-radius: var(--kotoba-floating-radius, var(--kotoba-radius));
+  background: var(--kotoba-floating-background, var(--kotoba-background));
+  color: var(--kotoba-floating-text, var(--kotoba-text));
+  box-shadow: var(--kotoba-floating-shadow, var(--kotoba-shadow));
+  font-family: var(--kotoba-font);
+  line-height: 1;
+  white-space: nowrap;
+  animation: kotoba-float-in 120ms ease-out;
+}
+
+.kotoba-selection-menu[hidden],
+.kotoba-link-card[hidden],
+.kotoba-link-card [hidden] {
+  display: none;
+}
+
+.kotoba-selection-menu[data-placement="bottom"],
+.kotoba-link-card[data-placement="bottom"] {
+  animation-name: kotoba-float-in-below;
+}
+
+@keyframes kotoba-float-in {
+  from { opacity: 0; transform: translateY(4px) scale(0.98); }
+}
+
+@keyframes kotoba-float-in-below {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kotoba-selection-menu,
+  .kotoba-link-card {
+    animation: none;
+  }
+}
+
+.kotoba-selection-menu .kotoba-toolbar-group {
+  display: flex;
+  gap: 2px;
+}
+
+.kotoba-selection-menu .kotoba-toolbar-group + .kotoba-toolbar-group {
+  margin-left: 2px;
+  padding-left: 4px;
+  border-left: 1px solid var(--kotoba-floating-border, var(--kotoba-border));
+}
+
+.kotoba-selection-menu .kotoba-toolbar-button {
+  min-width: 1.875rem;
+  min-height: 1.875rem;
+  padding: 0 0.375rem;
+}
+
+.kotoba-selection-menu .kotoba-toolbar-button:hover,
+.kotoba-link-card-button:hover,
+.kotoba-link-card-url:hover {
+  border-color: transparent;
+  background: var(--kotoba-floating-hover, var(--kotoba-surface));
+}
+
+.kotoba-link-card {
+  max-width: min(26rem, 100%);
+}
+
+.kotoba-link-card-url {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4em;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border-radius: calc(var(--kotoba-radius) - 2px);
+  color: var(--kotoba-accent);
+  font-size: var(--kotoba-small);
+  text-decoration: none;
+}
+
+.kotoba-link-card-url .kotoba-icon {
+  width: 14px;
+  height: 14px;
+}
+
+.kotoba-link-card-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 18rem;
+}
+
+.kotoba-link-card-url:not([href]) {
+  color: var(--kotoba-muted);
+}
+
+.kotoba-link-card-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.875rem;
+  min-height: 1.875rem;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--kotoba-radius) - 2px);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.kotoba-link-card-edit {
+  margin-left: 2px;
+  box-shadow: -3px 0 0 -2px var(--kotoba-floating-border, var(--kotoba-border));
+}
+
+.kotoba-link-card-button .kotoba-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.kotoba-link-card-url:focus-visible,
+.kotoba-link-card-button:focus-visible {
+  outline: none;
+  box-shadow: var(--kotoba-focus-ring, 0 0 0 2px var(--kotoba-accent));
+}
+
 /* Visually hidden: the live region and the LiveView file input */
 
 .kotoba-live,
@@ -916,3 +1062,38 @@ div.kotoba-unknown {
 .kotoba-collab-caret { position: absolute; border-inline-start: 2px solid var(--collab-color); }
 .kotoba-collab-caret span { position: absolute; left: -2px; bottom: 100%; background: var(--collab-color); color: #fff; font: 11px/1.4 system-ui; white-space: nowrap; padding: 1px 4px; border-radius: 3px; }
 .kotoba-collab-selection { position: absolute; background: var(--collab-color); opacity: .15; }
+
+/* A readable baseline for <.kotoba_content>. Each rule has the specificity
+   of one class (.kotoba-content :where(a)), so it wins over an element reset
+   such as `a { color: inherit }` and Tailwind's preflight, and a rule of the
+   app with a class (`.article a`) or a later rule of the same weight
+   (`.prose` imported after this file) wins over it. */
+.kotoba-content { line-height: 1.65; overflow-wrap: anywhere; }
+.kotoba-content > :where(:first-child) { margin-top: 0; }
+.kotoba-content :where(p) { margin: 0 0 1em; }
+.kotoba-content :where(:is(h1, h2, h3, h4)) { line-height: 1.25; font-weight: 650; margin: 1.5em 0 .55em; }
+.kotoba-content :where(h1) { font-size: 2em; }
+.kotoba-content :where(h2) { font-size: 1.6em; }
+.kotoba-content :where(h3) { font-size: 1.3em; }
+.kotoba-content :where(h4) { font-size: 1.1em; }
+.kotoba-content :where(ul:not(.kotoba-check), ol) { padding-inline-start: 1.7em; margin: .5em 0 1.25em; }
+.kotoba-content :where(ul:not(.kotoba-check)) { list-style: disc; }
+.kotoba-content :where(ul.kotoba-check) { margin: .5em 0 1.25em; }
+.kotoba-content :where(ol) { list-style: decimal; }
+.kotoba-content :where(li) { margin: .25em 0; }
+.kotoba-content :where(blockquote) { border-inline-start: 3px solid var(--kotoba-border); padding-inline-start: 1em; margin: 1.5em 0; color: var(--kotoba-muted); }
+.kotoba-content :where(blockquote p:last-child) { margin-bottom: 0; }
+.kotoba-content :where(a) { color: var(--kotoba-accent); text-decoration: underline; text-underline-offset: .16em; }
+.kotoba-content :where(a:hover) { text-decoration-thickness: 2px; }
+.kotoba-content :where(:not(pre) > code) { font-family: var(--kotoba-font-mono); font-size: .9em; padding: .1em .3em; border-radius: 2px; background: var(--kotoba-surface); }
+.kotoba-content :where(pre) { display: block; max-width: 100%; overflow-x: auto; margin: 1.5em 0; padding: 1em 1.2em; border-radius: var(--kotoba-radius); background: var(--kotoba-surface); font: .9em/1.55 var(--kotoba-font-mono); white-space: pre; }
+.kotoba-content :where(pre code) { font: inherit; }
+.kotoba-content :where(hr) { border: 0; border-top: 1px solid var(--kotoba-border); margin: 2em 0; }
+.kotoba-content :where(pre .token.comment) { color: var(--kotoba-token-comment); font-style: italic; }
+.kotoba-content :where(pre .token.keyword) { color: var(--kotoba-token-keyword); }
+.kotoba-content :where(pre .token.string) { color: var(--kotoba-token-string); }
+.kotoba-content :where(pre .token:is(.number, .boolean, .constant)) { color: var(--kotoba-token-constant); }
+.kotoba-content :where(pre .token:is(.function, .class-name)) { color: var(--kotoba-token-function); }
+.kotoba-content :where(pre .token:is(.attr-name, .property)) { color: var(--kotoba-token-attr); }
+.kotoba-content :where(pre .token.operator) { color: var(--kotoba-token-operator); }
+.kotoba-content :where(pre .token.punctuation) { color: var(--kotoba-token-punctuation); }

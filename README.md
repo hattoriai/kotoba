@@ -27,7 +27,8 @@ does not run Node.js for it: you add the hook and one style sheet.
 | Blocks | headings, quotes, bulleted, numbered and check lists, horizontal rules |
 | Code | code blocks highlighted as you type in 28 languages, with a language picker |
 | Tables | insert, rows and columns, header rows and columns, pasted tables |
-| Links | a link form, paste a URL over text, autolinks, allowed schemes |
+| Links | a link form, paste a URL over text, autolinks, allowed schemes; a link card to open, edit or remove the link at the caret |
+| Selection menu | a menu over the selected text, with the toolbar's commands or the app's own buttons, themed with CSS properties |
 | Files | drop, paste or pick images and files; image galleries, reordered from the keyboard; PDFs in the browser's viewer, MP4 and WebM videos; LiveView uploads, a storage adapter with byte ranges |
 | Prompts | `@` mentions, emoji, tags: server searches (async too) or local lists, with queries that have spaces |
 | Suggestions | text streamed from the server (a language model), shown as it comes, then accepted as one undo step or rejected; an Assist menu |

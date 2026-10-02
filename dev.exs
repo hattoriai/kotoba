@@ -403,6 +403,7 @@ defmodule KotobaDev.EditorLive do
        invalid: false,
        changes: 0,
        push_changes: params["change"] != nil,
+       menu: params["menu"],
        validated: 0,
        validated_text: "",
        reverse: params["uploads"] == "reverse",
@@ -438,7 +439,15 @@ defmodule KotobaDev.EditorLive do
         aria-describedby={if @invalid, do: "body-error"}
         nodes={[{KotobaDev.Nodes.Tag, "/assets/nodes/tag.js"}]}
         assist={KotobaDev.Assist.actions()}
-      />
+        selection_menu={@menu == "default"}
+      >
+        <:selection :if={@menu == "custom"}>
+          <.kotoba_selection_menu id="custom-menu" class="custom-menu" label="Quick format">
+            <:button command="bold">B</:button>
+            <:button command="h2" label="Heading">H</:button>
+          </.kotoba_selection_menu>
+        </:selection>
+      </.kotoba>
       <p :if={@invalid} id="body-error">Say something</p>
       <div class="row">
         <button type="submit" id="submit">Submit</button>
