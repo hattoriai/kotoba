@@ -144,3 +144,20 @@ test("a pasted style that is not a color of the palette is dropped", async ({ pa
 
   await expect.poll(() => runs(page)).toEqual([["red bg", 0, ""]]);
 });
+
+test("the palette at a caret in colored text shows its colors", async ({ page }) => {
+  const editable = await openEditor(page);
+  await editable.click();
+  await page.keyboard.type("one two");
+  await selectBack(page, 3);
+  await settle(page);
+  await highlightButton(page).click();
+  await palette(page).getByRole("button", { name: "Green highlight" }).click();
+
+  // The caret in "two".
+  await page.keyboard.press("ArrowLeft");
+  await page.keyboard.press("ArrowRight");
+  await settle(page);
+  await highlightButton(page).click();
+  expect(await pressed(page)).toEqual(["Green highlight"]);
+});

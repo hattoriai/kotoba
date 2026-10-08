@@ -7,6 +7,15 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- A text format button (Bold, Italic, Underline, Strikethrough, Inline
+  code, Subscript, Superscript, Highlight without the palette), in the
+  toolbar or the selection menu, takes the format off text that has it,
+  instead of applying it again; at the caret, it turns the format off for
+  the next text. The color palette at a caret in colored text shows its
+  colors. ([#36](https://github.com/hattoriai/kotoba/issues/36))
+
 ## [0.2.0] - 2026-10-02
 
 ### Added
