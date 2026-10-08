@@ -110,3 +110,66 @@ test("in an editor without them, the shortcuts do nothing and pasted formats are
   expect(texts.map(([text]) => text).join("")).toBe("plain ==not highlighted== u m b p bold");
   expect(texts.filter(([, format]) => format !== 0)).toEqual([["bold", 1]]);
 });
+
+test("a format button on formatted text takes the format off", async ({ page }) => {
+  const editable = await openEditor(page);
+  const buttons = toolbar(page, "post_body_editor");
+  await editable.click();
+  await page.keyboard.type("hello world");
+
+  for (const name of ["Bold", "Italic", "Underline", "Strikethrough", "Inline code"]) {
+    await selectBack(page, 5);
+    await settle(page);
+    const button = buttons.getByRole("button", { name, exact: true });
+    await button.click();
+    await expect(button).toHaveAttribute("aria-pressed", "true");
+    await expect.poll(() => formats(page, "post_body")).not.toEqual([["hello world", 0]]);
+
+    await button.click();
+    await expect(button).toHaveAttribute("aria-pressed", "false");
+    await expect(page.locator("#post_body_editor .kotoba-live")).toHaveText(`${name} off`);
+    await expect.poll(() => formats(page, "post_body")).toEqual([["hello world", 0]]);
+    await page.keyboard.press("End");
+  }
+});
+
+test("a format button on a mixed selection sets the format, then takes it off", async ({ page }) => {
+  const editable = await openEditor(page);
+  const bold = toolbar(page, "post_body_editor").getByRole("button", { name: "Bold", exact: true });
+  await editable.click();
+  await page.keyboard.type("one two");
+  await selectBack(page, 3);
+  await settle(page);
+  await bold.click();
+
+  await page.keyboard.press(`${MOD}+A`);
+  await settle(page);
+  await expect(bold).toHaveAttribute("aria-pressed", "false");
+  await bold.click();
+  await expect.poll(() => formats(page, "post_body")).toEqual([["one two", 1]]);
+  await bold.click();
+  await expect.poll(() => formats(page, "post_body")).toEqual([["one two", 0]]);
+});
+
+test("a format button at the caret turns the format on and off for the next text", async ({ page }) => {
+  const editable = await openEditor(page);
+  const bold = toolbar(page, "post_body_editor").getByRole("button", { name: "Bold", exact: true });
+  await editable.click();
+
+  // On and off before typing: the text is plain.
+  await bold.click();
+  await bold.click();
+  await page.keyboard.type("plain ");
+  // On, then off at the end of the bold text.
+  await bold.click();
+  await page.keyboard.type("bold");
+  await settle(page);
+  await bold.click();
+  await page.keyboard.type(" plain");
+
+  await expect.poll(() => formats(page, "post_body")).toEqual([
+    ["plain ", 0],
+    ["bold", 1],
+    [" plain", 0],
+  ]);
+});

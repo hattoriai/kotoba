@@ -216,11 +216,56 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
 // selection before the change. This reads the DOM selection when it is in
 // the editor. It does not set the editor's selection: that would move the
 // DOM selection, and the focus, back to the editor.
+//
+// A selection made from the DOM has no format or style, and Lexical toggles
+// a text format from the selection's own format: Bold on bold text would
+// apply it again. When the editor's selection is at the same points, this
+// returns a copy of it, with its format and style (a format the person
+// turned on at a caret too); else it reads them from the text, as Lexical
+// does when the DOM selection changes.
 export function $domSelection(editor: LexicalEditor): RangeSelection | null {
   const dom = window.getSelection();
   const root = editor.getRootElement();
   if (dom === null || root === null || dom.anchorNode === null || !root.contains(dom.anchorNode)) return null;
-  return $createRangeSelectionFromDom(dom, editor);
+  const selection = $createRangeSelectionFromDom(dom, editor);
+  if (selection === null) return null;
+
+  const current = $getSelection();
+  if ($isRangeSelection(current) && current.anchor.is(selection.anchor) && current.focus.is(selection.focus)) {
+    return current.clone();
+  }
+  $readFormatAndStyle(selection);
+  return selection;
+}
+
+// A caret takes the format and the style of its text; a range takes the
+// formats every selected text node has.
+function $readFormatAndStyle(selection: RangeSelection): void {
+  if (selection.isCollapsed()) {
+    const node = selection.anchor.getNode();
+    if ($isTextNode(node)) {
+      selection.format = node.getFormat();
+      selection.style = node.getStyle();
+    } else if ($isElementNode(node) && node.isEmpty()) {
+      selection.format = node.getTextFormat();
+      selection.style = node.getTextStyle();
+    }
+    return;
+  }
+
+  const [start, end] = selection.isBackward() ? [selection.focus, selection.anchor] : [selection.anchor, selection.focus];
+  const nodes = selection.getNodes();
+  let format: number | null = null;
+  nodes.forEach((node, index) => {
+    if (!$isTextNode(node)) return;
+    const size = node.getTextContentSize();
+    // A text node the range only touches at its edge is not selected.
+    if (size === 0) return;
+    if (index === 0 && node.getKey() === start.key && start.offset === size) return;
+    if (index === nodes.length - 1 && node.getKey() === end.key && end.offset === 0) return;
+    format = format === null ? node.getFormat() : format & node.getFormat();
+  });
+  selection.format = format ?? 0;
 }
 
 // A kept selection is still valid when both points are in the document and
