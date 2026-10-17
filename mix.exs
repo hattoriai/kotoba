@@ -1,7 +1,7 @@
 defmodule Kotoba.MixProject do
   use Mix.Project
 
-  @version "0.2.2"
+  @version "0.3.0"
   @source_url "https://github.com/hattoriai/kotoba"
 
   # KOTOBA_OLDEST=1 resolves the oldest Phoenix and LiveView that Kotoba
@@ -146,6 +146,7 @@ defmodule Kotoba.MixProject do
           Kotoba,
           Kotoba.Components,
           Kotoba.Live,
+          Kotoba.MarkdownPaste,
           Kotoba.Prompts,
           Kotoba.Features,
           Kotoba.CodeLanguages
