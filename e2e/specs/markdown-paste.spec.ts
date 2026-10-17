@@ -35,7 +35,7 @@ test("pasted Markdown becomes rich text, read by the server", async ({ page }) =
   await expect(editable.locator("strong")).toHaveText("Phoenix");
   await expect(editable.locator("blockquote li")).toHaveText(["first", "second"]);
   await expect(editable.locator("table td").first()).toHaveText("Tables");
-  await expect(editable.locator("img")).toHaveAttribute("alt", "Logo");
+  await expect(editable.locator(".kotoba-image img")).toHaveAttribute("alt", "Logo");
   await expect(editable.locator(".kotoba-footnote-ref")).toHaveText("1");
   await expect(editable.locator(".kotoba-footnote")).toHaveText("The footnote.");
 
