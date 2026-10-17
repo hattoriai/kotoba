@@ -99,7 +99,7 @@ defmodule Kotoba.Nodes.Text do
       [:code]
 
   """
-  @spec formats(integer() | %{format: integer()}) :: [format()]
+  @spec formats(integer() | %{:format => integer(), optional(atom()) => term()}) :: [format()]
   def formats(%{format: bitmask}), do: formats(bitmask)
 
   def formats(bitmask) when is_integer(bitmask),
