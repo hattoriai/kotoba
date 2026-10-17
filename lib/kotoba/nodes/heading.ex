@@ -10,7 +10,7 @@ defmodule Kotoba.Nodes.Heading do
 
   @impl Kotoba.Node
   def render_html(node, opts),
-    do: Renderer.tag(html_tag(node.tag), [], Renderer.html_children(node, opts))
+    do: Renderer.tag(node.tag, [], Renderer.html_children(node, opts))
 
   @impl Kotoba.Node
   def render_text(node, opts), do: Renderer.text_children(node, opts)
@@ -21,7 +21,4 @@ defmodule Kotoba.Nodes.Heading do
     text = node |> Renderer.markdown_children(opts) |> String.replace(~r/ *\n/, " ")
     String.duplicate("#", String.to_integer(level)) <> " " <> text
   end
-
-  defp html_tag(tag) when tag in ~w(h5 h6), do: "h4"
-  defp html_tag(tag), do: tag
 end

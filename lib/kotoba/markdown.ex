@@ -73,6 +73,22 @@ defmodule Kotoba.Markdown do
   end
 
   @doc """
+  Returns the title of a Markdown link or image, with its leading space, or
+  `""` for no title. The title is in double quotes, with `"` and `\\`
+  escaped.
+  """
+  @spec title(String.t() | nil) :: String.t()
+  def title(nil), do: ""
+  def title(""), do: ""
+  def title(title), do: " \"" <> String.replace(title, ~r/["\\]/, "\\\\\\0") <> "\""
+
+  @doc """
+  Returns a footnote label for `[^label]`, with `]`, `[` and `\\` escaped.
+  """
+  @spec footnote_label(String.t()) :: String.t()
+  def footnote_label(label), do: String.replace(label, ~r/[\[\]\\]/, "\\\\\\0")
+
+  @doc """
   Returns a URL for a Markdown link destination.
 
   `\\`, `&`, `<` and `>` get a backslash, so that a CommonMark renderer

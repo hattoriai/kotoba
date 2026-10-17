@@ -79,8 +79,24 @@ defmodule Kotoba.Renderer do
   """
   @spec to_html(Document.t(), keyword()) :: Phoenix.HTML.safe()
   def to_html(%Document{root: root}, opts \\ []) do
-    {:safe, render(root, nil, :html, prepare(opts))}
+    opts = opts |> prepare() |> Keyword.put_new_lazy(:footnotes, fn -> footnote_numbers(root) end)
+    {:safe, render(root, nil, :html, opts)}
   end
+
+  # The number of each footnote: the order of its first reference.
+  defp footnote_numbers(root) do
+    root
+    |> footnote_labels([])
+    |> Enum.reverse()
+    |> Enum.uniq()
+    |> Enum.with_index(1)
+    |> Map.new()
+  end
+
+  defp footnote_labels(%Kotoba.Nodes.FootnoteReference{label: label}, acc), do: [label | acc]
+
+  defp footnote_labels(node, acc),
+    do: node |> children() |> Enum.reduce(acc, &footnote_labels/2)
 
   @doc """
   Renders a document as plain text. Blocks are separated by `"\\n"`.
