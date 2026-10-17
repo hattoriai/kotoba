@@ -50,7 +50,14 @@ defmodule Kotoba.Content.MarkdownImport do
 
   defp blocks(nodes, features), do: Enum.flat_map(nodes, &block(&1, features))
 
-  defp block(%MDEx.Paragraph{nodes: nodes}, features), do: [paragraph(inline(nodes, features))]
+  # A paragraph of one non-breaking space (`&nbsp;`) is a blank line, as
+  # `Kotoba.Renderer.to_markdown/2` writes it: an empty paragraph.
+  defp block(%MDEx.Paragraph{nodes: nodes}, features) do
+    case inline(nodes, features) do
+      [%{"type" => "text", "text" => "\u00A0"}] -> [paragraph([])]
+      children -> [paragraph(children)]
+    end
+  end
 
   defp block(%MDEx.Heading{level: level, nodes: nodes}, features) do
     if on?(features, :headings),
@@ -197,7 +204,7 @@ defmodule Kotoba.Content.MarkdownImport do
     {inline, nested, after_blocks} =
       Enum.reduce(nodes, {[], [], []}, fn node, {inline, nested, after_blocks} ->
         case node do
-          %MDEx.Paragraph{nodes: children} ->
+          %MDEx.Paragraph{nodes: children} when nested == [] and after_blocks == [] ->
             {join_lines(inline, inline(children, features)), nested, after_blocks}
 
           # A nested list that a block split: its first part is the
@@ -293,8 +300,9 @@ defmodule Kotoba.Content.MarkdownImport do
   defp inline(nodes, features, format) when is_list(nodes),
     do: Enum.flat_map(nodes, &inline_node(&1, features, format))
 
+  # A line ending in text (from `&#10;`) is white space in HTML.
   defp inline_node(%MDEx.Text{literal: literal}, _features, format),
-    do: [text_node(literal, format)]
+    do: [text_node(String.replace(literal, ~r/\r\n|\r|\n/, " "), format)]
 
   defp inline_node(%MDEx.SoftBreak{}, _features, format), do: [text_node(" ", format)]
   defp inline_node(%MDEx.LineBreak{}, _features, _format), do: [linebreak_node()]
@@ -419,7 +427,7 @@ defmodule Kotoba.Content.MarkdownImport do
       "url" => url,
       "rel" => nil,
       "target" => nil,
-      "title" => if(present?(title), do: title)
+      "title" => if(present?(title), do: String.replace(title, ~r/\s+/, " "))
     })
   end
 end

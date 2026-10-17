@@ -77,6 +77,8 @@ export const FEATURES = [
   "tables",
   "attachments",
   "mentions",
+  "images",
+  "footnotes",
 ] as const;
 
 export type Feature = (typeof FEATURES)[number];
