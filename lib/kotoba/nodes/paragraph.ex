@@ -55,7 +55,9 @@ defmodule Kotoba.Nodes.Paragraph do
   text nodes with no text.
   """
   @spec empty?(t()) :: boolean()
-  def empty?(%__MODULE__{children: children}),
+  # The struct is defined at the end of the module (`Kotoba.Node`), so this
+  # matches the type and the children.
+  def empty?(%{__struct__: __MODULE__, children: children}),
     do: Enum.all?(children, &match?(%Text{text: ""}, &1))
 
   def empty?(_node), do: false
