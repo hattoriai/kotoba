@@ -7,6 +7,12 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- Collaborator cursors keep their last known position when awareness arrives
+  before the referenced characters or paragraph, then follow the new position
+  once the document catches up.
+
 ## [0.3.0] - 2026-10-17
 
 Full Markdown. This release has breaking changes, listed under Changed.

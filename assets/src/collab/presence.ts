@@ -7,6 +7,7 @@ export class Presence {
   private readonly list: HTMLUListElement;
   private readonly layer: HTMLDivElement;
   private people: Person[] = [];
+  private lastSelections = new Map<string, SharedSelection>();
   private frame = 0;
   private known = new Set<string>();
   private initialized = false;
@@ -28,6 +29,8 @@ export class Presence {
 
   receive(people: Person[]): void {
     this.people = people;
+    const sessions = new Set(people.filter(person => person.selection && person.role === "write").map(person => person.session));
+    for (const session of this.lastSelections.keys()) if (!sessions.has(session)) this.lastSelections.delete(session);
     const unique = new Map(people.map(person => [person.user.id, person]));
     const next = new Set(unique.keys());
     if (this.initialized) {
@@ -56,8 +59,17 @@ export class Presence {
       const surface = this.host.surface.getBoundingClientRect();
       for (const person of this.people) {
         if (person.session === this.session() || !person.selection || person.role === "read") continue;
-        const anchor = this.binding.domPoint(person.selection.anchor);
-        const focus = this.binding.domPoint(person.selection.focus);
+        let anchor = this.binding.domPoint(person.selection.anchor);
+        let focus = this.binding.domPoint(person.selection.focus);
+        if (anchor && focus) this.lastSelections.set(person.session, person.selection);
+        else {
+          // Keep the last resolvable selection until the document catches up with awareness.
+          const previous = this.lastSelections.get(person.session);
+          if (previous) {
+            anchor = this.binding.domPoint(previous.anchor);
+            focus = this.binding.domPoint(previous.focus);
+          }
+        }
         if (!anchor || !focus) continue;
         try {
           const range = document.createRange();
@@ -105,6 +117,7 @@ export class Presence {
   dispose(): void {
     cancelAnimationFrame(this.frame);
     this.observer.disconnect();
+    this.lastSelections.clear();
     window.removeEventListener("scroll", this.onScroll, true);
     this.list.remove();
     this.layer.remove();
