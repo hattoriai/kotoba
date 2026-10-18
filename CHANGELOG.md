@@ -7,6 +7,18 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- The shared editors of a page share one collaboration socket, each with
+  its own channel, instead of opening a socket each: a page of 20 shared
+  editors opens one WebSocket, not 20. A missed revision or removing an
+  editor affects that editor's channel only, and so does a push timeout
+  unless a ping finds the connection dead, which reconnects the socket
+  once for all its editors. A socket takes up to `Kotoba.Collab.token/3`'s
+  new `:max_channels` editors, 100 by default; pass a lower
+  `:max_channels_per_transport` of the socket there.
+  ([#38](https://github.com/hattoriai/kotoba/issues/38))
+
 ## [0.3.0] - 2026-10-17
 
 Full Markdown. This release has breaking changes, listed under Changed.
