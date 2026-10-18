@@ -13,6 +13,8 @@ declare module "phoenix" {
     connect(): void;
     disconnect(callback?: () => void): void;
     ping(callback: (rtt: number) => void): boolean;
+    onOpen(callback: () => void): string;
+    onClose(callback: () => void): string;
     channel(topic: string, params: Record<string, unknown> | (() => Record<string, unknown>)): Channel;
   }
 }

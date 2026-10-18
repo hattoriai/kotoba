@@ -18,17 +18,21 @@ export interface Lease { readonly socket: Socket; check(): void; release(): void
 // How long a ping may go unanswered before the socket counts as dead.
 const PING_TIMEOUT = 5_000;
 
-interface Entry { socket: Socket; recovers: Map<string, () => void>; checking: Set<string> | null; close: () => void }
+interface Entry { socket: Socket; maxChannels: number; recovers: Map<string, () => void>; checking: Set<string> | null; close: () => void }
 const entries = new Map<string, Entry[]>();
 
-function open(url: string): Entry {
+function open(url: string, maxChannels: number): Entry {
   const socket = new Socket(url);
   const offline = (): void => socket.disconnect();
   const online = (): void => socket.connect();
   window.addEventListener("offline", offline);
   window.addEventListener("online", online);
   if (navigator.onLine) socket.connect();
-  return { socket, recovers: new Map(), checking: null, close: () => { window.removeEventListener("offline", offline); window.removeEventListener("online", online); socket.disconnect(); } };
+  const entry: Entry = { socket, maxChannels, recovers: new Map(), checking: null, close: () => { window.removeEventListener("offline", offline); window.removeEventListener("online", online); socket.disconnect(); } };
+  // A check is about the connection it pinged: once that connection goes, Phoenix joins the channels again.
+  socket.onOpen(() => { entry.checking = null; });
+  socket.onClose(() => { entry.checking = null; });
+  return entry;
 }
 
 function check(entry: Entry, topic: string): void {
@@ -49,7 +53,8 @@ function check(entry: Entry, topic: string): void {
     // Phoenix doesn't learn that a dead connection's channels are gone, so every editor joins again.
     entry.socket.disconnect(() => {
       if (entry.recovers.size === 0) return;
-      entry.socket.connect();
+      // Offline meanwhile: the joins wait for the browser's online event to connect the socket.
+      if (navigator.onLine) entry.socket.connect();
       entry.recovers.forEach(recover => recover());
     });
   }, PING_TIMEOUT);
@@ -58,8 +63,8 @@ function check(entry: Entry, topic: string): void {
 export function lease(url: string, topic: string, maxChannels: number, recover: () => void): Lease {
   const sockets = entries.get(url) ?? [];
   entries.set(url, sockets);
-  let entry = sockets.find(candidate => !candidate.recovers.has(topic) && candidate.recovers.size < maxChannels);
-  if (!entry) { entry = open(url); sockets.push(entry); }
+  let entry = sockets.find(candidate => !candidate.recovers.has(topic) && candidate.recovers.size < Math.min(candidate.maxChannels, maxChannels));
+  if (!entry) { entry = open(url, maxChannels); sockets.push(entry); }
   const current = entry;
   current.recovers.set(topic, recover);
   let released = false;
