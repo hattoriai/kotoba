@@ -139,10 +139,13 @@ and never persisted in the document.
 
 The shared editors of a page share one socket per socket URL, each with its
 own channel on it, so a page of many shared editors opens one WebSocket. A
-second editor of the same document on the page, or a 101st editor (Phoenix's
-default `:max_channels_per_transport` is 100), gets another socket. Keep
-the collaboration socket's `:max_channels_per_transport` at 100 or above: an
-editor whose join a smaller limit refuses waits for room on that socket.
+second editor of the same document on the page, or an editor past the
+socket's channel limit, gets another socket. The limit is
+`Kotoba.Collab.token/3`'s `:max_channels`, 100 by default, the default
+`:max_channels_per_transport` of the Phoenix versions that limit channels
+(1.7.24 and later, 1.8.2 and later). If you set a lower
+`:max_channels_per_transport` on the collaboration socket, pass the same
+number as `:max_channels`.
 
 ## LiveView and forms
 

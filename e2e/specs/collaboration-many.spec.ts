@@ -10,13 +10,16 @@ async function open(page: Page, query: string, first = 1): Promise<void> {
   await expect(status(page, first)).toHaveText("Saved");
 }
 
-interface Traffic { sockets: string[]; closed: number; joins: string[]; leaves: string[] }
+// The page's collaboration sockets: the default one and the dev app's socket with a limit of 5 channels.
+const collabSocket = /\/kotoba\/(small-)?socket/;
 
-// The collaboration sockets the page opens and closes, and the channel joins and leaves it sends on them.
+interface Traffic { sockets: string[]; closed: number; joins: string[]; leaves: string[]; transactions: string[] }
+
+// The collaboration sockets the page opens and closes, and the channel joins, leaves and transactions it sends on them.
 function watch(page: Page): Traffic {
-  const traffic: Traffic = { sockets: [], closed: 0, joins: [], leaves: [] };
+  const traffic: Traffic = { sockets: [], closed: 0, joins: [], leaves: [], transactions: [] };
   page.on("websocket", socket => {
-    if (!socket.url().includes("/kotoba/socket")) return;
+    if (!collabSocket.test(socket.url())) return;
     traffic.sockets.push(socket.url());
     socket.on("close", () => { traffic.closed += 1; });
     socket.on("framesent", frame => {
@@ -24,6 +27,7 @@ function watch(page: Page): Traffic {
       const [, , topic, event] = JSON.parse(frame.payload) as [string, string, string, string];
       if (event === "phx_join") traffic.joins.push(topic);
       if (event === "phx_leave") traffic.leaves.push(topic);
+      if (event === "transaction") traffic.transactions.push(topic);
     });
   });
   return traffic;
@@ -32,25 +36,39 @@ function watch(page: Page): Traffic {
 const count = (values: string[], value: string): number => values.filter(v => v === value).length;
 
 // Routes the collaboration socket: `blocked` refuses new connections, `drop()` closes the current
-// one as an unreachable server does, `hold` drops what the server sends on one topic, and `skip`
-// drops the next transaction broadcast on one topic, and `slowLeave` holds the page's channel leaves
-// back for that many milliseconds.
-interface Control { blocked: boolean; hold: string | null; skip: string | null; slowLeave: number; drop: () => void }
+// one as an unreachable server does, `deafen()` drops all the current one gets from the server
+// without closing it, as a dead connection the browser hasn't noticed, `hold` drops what the server
+// sends on one topic, `skip` drops the next transaction broadcast on one topic, `holdLeaves` holds
+// the page's channel leaves until `releaseLeaves()`, and `refused` lists the topics whose join the
+// server refused for its channel limit.
+interface Control {
+  blocked: boolean; hold: string | null; skip: string | null; holdLeaves: boolean; refused: string[];
+  drop: () => void; deafen: () => void; releaseLeaves: () => void;
+}
 async function route(page: Page): Promise<Control> {
   let current: WebSocketRoute | null = null;
-  const control: Control = { blocked: false, hold: null, skip: null, slowLeave: 0, drop: () => void current?.close({ code: 4000, reason: "dropped" }) };
-  await page.routeWebSocket(/\/kotoba\/socket/, socket => {
+  let deaf: WebSocketRoute | null = null;
+  const held: (() => void)[] = [];
+  const control: Control = {
+    blocked: false, hold: null, skip: null, holdLeaves: false, refused: [],
+    drop: () => void current?.close({ code: 4000, reason: "dropped" }),
+    deafen: () => { deaf = current; },
+    releaseLeaves: () => { control.holdLeaves = false; held.splice(0).forEach(send => send()); },
+  };
+  await page.routeWebSocket(collabSocket, socket => {
     // An abnormal close: Phoenix reconnects only then.
     if (control.blocked) { void socket.close({ code: 4000, reason: "blocked" }); return; }
     current = socket;
     const server = socket.connectToServer();
     socket.onMessage(message => {
       const event = typeof message === "string" ? (JSON.parse(message) as string[])[3] : null;
-      if (event === "phx_leave" && control.slowLeave > 0) setTimeout(() => server.send(message), control.slowLeave);
+      if (event === "phx_leave" && control.holdLeaves) held.push(() => server.send(message));
       else server.send(message);
     });
     server.onMessage(message => {
-      const [, , topic, event] = typeof message === "string" ? JSON.parse(message) as string[] : [];
+      if (socket === deaf) return;
+      const [, , topic, event, payload] = typeof message === "string" ? JSON.parse(message) as [string, string, string, string, { response?: { reason?: string } }] : [];
+      if (event === "phx_reply" && payload?.response?.reason === "too many channels joined") control.refused.push(topic!);
       if (topic === control.hold) return;
       if (topic === control.skip && event === "transaction") { control.skip = null; return; }
       socket.send(message);
@@ -119,29 +137,34 @@ test("removing an editor leaves its channel only, a new editor joins on the same
   await context.close();
 });
 
-test("an editor past Phoenix's channel limit of a socket gets another socket", async ({ page }) => {
-  test.setTimeout(60_000);
-  const id = crypto.randomUUID();
-  const traffic = watch(page);
-  await open(page, `document=${id}&count=101&name=Ada`);
-  await expect(status(page, 101)).toHaveText("Saved", { timeout: 30_000 });
-  for (let n = 1; n <= 101; n++) await expect(page.locator(`#editor_${n}`)).toHaveAttribute("data-collab-state", "saved");
-  expect(traffic.sockets).toHaveLength(2);
-});
-
-test("an editor that replaces another on a full socket joins once the server has let the other go", async ({ page }) => {
-  test.setTimeout(60_000);
+test("an editor past the socket's channel limit gets another socket", async ({ page }) => {
   const id = crypto.randomUUID();
   const control = await route(page);
   const traffic = watch(page);
-  await open(page, `document=${id}&count=100&name=Ada`);
-  for (let n = 1; n <= 100; n++) await expect(page.locator(`#editor_${n}`)).toHaveAttribute("data-collab-state", "saved", { timeout: 30_000 });
-  // The server still counts the removed editor's channel when the new editor's join arrives.
-  control.slowLeave = 1_000;
+  await open(page, `document=${id}&count=6&name=Ada&socket=small`);
+  for (let n = 1; n <= 6; n++) await expect(page.locator(`#editor_${n}`)).toHaveAttribute("data-collab-state", "saved");
+  expect(traffic.sockets).toHaveLength(2);
+  expect(control.refused).toEqual([]);
+});
+
+test("an editor that replaces another on a full socket joins once the server has let the other go", async ({ page }) => {
+  const id = crypto.randomUUID();
+  const control = await route(page);
+  const traffic = watch(page);
+  await page.clock.install();
+  await open(page, `document=${id}&count=5&name=Ada&socket=small`);
+  for (let n = 1; n <= 5; n++) await expect(page.locator(`#editor_${n}`)).toHaveAttribute("data-collab-state", "saved");
+
+  control.holdLeaves = true;
   await page.locator("#many-remove").click();
   await page.locator("#many-add").click();
-  await expect(status(page, 101)).toHaveText("Saved", { timeout: 15_000 });
-  expect(count(traffic.joins, `kotoba:${id}-101`)).toBeGreaterThan(1);
+  // The server still counts the removed editor's channel, so it refuses the new editor's join.
+  await expect.poll(() => control.refused).toEqual([`kotoba:${id}-6`]);
+  control.releaseLeaves();
+  // Phoenix's rejoin timer: 1s after the first refusal.
+  await page.clock.fastForward(1_000);
+  await expect(status(page, 6)).toHaveText("Saved");
+  expect(count(traffic.joins, `kotoba:${id}-6`)).toBe(2);
   expect(traffic.sockets).toHaveLength(1);
 });
 
@@ -209,6 +232,38 @@ test("an editor whose push times out joins again alone while the others keep edi
   await focusEnd(page, editor(page, 1));
   await page.keyboard.type(" more");
   await expect(editor(other, 1)).toHaveText("one more");
+  await context.close();
+});
+
+test("a push timeout on a dead connection reconnects the socket once and every editor joins again", async ({ page, browser }) => {
+  const id = crypto.randomUUID();
+  const control = await route(page);
+  const traffic = watch(page);
+  await page.clock.install();
+  await open(page, `document=${id}&count=3&name=Ada`);
+  for (let n = 1; n <= 3; n++) await expect(status(page, n)).toHaveText("Saved");
+
+  control.deafen();
+  await focusEnd(page, editor(page, 2));
+  await page.keyboard.type("two");
+  await page.clock.fastForward(100);
+  await expect.poll(() => traffic.transactions).toEqual([`kotoba:${id}-2`]);
+  // The push times out and the lease pings the socket; Phoenix's own heartbeat would wait 30s more.
+  await page.clock.fastForward(15_000);
+  await expect(page.locator("#editor_2")).toHaveAttribute("data-collab-state", "offline");
+  expect(traffic.sockets).toHaveLength(1);
+  // The ping goes unanswered: the socket reconnects and every editor joins again on it.
+  await page.clock.fastForward(5_000);
+  // Phoenix waits for the old connection to close, up to 1.5s.
+  await page.clock.fastForward(1_500);
+  await expect.poll(() => traffic.sockets.length).toBe(2);
+  for (let n = 1; n <= 3; n++) await expect(status(page, n)).toHaveText("Saved");
+  for (let n = 1; n <= 3; n++) expect(count(traffic.joins, `kotoba:${id}-${n}`)).toBe(2);
+
+  const context = await browser.newContext();
+  const other = await context.newPage();
+  await open(other, `document=${id}&count=3&name=Grace`);
+  await expect(editor(other, 2)).toHaveText("two");
   await context.close();
 });
 

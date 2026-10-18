@@ -955,6 +955,14 @@ defmodule KotobaDev.CollabSocket do
   def id(_socket), do: nil
 end
 
+# A collaboration socket with a small channel limit, for the e2e tests of socket sharing.
+defmodule KotobaDev.SmallCollabSocket do
+  use Phoenix.Socket, max_channels_per_transport: 5
+  channel("kotoba:*", KotobaDev.CollabChannel)
+  def connect(_params, socket, _connect_info), do: {:ok, socket}
+  def id(_socket), do: nil
+end
+
 defmodule KotobaDev.CollabLive do
   use Phoenix.LiveView
   import Kotoba.Components
@@ -1022,7 +1030,7 @@ defmodule KotobaDev.ManyCollabLive do
   @moduledoc false
   # Many shared editors on one page, as in a document of many text blocks:
   # /collab/many?document=ID&count=20&name=Ada. ?repeat=1 adds a last editor of
-  # the first editor's document.
+  # the first editor's document; ?socket=small signs for KotobaDev.SmallCollabSocket.
   use Phoenix.LiveView
   import Kotoba.Components
 
@@ -1039,13 +1047,18 @@ defmodule KotobaDev.ManyCollabLive do
     editors = Enum.with_index(ids, 1)
     editors = if params["repeat"], do: editors ++ [{hd(ids), count + 1}], else: editors
 
+    signing =
+      if params["socket"] == "small",
+        do: [user: user, socket: "/kotoba/small-socket", max_channels: 5],
+        else: [user: user]
+
     {:ok,
      assign(socket,
        prefix: prefix,
        editors: editors,
        next: length(editors) + 1,
-       user: user,
-       collab: Map.new(ids, &{&1, Kotoba.Collab.token(socket, &1, user: user)}),
+       signing: signing,
+       collab: Map.new(ids, &{&1, Kotoba.Collab.token(socket, &1, signing)}),
        form: to_form(%{}, as: :many)
      )}
   end
@@ -1065,7 +1078,7 @@ defmodule KotobaDev.ManyCollabLive do
 
   def handle_event("kotoba:collab_token", %{"document_id" => id}, socket) do
     if Map.has_key?(socket.assigns.collab, id) do
-      {:reply, Kotoba.Collab.token(socket, id, user: socket.assigns.user), socket}
+      {:reply, Kotoba.Collab.token(socket, id, socket.assigns.signing), socket}
     else
       {:reply, %{}, socket}
     end
@@ -1087,7 +1100,7 @@ defmodule KotobaDev.ManyCollabLive do
          Map.put(
            socket.assigns.collab,
            id,
-           Kotoba.Collab.token(socket, id, user: socket.assigns.user)
+           Kotoba.Collab.token(socket, id, socket.assigns.signing)
          )
      )}
   end
@@ -1167,6 +1180,10 @@ defmodule KotobaDev.Endpoint do
 
   socket("/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session]])
   socket("/kotoba/socket", KotobaDev.CollabSocket, websocket: [max_frame_size: 1_000_000])
+
+  socket("/kotoba/small-socket", KotobaDev.SmallCollabSocket,
+    websocket: [max_frame_size: 1_000_000]
+  )
 
   if System.get_env("KOTOBA_DEV_WATCH") != "false" do
     socket("/phoenix/live_reload/socket", Phoenix.LiveReloader.Socket)

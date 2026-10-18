@@ -11,7 +11,8 @@ declare module "phoenix" {
   export class Socket {
     constructor(url: string, options?: Record<string, unknown>);
     connect(): void;
-    disconnect(): void;
+    disconnect(callback?: () => void): void;
+    ping(callback: (rtt: number) => void): boolean;
     channel(topic: string, params: Record<string, unknown> | (() => Record<string, unknown>)): Channel;
   }
 }

@@ -11,13 +11,24 @@ defmodule Kotoba.Collab do
 
   @salt "kotoba-collab-v1"
 
-  @doc "Makes short-lived join credentials from the LiveView's authenticated user."
+  @doc """
+  Makes short-lived join credentials from the LiveView's authenticated user.
+
+  Options: `:user` (required), `:role` (`:write` or `:read`), `:socket` (the
+  socket's path, `"/kotoba/socket"` by default) and `:max_channels` (that
+  socket's `:max_channels_per_transport`, 100 by default).
+  """
   def token(socket_or_endpoint, document_id, opts) when is_binary(document_id) do
     user = Keyword.fetch!(opts, :user)
     role = Keyword.get(opts, :role, :write)
 
     unless role in [:read, :write],
       do: raise(ArgumentError, "collaboration role must be :read or :write")
+
+    max_channels = Keyword.get(opts, :max_channels, 100)
+
+    unless is_integer(max_channels) and max_channels > 0,
+      do: raise(ArgumentError, "collaboration :max_channels must be a positive integer")
 
     user = %{
       "id" => to_string(Map.fetch!(user, :id)),
@@ -36,6 +47,7 @@ defmodule Kotoba.Collab do
       "document_id" => document_id,
       "token" => signed,
       "socket" => Keyword.get(opts, :socket, "/kotoba/socket"),
+      "max_channels" => max_channels,
       "user" => user,
       "role" => Atom.to_string(role)
     }

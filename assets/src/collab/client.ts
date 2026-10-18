@@ -107,7 +107,7 @@ class Client implements Collaboration {
     const offline = (): void => this.offline();
     window.addEventListener("offline", offline);
     this.cleanups.push(() => window.removeEventListener("offline", offline));
-    this.lease = lease(this.credentials.socket, `kotoba:${this.credentials.document_id}`);
+    this.lease = lease(this.credentials.socket, `kotoba:${this.credentials.document_id}`, this.credentials.max_channels ?? 100, () => this.rejoin());
     this.join();
     if (!navigator.onLine) this.offline();
     this.refreshTimer = setInterval(() => { if (this.connected) void this.refreshCredentials(); }, 180_000);
@@ -253,7 +253,8 @@ class Client implements Collaboration {
           }
         })
         .receive("error", payload => { console.error("Kotoba collaboration rejected transaction:", (payload as { reason?: string }).reason); this.fail("The server could not save your edits. Your local draft is preserved."); })
-        .receive("timeout", () => { if (this.channel === channel && this.inFlight === transaction.id) this.rejoin(); });
+        // The lease pings the socket: this editor joins again alone, or every editor on a dead socket does.
+        .receive("timeout", () => { if (this.channel === channel && this.inFlight === transaction.id) { this.offline(); this.lease!.check(); } });
     });
   }
 

@@ -69,6 +69,16 @@ defmodule Kotoba.Collab.ChannelTest do
              )
   end
 
+  test "credentials carry the socket's channel limit for the editors' socket sharing" do
+    assert credentials(:write)["max_channels"] == 100
+    small = Kotoba.Collab.token(@endpoint, "shared", user: %{id: "alice"}, max_channels: 5)
+    assert small["max_channels"] == 5
+
+    assert_raise ArgumentError, fn ->
+      Kotoba.Collab.token(@endpoint, "shared", user: %{id: "alice"}, max_channels: 0)
+    end
+  end
+
   test "read tokens cannot transact but can flush", %{socket: socket} do
     assert {:ok, %{"role" => "read"}, joined} =
              subscribe_and_join(
