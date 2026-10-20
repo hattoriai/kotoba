@@ -191,8 +191,9 @@ mix dev             # the development server on http://localhost:4099
 ```
 
 `mix kotoba.build` runs in the `:dev` environment and needs `npm`. It
-empties `priv/static` and writes the four files of the package:
-`kotoba.esm.js`, `kotoba.cjs.js`, `kotoba.css` and `kotoba-sumi.css`.
+empties `priv/static` and writes the six files of the package:
+`kotoba.esm.js`, `kotoba.cjs.js`, `kotoba-collab.esm.js`,
+`kotoba-collab.cjs.js`, `kotoba.css` and `kotoba-sumi.css`.
 
 `mix dev` runs `dev.exs`: a Phoenix endpoint with the editor in a form,
 the prompts (`@` people, `:` emoji, `+` tags, `~` a slow search, `!` a
@@ -243,7 +244,7 @@ port 4099 can keep running.
 
 `mix release` (in this repository, an alias that replaces Mix's `release`
 task) builds the bundle, checks that `priv/static` holds only the
-four bundle files (`mix kotoba.release_check`), publishes to Hex, and tags
+six bundle files (`mix kotoba.release_check`), publishes to Hex, and tags
 and pushes `v<version>`.
 
 ## Contributing
