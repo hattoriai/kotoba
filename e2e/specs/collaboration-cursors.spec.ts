@@ -11,8 +11,9 @@ async function open(page: Page, document: string, name: string): Promise<void> {
 
 for (const sameAuthor of [true, false]) {
   for (const split of [false, true]) {
-    test(`a cursor keeps its last known position before ${split ? "a new paragraph" : "new characters"} arrives (${sameAuthor ? "same author" : "different authors"})`, async ({ page, context }) => {
-      const other = await context.newPage();
+    test(`a cursor keeps its last known position before ${split ? "a new paragraph" : "new characters"} arrives (${sameAuthor ? "same author" : "different authors"})`, async ({ page, context, browser }) => {
+      const otherContext = sameAuthor ? context : await browser.newContext();
+      const other = await otherContext.newPage();
       let hold = false;
       let presence = 0;
       const queued: (() => void)[] = [];
@@ -63,6 +64,7 @@ for (const sameAuthor of [true, false]) {
         const after = await caret(other).boundingBox();
         return after !== null && (split ? after.y > before!.y + 5 : after.x > before!.x + 2);
       }).toBe(true);
+      if (!sameAuthor) await otherContext.close();
     });
   }
 }

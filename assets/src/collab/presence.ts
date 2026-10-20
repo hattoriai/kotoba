@@ -7,7 +7,7 @@ export class Presence {
   private readonly list: HTMLUListElement;
   private readonly layer: HTMLDivElement;
   private people: Person[] = [];
-  private lastSelections = new Map<string, SharedSelection>();
+  private readonly lastSelections = new Map<string, SharedSelection>();
   private frame = 0;
   private known = new Set<string>();
   private initialized = false;
