@@ -119,6 +119,25 @@ jobs:
         env:
           MIX_ENV: test
 
+  # The type check of the TypeScript editor.
+  js:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .tool-versions
+          cache: npm
+          cache-dependency-path: assets/package-lock.json
+
+      - run: npm ci
+        working-directory: assets
+
+      - run: npm run typecheck
+        working-directory: assets
+
   # One job for each browser engine. The Chromium job keeps the name "e2e".
   e2e:
     name: ${{ matrix.browser == 'chromium' && 'e2e' || format('e2e ({0})', matrix.browser) }}
