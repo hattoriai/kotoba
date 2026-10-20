@@ -113,15 +113,15 @@ defmodule Kotoba.RendererTest do
       ]
 
       assert html(input) ==
-               "<ul><li>a</li><li><ol><li>a.1</li></ol></li>" <>
+               ~s(<ul><li>a</li><li class="kotoba-li-nested"><ol><li>a.1</li></ol></li>) <>
                  "<li>b<ul><li>b.1</li></ul></li></ul>"
     end
 
-    test "an item that holds only a nested list has no check class" do
+    test "an item that holds only a nested list has no marker or check class" do
       input = [list("check", [item([list("check", [item([text("x")], %{"checked" => true})])])])]
 
       assert html(input) ==
-               ~s(<ul class="kotoba-check"><li><ul class="kotoba-check">) <>
+               ~s(<ul class="kotoba-check"><li class="kotoba-li-nested"><ul class="kotoba-check">) <>
                  ~s(<li class="kotoba-checked">x</li></ul></li></ul>)
     end
 
@@ -433,7 +433,7 @@ defmodule Kotoba.RendererTest do
       input = [list("bullet", [item([nested, nested])])]
 
       assert html(input) ==
-               "<ul><li><ul><li>b</li></ul>" <>
+               ~s(<ul><li class="kotoba-li-nested"><ul><li>b</li></ul>) <>
                  ~s(<span class="kotoba-unknown" data-type="list"></span></li></ul>)
     end
 

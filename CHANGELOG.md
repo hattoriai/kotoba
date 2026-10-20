@@ -7,6 +7,12 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- A nested list in rendered HTML no longer shows a second marker: the
+  item that holds it, which has no text of its own, has the
+  `kotoba-li-nested` class, as in the editor.
+
 ## [0.4.0] - 2026-10-20
 
 Attachments of files on the server, underline and highlight in Markdown,
