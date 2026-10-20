@@ -3,6 +3,7 @@ defmodule Kotoba.RendererTest do
 
   import Kotoba.TestJSON
 
+  alias Kotoba.Nodes.Attachment
   alias Kotoba.Renderer
 
   doctest Kotoba.Renderer
@@ -401,6 +402,98 @@ defmodule Kotoba.RendererTest do
 
       assert html(input, schemes: ["tel"]) ==
                ~s(<p><a href="tel:+100" rel="noopener nofollow">call</a></p>)
+    end
+  end
+
+  describe "attachment captions" do
+    test "an image's caption is its alt text and its figcaption" do
+      input = [attachment(%{"caption" => "The timeline of the project"})]
+
+      assert html(input) ==
+               ~s(<figure class="kotoba-attachment"><img src="/uploads/k/cat.png" alt="The timeline of the project" width="640" height="480">) <>
+                 "<figcaption>The timeline of the project</figcaption></figure>"
+    end
+
+    test "a blank caption is no caption" do
+      assert html([attachment(%{"caption" => "  "})]) =~ ~s(alt="cat.png")
+    end
+
+    test "a file's caption is the text of its download link" do
+      input = [
+        attachment(%{
+          "contentType" => "application/zip",
+          "name" => "a.zip",
+          "url" => "/f/a.zip",
+          "caption" => "The sources"
+        })
+        |> Map.drop(["width", "height"])
+      ]
+
+      assert html(input) ==
+               ~s(<figure class="kotoba-attachment"><figcaption>) <>
+                 ~s(<a href="/f/a.zip" download rel="noopener nofollow">The sources</a></figcaption></figure>)
+    end
+
+    test "a PDF's and a video's caption names the viewer and the player" do
+      pdf =
+        attachment(%{
+          "contentType" => "application/pdf",
+          "name" => "a.pdf",
+          "url" => "/f/a.pdf",
+          "caption" => "The report"
+        })
+        |> Map.drop(["width", "height"])
+
+      link = ~s(<a href="/f/a.pdf" download rel="noopener nofollow">The report</a>)
+
+      assert html([pdf]) ==
+               ~s(<figure class="kotoba-attachment kotoba-attachment-pdf">) <>
+                 ~s(<object data="/f/a.pdf" type="application/pdf" aria-label="The report">#{link}</object>) <>
+                 "<figcaption>#{link}</figcaption></figure>"
+
+      assert html([Map.put(pdf, "preview", "/f/a.png")]) =~ ~s(alt="Preview of The report")
+
+      video =
+        attachment(%{"contentType" => "video/mp4", "url" => "/f/c.mp4", "caption" => "The demo"})
+
+      assert html([video]) =~ ~s(aria-label="The demo")
+
+      assert html([video]) =~
+               ~s(<figcaption><a href="/f/c.mp4" download rel="noopener nofollow">The demo</a>)
+    end
+
+    test "a caption is escaped" do
+      input = [attachment(%{"caption" => "\"><script>alert(1)</script>"})]
+      html = html(input)
+
+      refute html =~ "<script>"
+      assert html =~ ~s|alt="&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"|
+      assert html =~ "<figcaption>&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;</figcaption>"
+
+      assert html(input, policy: :untrusted) ==
+               "&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;"
+    end
+
+    test "to_text/2 and to_markdown/2 give the caption" do
+      doc = doc([attachment(%{"caption" => "The [timeline]"})])
+
+      assert Renderer.to_text(doc) == "The [timeline]"
+      assert Renderer.to_markdown(doc) == "![The \\[timeline\\]](/uploads/k/cat.png)"
+      assert Renderer.to_markdown(doc, policy: :untrusted) == "The \\[timeline\\]"
+    end
+
+    test "the caption is kept through JSON, and a document without one has no key" do
+      {:ok, doc} = Kotoba.Document.parse(envelope([attachment(%{"caption" => "A cat"})]))
+      [node] = Kotoba.Document.attachments(doc)
+
+      assert node.caption == "A cat"
+      assert Attachment.to_json(node)["caption"] == "A cat"
+      refute Map.has_key?(Attachment.to_json(%{node | caption: nil}), "caption")
+    end
+
+    test "a caption with a control character renders as unknown, as another field would" do
+      assert html([attachment(%{"caption" => "a\nb"})]) ==
+               ~s(<span class="kotoba-unknown" data-type="attachment"></span>)
     end
   end
 

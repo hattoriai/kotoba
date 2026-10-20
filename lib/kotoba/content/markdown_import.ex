@@ -56,14 +56,16 @@ defmodule Kotoba.Content.MarkdownImport do
 
   # A paragraph of the root with only `![alt](attachment:name)` images is
   # the attachment of that name, or a gallery of several, as the editor
-  # makes them. With the attachments feature off, it is the images' text.
+  # makes them. An image's alternative text is the attachment's caption,
+  # unless it is empty or the file name, or the attachment has a caption
+  # already. With the attachments feature off, it is the images' text.
   defp root_block(%MDEx.Paragraph{nodes: nodes} = paragraph, features, attachments) do
-    case attachment_names(nodes) do
+    case attachment_images(nodes) do
       [] ->
         block(paragraph, features)
 
-      names ->
-        nodes = Enum.map(names, &attachment_json!(&1, attachments))
+      images ->
+        nodes = Enum.map(images, fn {name, alt} -> attachment_json!(name, alt, attachments) end)
 
         cond do
           not on?(features, :attachments) -> [paragraph(alt_texts(nodes))]
@@ -75,10 +77,10 @@ defmodule Kotoba.Content.MarkdownImport do
 
   defp root_block(node, features, _attachments), do: block(node, features)
 
-  defp attachment_names(nodes) do
+  defp attachment_images(nodes) do
     Enum.reduce_while(nodes, [], fn
-      %MDEx.Image{url: "attachment:" <> name}, names ->
-        {:cont, [name | names]}
+      %MDEx.Image{url: "attachment:" <> name, nodes: alt}, names ->
+        {:cont, [{name, caption_text(alt)} | names]}
 
       %MDEx.SoftBreak{}, names ->
         {:cont, names}
@@ -97,10 +99,14 @@ defmodule Kotoba.Content.MarkdownImport do
 
   defp blank?(text), do: String.trim(text) == ""
 
-  defp attachment_json!(name, attachments) do
+  # The alternative text as a caption: one line, with no control character.
+  defp caption_text(nodes),
+    do: nodes |> plain_text() |> String.replace(~r/\s+/u, " ") |> String.trim()
+
+  defp attachment_json!(name, alt, attachments) do
     case Map.fetch(attachments, name) do
       {:ok, %Attachment{} = node} ->
-        Attachment.to_json(node)
+        node |> with_caption(alt) |> Attachment.to_json()
 
       {:ok, other} ->
         raise ArgumentError,
@@ -112,7 +118,14 @@ defmodule Kotoba.Content.MarkdownImport do
     end
   end
 
-  defp alt_texts(nodes), do: [text_node(Enum.map_join(nodes, ", ", & &1["name"]))]
+  defp with_caption(%Attachment{caption: caption} = node, alt) do
+    if (is_binary(caption) and String.trim(caption) != "") or alt == "" or alt == node.name,
+      do: node,
+      else: %{node | caption: alt}
+  end
+
+  defp alt_texts(nodes),
+    do: [text_node(Enum.map_join(nodes, ", ", &(&1["caption"] || &1["name"])))]
 
   # -- blocks ----------------------------------------------------------------
 

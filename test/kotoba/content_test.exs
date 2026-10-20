@@ -295,14 +295,63 @@ defmodule Kotoba.ContentTest do
                content.doc["root"]["children"]
     end
 
-    test "with the attachments feature off, the attachments are their names" do
+    test "with the attachments feature off, the attachments are their captions, else names" do
       content =
-        Content.from_markdown("![A](attachment:a)",
-          attachments: %{"a" => @shot},
+        Content.from_markdown("![A](attachment:a)\n![](attachment:b)",
+          attachments: %{"a" => @shot, "b" => @shot},
           features: Kotoba.Features.all() -- [:attachments]
         )
 
-      assert content.text == "shot.png"
+      assert content.text == "A, shot.png"
+    end
+
+    test "an attachment: image's alt text is the attachment's caption" do
+      content =
+        Content.from_markdown("![The *timeline* of\nthe project](attachment:shot)",
+          attachments: %{"shot" => @shot}
+        )
+
+      assert [%{"type" => "attachment", "caption" => "The timeline of the project"}] =
+               content.doc["root"]["children"]
+
+      assert content.html ==
+               ~s(<figure class="kotoba-attachment"><img src="/files/2026/10/a-shot.png" alt="The timeline of the project" width="1280" height="800">) <>
+                 "<figcaption>The timeline of the project</figcaption></figure>"
+
+      assert content.text == "The timeline of the project"
+    end
+
+    test "an empty alt text, or the file name, makes no caption" do
+      for markdown <- ["![](attachment:shot)", "![ shot.png ](attachment:shot)"] do
+        content = Content.from_markdown(markdown, attachments: %{"shot" => @shot})
+        assert [node] = content.doc["root"]["children"]
+        refute Map.has_key?(node, "caption")
+        assert content.html =~ "<figcaption>shot.png</figcaption>"
+      end
+    end
+
+    test "a caption the attachment has already wins over the alt text" do
+      content =
+        Content.from_markdown("![The timeline](attachment:shot)",
+          attachments: %{"shot" => %{@shot | caption: "Our timeline"}}
+        )
+
+      assert [%{"caption" => "Our timeline"}] = content.doc["root"]["children"]
+    end
+
+    test "each image of a gallery takes its own caption" do
+      other = %{@shot | key: "2026/10/b.png", url: "/files/2026/10/b.png", name: "b.png"}
+
+      content =
+        Content.from_markdown("![First](attachment:a)\n![b.png](attachment:b)",
+          attachments: %{"a" => @shot, "b" => other}
+        )
+
+      assert [%{"type" => "gallery", "children" => [first, second]}] =
+               content.doc["root"]["children"]
+
+      assert first["caption"] == "First"
+      refute Map.has_key?(second, "caption")
     end
 
     test "an attachment that is not in the map raises" do

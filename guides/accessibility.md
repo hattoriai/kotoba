@@ -203,10 +203,18 @@ caret does not go in it; the person selects its images.
 
 Attachments and mentions are single units in the text. Backspace before
 the caret, or Delete after it, removes one. An image attachment renders
-with its file name as the `alt` text.
+with its caption as the `alt` text, or its file name when it has none.
 
-A PDF's viewer and a video's player are named after the file
-(`aria-label`). In the editor they are out of the tab order, so Tab does
+The person writes the caption in the field under the selected attachment
+(see the Uploads guide): Alt+F10 moves the focus to it from the editable
+area, Enter keeps the caption and Escape leaves it as it was; both give the
+focus back to the editable area, with the attachment selected. The field
+is named after the file ("Caption of timeline.png"), and the live region
+says "Caption saved" or "Caption removed". Escape in the editable area
+hides the field until the selection changes.
+
+A PDF's viewer and a video's player are named after the caption, else the
+file (`aria-label`). In the editor they are out of the tab order, so Tab does
 not go into them: the person selects the attachment, and reads or plays
 it in the saved page, where the viewer and the player's controls take the
 focus. A video never plays by itself. The caption of a PDF or a video is a

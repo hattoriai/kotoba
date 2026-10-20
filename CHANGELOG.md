@@ -9,12 +9,39 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.4.1] - 2026-10-20
 
+Attachment captions, and two fixes to rendered HTML.
+
+### Added
+
+- Attachments have a caption: the optional `caption` field of
+  `Kotoba.Nodes.Attachment` (JSON key `caption`, written only when set)
+  and of the editor's attachment node. An image's caption is its `alt`
+  text and its `figcaption`; a PDF's, a video's or another file's is the
+  text of its download link and the name of its viewer or player. Plain
+  text and Markdown (`![caption](url)`) use it too, and so does the
+  `:untrusted` policy. With no caption, the file name shows, as before.
+  `Kotoba.Nodes.Attachment.label/1` returns the caption, else the name.
+- The editor has a caption field under the selected attachment: a click
+  or Alt+F10 goes to it, Enter keeps the caption, Escape leaves it as it
+  was. Keeping a caption is one undo step, and a shared editor sends it
+  to the others.
+- `Kotoba.Content.from_markdown/2` with `:attachments` makes the alt text
+  of `![The timeline of the project](attachment:timeline)` the
+  attachment's caption, unless it is empty or the file name. A caption
+  the attachment has already wins.
+  ([#49](https://github.com/hattoriai/kotoba/pull/49))
+
 ### Fixed
 
 - A nested list in rendered HTML no longer shows a second marker: the
   item that holds it, which has no text of its own, has the
   `kotoba-li-nested` class, as in the editor.
   ([#48](https://github.com/hattoriai/kotoba/pull/48))
+- `kotoba.css` sizes a rendered image attachment: its `img` is no wider
+  than the text and keeps its proportions, with the radius of the
+  editor's images, and its `figcaption` is small and muted. A large
+  screenshot rendered at its natural width and overflowed the column.
+  ([#49](https://github.com/hattoriai/kotoba/pull/49))
 
 ## [0.4.0] - 2026-10-20
 

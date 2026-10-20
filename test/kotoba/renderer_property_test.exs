@@ -34,14 +34,24 @@ defmodule Kotoba.RendererPropertyTest do
 
       doc =
         Document.map(doc, fn
-          %Kotoba.Nodes.Text{} = node -> %{node | text: "<script>" <> node.text}
-          %Kotoba.Nodes.Mention{} = node -> %{node | id: "\"><script>", label: "<script>"}
-          %Kotoba.Nodes.Attachment{} = node -> %{node | name: "\"><script>"}
-          node -> node
+          %Kotoba.Nodes.Text{} = node ->
+            %{node | text: "<script>" <> node.text}
+
+          %Kotoba.Nodes.Mention{} = node ->
+            %{node | id: "\"><script>", label: "<script>"}
+
+          %Kotoba.Nodes.Attachment{} = node ->
+            %{node | name: "\"><script>", caption: caption(node)}
+
+          node ->
+            node
         end)
 
       html = doc |> Renderer.to_html() |> Phoenix.HTML.safe_to_string()
       refute html =~ "<script"
     end
   end
+
+  # Half of the attachments have a caption, the other half show their name.
+  defp caption(node), do: if(rem(node.bytes, 2) == 0, do: "<script>")
 end
