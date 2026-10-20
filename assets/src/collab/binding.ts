@@ -340,7 +340,10 @@ export class Binding {
 
   private point(anchor: Anchor): { key: string; offset: number; type: "text" | "element" } | null {
     if (!this.current) return null;
-    const location = atomLocation(this.current, anchor.before) ?? anchor.node;
+    const buffer = atomLocation(this.current, anchor.before);
+    // Awareness can arrive before the transaction that inserts its character.
+    if (anchor.before !== null && buffer === null) return null;
+    const location = buffer ?? anchor.node;
     if (!this.current.nodes[location] || this.current.nodes[location].deleted) return null;
     if (anchor.offset !== undefined) {
       const key = this.keys.get(anchor.node);
