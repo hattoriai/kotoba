@@ -7,14 +7,12 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
-### Changed
+## [0.4.0] - 2026-10-20
 
-- Underline and highlight have Markdown: `Kotoba.Renderer.to_markdown/2`
-  writes `__underline__` and `==highlight==`, and
-  `Kotoba.Content.from_markdown/2` reads them back. They were dropped
-  before, so a document turned into Markdown and back (an AI translation,
-  say) lost them. `__text__` read from Markdown is now an underline, not
-  bold. Text colors and the color of a highlight still have no Markdown.
+Attachments of files on the server, underline and highlight in Markdown,
+one collaboration socket for the shared editors of a page, and stable
+collaborator cursors. This release has a breaking change, listed under
+Changed.
 
 ### Added
 
@@ -29,6 +27,15 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Underline and highlight have Markdown: `Kotoba.Renderer.to_markdown/2`
+  writes `__underline__` and `==highlight==`, and
+  `Kotoba.Content.from_markdown/2` reads them back. They were dropped
+  before, so a document turned into Markdown and back (an AI translation,
+  say) lost them. Text colors and the color of a highlight still have no
+  Markdown.
+  ([#47](https://github.com/hattoriai/kotoba/pull/47))
+- **Breaking:** `__text__` read from Markdown is an underline, not bold.
+  Kotoba writes bold as `**text**`.
 - The warning of an upload's preview that fails names "the file" rather
   than "the upload".
 - The shared editors of a page share one collaboration socket, each with
@@ -46,6 +53,7 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Collaborator cursors keep their last known position when awareness arrives
   before the referenced characters or paragraph, then follow the new position
   once the document catches up.
+  ([#44](https://github.com/hattoriai/kotoba/pull/44))
 
 ## [0.3.0] - 2026-10-17
 
@@ -402,7 +410,8 @@ The first release.
 - Guides: quickstart, forms, uploads, prompts, custom nodes, theming,
   security, accessibility and known limits.
 
-[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/hattoriai/kotoba/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/hattoriai/kotoba/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/hattoriai/kotoba/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/hattoriai/kotoba/compare/v0.2.0...v0.2.1
