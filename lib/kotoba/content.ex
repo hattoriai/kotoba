@@ -293,6 +293,12 @@ defmodule Kotoba.Content do
       its blocks, a list its items, a table a line for each row, an image
       its alternative text, a footnote its `[^label]` text, and a format is
       dropped.
+    * `:attachments` - a map of names to attachment nodes
+      (`Kotoba.Nodes.Attachment`, as `Kotoba.Attachments.store/2` returns
+      them). A paragraph of only `![alt](attachment:name)` images becomes
+      the attachment of that name, or a gallery of several, as the editor
+      makes them for a file someone drops in. A name that is not in the
+      map raises `ArgumentError`.
     * `:nodes` and `:policy` - as in `rerender/2`.
 
   ## Examples
@@ -305,7 +311,8 @@ defmodule Kotoba.Content do
   @spec from_markdown(String.t(), keyword()) :: t()
   def from_markdown(markdown, opts \\ []) when is_binary(markdown) do
     {features, opts} = Keyword.pop(opts, :features, Kotoba.Features.all())
-    envelope = wrap(MarkdownImport.root(markdown, features: features))
+    {attachments, opts} = Keyword.pop(opts, :attachments, %{})
+    envelope = wrap(MarkdownImport.root(markdown, features: features, attachments: attachments))
     {nodes, render_opts} = Keyword.pop(opts, :nodes, [])
 
     case Document.parse(envelope, nodes: nodes) do

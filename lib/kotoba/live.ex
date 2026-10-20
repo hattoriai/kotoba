@@ -65,8 +65,7 @@ defmodule Kotoba.Live do
   import Phoenix.LiveView,
     only: [push_event: 3, cancel_upload: 3, consume_uploaded_entry: 3, start_async: 3]
 
-  alias Kotoba.{Attachments, Content, Document, Prompts, Sanitizer, Storage}
-  alias Kotoba.Nodes.Attachment
+  alias Kotoba.{Attachments, Content, Document, Prompts, Storage}
   alias Phoenix.LiveView.{Socket, UploadConfig, UploadEntry}
 
   @v 1
@@ -425,82 +424,14 @@ defmodule Kotoba.Live do
   # stored is still consumed (its temporary file is removed), and the
   # result says what happened.
   defp store(%{path: path}, entry, storage, key_fun, preview_fun) do
-    name = Attachments.clean_name(entry.client_name)
-
-    with {:ok, description} <- Attachments.describe(path, entry.client_type),
-         {:ok, key} <- key(key_fun, entry, description.content_type),
-         meta = %{name: name, content_type: description.content_type, bytes: description.bytes},
-         {:ok, node} <- put_node(storage, key, path, meta, description) do
-      {:ok, {:ok, preview(node, path, preview_fun)}}
-    else
-      {:error, reason} -> {:ok, {:error, reason}}
-    end
-  end
-
-  # When the adapter stored the file but its result gives no valid
-  # attachment, the stored file is deleted, so that no file is left that no
-  # document points to.
-  defp put_node(storage, key, path, meta, description) do
-    case storage.put(key, path, meta) do
-      {:ok, url} when is_binary(url) ->
-        node = Attachments.node(description, key: key, url: url, name: meta.name)
-
-        case check_node(node) do
-          :ok -> {:ok, node}
-          {:error, _reason} = error -> discard(storage, key, error)
-        end
-
-      {:error, reason} ->
-        {:error, reason}
-
-      other ->
-        discard(storage, key, {:error, {:invalid_storage_result, other}})
-    end
-  end
-
-  defp preview(node, _path, nil), do: node
-
-  defp preview(node, path, preview_fun) do
-    case preview_fun.(node, path) do
-      nil ->
-        node
-
-      url when is_binary(url) ->
-        if Sanitizer.link_url(url),
-          do: %{node | preview: url},
-          else: no_preview(node, {:unsafe_url, url})
-
-      other ->
-        no_preview(node, {:invalid_preview, other})
-    end
-  rescue
-    exception -> no_preview(node, exception)
-  end
-
-  defp no_preview(node, reason) do
-    Logger.warning("Kotoba: no preview for the upload #{inspect(node.name)}: #{inspect(reason)}")
-
-    node
-  end
-
-  defp discard(storage, key, error) do
-    _result = storage.delete(key)
-    error
-  end
-
-  defp key(key_fun, entry, content_type) do
-    case key_fun.(entry, content_type) do
-      key when is_binary(key) -> {:ok, key}
-      other -> {:error, {:invalid_key, other}}
-    end
-  end
-
-  defp check_node(node) do
-    cond do
-      (errors = Attachment.validate(node)) != :ok -> {:error, {:invalid_attachment, errors}}
-      Sanitizer.link_url(node.url) == nil -> {:error, {:unsafe_url, node.url}}
-      true -> :ok
-    end
+    {:ok,
+     Attachments.store(path,
+       name: entry.client_name,
+       content_type: entry.client_type,
+       storage: storage,
+       key: fn _name, content_type -> key_fun.(entry, content_type) end,
+       preview: preview_fun
+     )}
   end
 
   defp editor_id(%{"id" => id}) when is_binary(id) and id != "", do: id

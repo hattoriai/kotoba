@@ -33,11 +33,17 @@ defmodule Kotoba.Attachments do
   `inline?/1` tells which types a browser can show in the page (the
   images, PDF and the videos). Serve every other file with
   `Content-Disposition: attachment`.
+
+  `store/2` makes an attachment of a file on the server, as an upload
+  does: for seeds, imports, or files an app makes itself.
   """
 
   import Bitwise
 
+  require Logger
+
   alias Kotoba.Nodes.Attachment
+  alias Kotoba.{Sanitizer, Storage}
 
   @octet "application/octet-stream"
   @head 65_536
@@ -189,6 +195,121 @@ defmodule Kotoba.Attachments do
   """
   @spec inline?(String.t()) :: boolean()
   def inline?(content_type), do: content_type in @inline
+
+  @doc """
+  Stores the file at `path` and returns its attachment node, as an upload
+  of the file would make it.
+
+  The file is checked with `describe/2`, stored with the storage adapter
+  under a new key, and its node checked. When the adapter stores the file
+  but its result does not make a valid attachment (a URL that is not a
+  safe link, say), the stored file is deleted. The file at `path` is left
+  where it is.
+
+  Put the node in a document with `Kotoba.Content.from_markdown/2` and
+  its `:attachments` option:
+
+      {:ok, shot} = Kotoba.Attachments.store("priv/seeds/timeline.png")
+
+      Kotoba.Content.from_markdown(
+        "The timeline:\n\n![Timeline](attachment:timeline)",
+        attachments: %{"timeline" => shot}
+      )
+
+  ## Options
+
+    * `:name` - the file name. The default is the base name of `path`.
+    * `:content_type` - the claimed content type, as a browser sends it.
+      The default is the type of the file's extension. Only the bytes of
+      the file make an image an image (see `describe/2`).
+    * `:storage` - the storage adapter. The default is
+      `Kotoba.Storage.adapter/0`.
+    * `:key` - a function of the file name and the checked content type
+      that returns a storage key. The default is `&Kotoba.Storage.key/2`.
+    * `:preview` - a function of the stored attachment and `path` that
+      returns the URL of a preview image, or `nil`: as the `:preview`
+      option of `Kotoba.Live.consume_uploads/4`.
+  """
+  @spec store(Path.t(), keyword()) :: {:ok, Attachment.t()} | {:error, term()}
+  def store(path, opts \\ []) when is_binary(path) do
+    name = clean_name(Keyword.get_lazy(opts, :name, fn -> Path.basename(path) end))
+    claim = Keyword.get_lazy(opts, :content_type, fn -> content_type(Path.extname(path)) end)
+    storage = Keyword.get_lazy(opts, :storage, &Storage.adapter/0)
+    key_fun = Keyword.get(opts, :key, &Storage.key/2)
+
+    with {:ok, description} <- describe(path, claim),
+         {:ok, key} <- key(key_fun, name, description.content_type),
+         meta = %{name: name, content_type: description.content_type, bytes: description.bytes},
+         {:ok, node} <- put_node(storage, key, path, meta, description) do
+      {:ok, preview(node, path, Keyword.get(opts, :preview))}
+    end
+  end
+
+  defp key(key_fun, name, content_type) do
+    case key_fun.(name, content_type) do
+      key when is_binary(key) -> {:ok, key}
+      other -> {:error, {:invalid_key, other}}
+    end
+  end
+
+  # When the adapter stored the file but its result gives no valid
+  # attachment, the stored file is deleted, so that no file is left that no
+  # document points to.
+  defp put_node(storage, key, path, meta, description) do
+    case storage.put(key, path, meta) do
+      {:ok, url} when is_binary(url) ->
+        node = node(description, key: key, url: url, name: meta.name)
+
+        case check_node(node) do
+          :ok -> {:ok, node}
+          {:error, _reason} = error -> discard(storage, key, error)
+        end
+
+      {:error, reason} ->
+        {:error, reason}
+
+      other ->
+        discard(storage, key, {:error, {:invalid_storage_result, other}})
+    end
+  end
+
+  defp check_node(node) do
+    cond do
+      (errors = Attachment.validate(node)) != :ok -> {:error, {:invalid_attachment, errors}}
+      Sanitizer.link_url(node.url) == nil -> {:error, {:unsafe_url, node.url}}
+      true -> :ok
+    end
+  end
+
+  defp discard(storage, key, error) do
+    _result = storage.delete(key)
+    error
+  end
+
+  defp preview(node, _path, nil), do: node
+
+  defp preview(node, path, preview_fun) do
+    case preview_fun.(node, path) do
+      nil ->
+        node
+
+      url when is_binary(url) ->
+        if Sanitizer.link_url(url),
+          do: %{node | preview: url},
+          else: no_preview(node, {:unsafe_url, url})
+
+      other ->
+        no_preview(node, {:invalid_preview, other})
+    end
+  rescue
+    exception -> no_preview(node, exception)
+  end
+
+  defp no_preview(node, reason) do
+    Logger.warning("Kotoba: no preview for the file #{inspect(node.name)}: #{inspect(reason)}")
+
+    node
+  end
 
   @doc """
   Builds an attachment node for a stored file.

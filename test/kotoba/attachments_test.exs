@@ -177,4 +177,105 @@ defmodule Kotoba.AttachmentsTest do
     assert Attachments.clean_name(nil) == "file"
     assert Attachments.clean_name("a\u200Eb\u2066c\u2069\uFEFF.pdf") == "abc.pdf"
   end
+
+  describe "store/2" do
+    defmodule RecordingStorage do
+      @moduledoc false
+      @behaviour Kotoba.Storage
+
+      @impl true
+      def put(key, path, meta) do
+        send(self(), {:put, key, File.read!(path), meta})
+        {:ok, url(key)}
+      end
+
+      @impl true
+      def url(key), do: "/files/" <> key
+
+      @impl true
+      def delete(key), do: send(self(), {:deleted, key})
+    end
+
+    @png <<0x89, "PNG\r\n", 0x1A, "\n", 13::32, "IHDR", 1280::32, 800::32, 8, 6, 0, 0, 0>>
+
+    test "stores a file and returns its attachment node, as an upload makes it", %{dir: dir} do
+      path = Path.join(dir, "Timeline view.png")
+      File.write!(path, @png)
+
+      assert {:ok, %Attachment{} = node} = Attachments.store(path, storage: RecordingStorage)
+
+      assert %Attachment{
+               name: "Timeline view.png",
+               content_type: "image/png",
+               width: 1280,
+               height: 800,
+               bytes: 29
+             } = node
+
+      assert node.key =~ ~r"^\d{4}/\d{2}/[0-9a-f-]+-Timeline_view\.png$"
+      assert node.url == "/files/" <> node.key
+      assert_received {:put, key, @png, %{name: "Timeline view.png", content_type: "image/png"}}
+      assert key == node.key
+      assert File.exists?(path)
+    end
+
+    test "takes a name, a key and a preview", %{dir: dir} do
+      path = Path.join(dir, "shot")
+      File.write!(path, @png)
+
+      assert {:ok, node} =
+               Attachments.store(path,
+                 storage: RecordingStorage,
+                 name: "Share dialog.png",
+                 key: fn name, type -> "seeds/" <> name <> "." <> type end,
+                 preview: fn node, ^path -> "/previews/" <> node.key end
+               )
+
+      assert node.key == "seeds/Share dialog.png.image/png"
+      assert node.preview == "/previews/" <> node.key
+    end
+
+    test "the bytes make the type: a page named .png is not an image", %{dir: dir} do
+      path = Path.join(dir, "page.png")
+      File.write!(path, "<html><script>alert(1)</script></html>")
+
+      assert {:ok, node} = Attachments.store(path, storage: RecordingStorage)
+      assert node.content_type == "application/octet-stream"
+      assert node.key =~ ~r"\.bin$"
+    end
+
+    test "deletes the stored file when the storage gives no valid attachment", %{dir: dir} do
+      path = Path.join(dir, "a.png")
+      File.write!(path, @png)
+
+      defmodule UnsafeUrlStorage do
+        @moduledoc false
+        @behaviour Kotoba.Storage
+        @impl true
+        def put(_key, _path, _meta), do: {:ok, "javascript:alert(1)"}
+        @impl true
+        def url(_key), do: "javascript:alert(1)"
+        @impl true
+        def delete(key), do: send(self(), {:deleted, key})
+      end
+
+      assert {:error, {:unsafe_url, "javascript:alert(1)"}} =
+               Attachments.store(path, storage: UnsafeUrlStorage)
+
+      assert_received {:deleted, _key}
+    end
+
+    test "returns the error of a missing file or a bad key", %{dir: dir} do
+      assert {:error, :enoent} =
+               Attachments.store(Path.join(dir, "nope.png"), storage: RecordingStorage)
+
+      path = Path.join(dir, "a.png")
+      File.write!(path, @png)
+
+      assert {:error, {:invalid_key, nil}} =
+               Attachments.store(path, storage: RecordingStorage, key: fn _, _ -> nil end)
+
+      refute_received {:put, _, _, _}
+    end
+  end
 end
