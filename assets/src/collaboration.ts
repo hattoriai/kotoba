@@ -5,6 +5,7 @@ export interface CollabCredentials {
   document_id: string;
   token: string;
   socket: string;
+  max_channels?: number;
   role: "read" | "write";
   user: { id: string; name: string; color: string };
 }
@@ -44,6 +45,6 @@ export function attachCollaboration(host: CollaborationHost): Promise<Collaborat
 export function readCollabCredentials(json: string | undefined): CollabCredentials | null {
   if (!json) return null;
   const data = JSON.parse(json) as CollabCredentials;
-  if (!data || typeof data.document_id !== "string" || typeof data.token !== "string" || typeof data.socket !== "string" || !["read", "write"].includes(data.role) || typeof data.user?.id !== "string") throw new Error("Invalid Kotoba collaboration credentials");
+  if (!data || typeof data.document_id !== "string" || typeof data.token !== "string" || typeof data.socket !== "string" || !["read", "write"].includes(data.role) || typeof data.user?.id !== "string" || (data.max_channels !== undefined && !(Number.isInteger(data.max_channels) && data.max_channels > 0))) throw new Error("Invalid Kotoba collaboration credentials");
   return data;
 }

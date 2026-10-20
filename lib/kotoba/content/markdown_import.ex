@@ -22,6 +22,7 @@ defmodule Kotoba.Content.MarkdownImport do
   import Bitwise
 
   alias Kotoba.Features
+  alias Kotoba.Nodes.Attachment
 
   @parse_options [
     extension: [
@@ -42,9 +43,72 @@ defmodule Kotoba.Content.MarkdownImport do
   @spec root(String.t(), keyword()) :: map()
   def root(markdown, opts \\ []) do
     features = opts |> Keyword.get(:features, Features.all()) |> Features.names!() |> MapSet.new()
+    attachments = Keyword.get(opts, :attachments, %{})
     document = MDEx.parse_document!(markdown, @parse_options)
-    element("root", blocks(document.nodes, features))
+    element("root", Enum.flat_map(document.nodes, &root_block(&1, features, attachments)))
   end
+
+  # -- attachments -----------------------------------------------------------
+
+  # A paragraph of the root with only `![alt](attachment:name)` images is
+  # the attachment of that name, or a gallery of several, as the editor
+  # makes them. With the attachments feature off, it is the images' text.
+  defp root_block(%MDEx.Paragraph{nodes: nodes} = paragraph, features, attachments) do
+    case attachment_names(nodes) do
+      [] ->
+        block(paragraph, features)
+
+      names ->
+        nodes = Enum.map(names, &attachment_json!(&1, attachments))
+
+        cond do
+          not on?(features, :attachments) -> [paragraph(alt_texts(nodes))]
+          match?([_one], nodes) -> nodes
+          true -> [element("gallery", nodes)]
+        end
+    end
+  end
+
+  defp root_block(node, features, _attachments), do: block(node, features)
+
+  defp attachment_names(nodes) do
+    Enum.reduce_while(nodes, [], fn
+      %MDEx.Image{url: "attachment:" <> name}, names ->
+        {:cont, [name | names]}
+
+      %MDEx.SoftBreak{}, names ->
+        {:cont, names}
+
+      %MDEx.LineBreak{}, names ->
+        {:cont, names}
+
+      %MDEx.Text{literal: literal}, names ->
+        if blank?(literal), do: {:cont, names}, else: {:halt, []}
+
+      _other, _names ->
+        {:halt, []}
+    end)
+    |> Enum.reverse()
+  end
+
+  defp blank?(text), do: String.trim(text) == ""
+
+  defp attachment_json!(name, attachments) do
+    case Map.fetch(attachments, name) do
+      {:ok, %Attachment{} = node} ->
+        Attachment.to_json(node)
+
+      {:ok, other} ->
+        raise ArgumentError,
+              "the attachment #{inspect(name)} must be a Kotoba.Nodes.Attachment, got: #{inspect(other)}"
+
+      :error ->
+        raise ArgumentError,
+              "no attachment named #{inspect(name)} in the :attachments option"
+    end
+  end
+
+  defp alt_texts(nodes), do: [text_node(Enum.map_join(nodes, ", ", & &1["name"]))]
 
   # -- blocks ----------------------------------------------------------------
 

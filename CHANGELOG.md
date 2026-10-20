@@ -7,6 +7,31 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `Kotoba.Attachments.store/2` makes an attachment of a file on the
+  server, as an upload does: it checks the file, stores it, and deletes it
+  again when the storage's result makes no valid attachment. For seeds,
+  imports, and files an app makes itself. `Kotoba.Live.consume_uploads/4`
+  stores uploads with it.
+- The `:attachments` option of `Kotoba.Content.from_markdown/2`: a
+  paragraph of only `![alt](attachment:name)` images becomes the
+  attachment of that name, or a gallery of several.
+
+### Changed
+
+- The warning of an upload's preview that fails names "the file" rather
+  than "the upload".
+- The shared editors of a page share one collaboration socket, each with
+  its own channel, instead of opening a socket each: a page of 20 shared
+  editors opens one WebSocket, not 20. A missed revision or removing an
+  editor affects that editor's channel only, and so does a push timeout
+  unless a ping finds the connection dead, which reconnects the socket
+  once for all its editors. A socket takes up to `Kotoba.Collab.token/3`'s
+  new `:max_channels` editors, 100 by default; pass a lower
+  `:max_channels_per_transport` of the socket there.
+  ([#38](https://github.com/hattoriai/kotoba/issues/38))
+
 ### Fixed
 
 - Collaborator cursors keep their last known position when awareness arrives

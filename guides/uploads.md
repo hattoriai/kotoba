@@ -305,6 +305,40 @@ The editor and the rendered page load the file from its URL, so:
   the files' origin in `object-src` (PDF), `media-src` (video) and
   `img-src` (images and previews).
 
+## Files from the server
+
+A seed, an import or a file the app makes itself becomes an attachment
+the same way, without a browser: `Kotoba.Attachments.store/2` checks the
+file, stores it with the storage adapter and returns its node, as an
+upload makes it. Put it in a document with the `:attachments` option of
+`Kotoba.Content.from_markdown/2`: a paragraph of only
+`![alt](attachment:name)` images becomes that attachment, or a gallery of
+several.
+
+```elixir
+{:ok, timeline} = Kotoba.Attachments.store("priv/seeds/timeline.png")
+{:ok, day} = Kotoba.Attachments.store("priv/seeds/day.png")
+{:ok, week} = Kotoba.Attachments.store("priv/seeds/week.png")
+
+Kotoba.Content.from_markdown(
+  """
+  Every project's work on one line of time.
+
+  ![Timeline](attachment:timeline)
+
+  Zoom from a day to a week:
+
+  ![Day](attachment:day)
+  ![Week](attachment:week)
+  """,
+  attachments: %{"timeline" => timeline, "day" => day, "week" => week}
+)
+```
+
+The file at the path stays where it is; the storage has its copy. The
+options are those of an upload: `:storage`, `:key` and `:preview`, and
+`:name` and `:content_type` in place of the browser's.
+
 ## Direct uploads are not supported
 
 LiveView's `external:` uploads (the browser sends the file straight to a

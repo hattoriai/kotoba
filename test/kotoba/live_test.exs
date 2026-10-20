@@ -406,7 +406,7 @@ defmodule Kotoba.LiveTest do
             refute Map.has_key?(node, "preview")
           end)
 
-        assert log =~ ~s(no preview for the upload "cat.png")
+        assert log =~ ~s(no preview for the file "cat.png")
         assert log =~ unquote(reason)
       end
     end
