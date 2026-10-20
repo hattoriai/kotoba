@@ -3,11 +3,13 @@ defmodule Kotoba.Nodes.Attachment do
   A file in the document (type `"attachment"`), for example an image.
 
   The JSON keys are camelCase, as in Lexical: `key`, `url`, `name`,
-  `contentType`, `bytes`, `width` and `height`.
+  `contentType`, `bytes`, `width`, `height`, `preview` and `caption`.
 
-  In HTML, an attachment is a `figure` with the class `kotoba-attachment`:
+  In HTML, an attachment is a `figure` with the class `kotoba-attachment`.
+  Its caption, when it has one, is its text; else its file name:
 
-    * An image has an `img` and a `figcaption` with the name.
+    * An image has an `img`, with the caption (else the name) as its `alt`,
+      and a `figcaption` with the caption (else the name).
     * A PDF (`figure.kotoba-attachment-pdf`) has an `object` that shows it
       in the browser's viewer, with a download link inside for a browser
       that has none; with a `preview`, a link to the PDF with the preview
@@ -16,9 +18,14 @@ defmodule Kotoba.Nodes.Attachment do
       controls, `preload="metadata"`, no autoplay, the `preview` as its
       poster, and a download link inside.
     * Another file has only its `figcaption`. The `figcaption` of a PDF, a
-      video and another file is a download link.
+      video and another file is a download link, with the caption (else
+      the name) as its text; the caption also names the viewer and the
+      player (`aria-label`).
 
-  With the `:untrusted` policy, only the name is rendered.
+  As plain text, an attachment is its caption, else its name; in Markdown,
+  `![caption](url)` for an image and `[caption](url)` for another file,
+  with the name when there is no caption. With the `:untrusted` policy,
+  only the caption (else the name) is rendered, escaped.
 
     * `key` - the storage key of the file.
     * `url` - the URL of the file.
@@ -29,6 +36,10 @@ defmodule Kotoba.Nodes.Attachment do
     * `preview` - the URL of an image of a PDF's first page or a video's
       poster frame, or `nil`. The app makes it (see the `:preview` option of
       `Kotoba.Live.consume_uploads/4`).
+    * `caption` - what the attachment shows, written by the person, or
+      `nil`: for an image, its alternative text and caption. The editor
+      writes it under the selected attachment; `Kotoba.Content.from_markdown/2`
+      reads it from the alternative text of `![caption](attachment:name)`.
   """
   use Kotoba.Node, type: "attachment", kind: :decorator
 
@@ -42,6 +53,7 @@ defmodule Kotoba.Nodes.Attachment do
   field :width, :integer, omit_nil: true
   field :height, :integer, omit_nil: true
   field :preview, :string, omit_nil: true
+  field :caption, :string, omit_nil: true
 
   @doc """
   Returns `true` when the attachment is an image.
@@ -64,6 +76,24 @@ defmodule Kotoba.Nodes.Attachment do
   @spec video?(t()) :: boolean()
   def video?(%{content_type: type}), do: type in ["video/mp4", "video/webm"]
 
+  @doc """
+  Returns the text of the attachment: its caption, or its name when it has
+  none (or a blank one).
+
+  ## Examples
+
+      iex> Kotoba.Nodes.Attachment.label(%Kotoba.Nodes.Attachment{name: "timeline.png", caption: "The timeline"})
+      "The timeline"
+
+      iex> Kotoba.Nodes.Attachment.label(%Kotoba.Nodes.Attachment{name: "timeline.png", caption: nil})
+      "timeline.png"
+
+  """
+  @spec label(t()) :: String.t()
+  def label(%{caption: caption, name: name}) do
+    if is_binary(caption) and String.trim(caption) != "", do: caption, else: name
+  end
+
   @impl Kotoba.Node
   def render_html(node, opts) do
     if Renderer.policy(opts).attachments do
@@ -71,7 +101,7 @@ defmodule Kotoba.Nodes.Attachment do
       preview = node.preview && Sanitizer.link_url(node.preview, opts)
       Renderer.tag("figure", [class: class(node)], figure(node, url, preview))
     else
-      Phoenix.HTML.html_escape(node.name)
+      Phoenix.HTML.html_escape(label(node))
     end
   end
 
@@ -88,10 +118,10 @@ defmodule Kotoba.Nodes.Attachment do
       join([
         Renderer.tag(
           "img",
-          [src: url, alt: node.name, width: node.width, height: node.height],
+          [src: url, alt: label(node), width: node.width, height: node.height],
           :void
         ),
-        Renderer.tag("figcaption", [], node.name)
+        Renderer.tag("figcaption", [], label(node))
       ])
     else
       join([media(node, url, preview), Renderer.tag("figcaption", [], download(node, url))])
@@ -101,13 +131,13 @@ defmodule Kotoba.Nodes.Attachment do
   defp media(node, url, preview) do
     cond do
       pdf?(node) and preview != nil ->
-        image = Renderer.tag("img", [src: preview, alt: "Preview of " <> node.name], :void)
+        image = Renderer.tag("img", [src: preview, alt: "Preview of " <> label(node)], :void)
         Renderer.tag("a", [href: url, rel: "noopener nofollow"], image)
 
       pdf?(node) ->
         Renderer.tag(
           "object",
-          [data: url, type: "application/pdf", "aria-label": node.name],
+          [data: url, type: "application/pdf", "aria-label": label(node)],
           download(node, url)
         )
 
@@ -120,7 +150,7 @@ defmodule Kotoba.Nodes.Attachment do
             preload: "metadata",
             playsinline: true,
             poster: preview,
-            "aria-label": node.name
+            "aria-label": label(node)
           ],
           download(node, url)
         )
@@ -131,16 +161,16 @@ defmodule Kotoba.Nodes.Attachment do
   end
 
   defp download(node, url),
-    do: Renderer.tag("a", [href: url, download: true, rel: "noopener nofollow"], node.name)
+    do: Renderer.tag("a", [href: url, download: true, rel: "noopener nofollow"], label(node))
 
   defp join(parts), do: {:safe, Enum.map(parts, &elem(&1, 1))}
 
   @impl Kotoba.Node
-  def render_text(node, _opts), do: node.name
+  def render_text(node, _opts), do: label(node)
 
   @impl Kotoba.Node
   def render_markdown(node, opts) do
-    name = Markdown.escape(node.name)
+    name = Markdown.escape(label(node))
 
     destination = Markdown.destination(node.url)
 

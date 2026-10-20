@@ -97,6 +97,7 @@ import {
   type KotobaExtension,
 } from "./extensions";
 import { type Feature, builtInExtensions, parseFeatures } from "./features";
+import { attachCaptionField } from "./caption";
 import { createColorMenu, type ColorMenu } from "./colors";
 import { createLinkForm, type LinkForm } from "./link";
 import { parseLinkSchemes } from "./links";
@@ -511,6 +512,12 @@ class Instance {
           onEdit: () => this.link?.open(),
           announce: this.announce,
         }),
+      );
+    }
+
+    if (features.has("attachments")) {
+      this.floating.push(
+        attachCaptionField(editor, { host: surface, root: this.el, idPrefix: this.id, announce: this.announce }),
       );
     }
 

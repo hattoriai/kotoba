@@ -37,7 +37,8 @@ before it renders. See the [Security](security.md) guide.
 * `:default`: links are anchors (with `rel="noopener nofollow"`), and
   attachments are figures with their image or a download link.
 * `:untrusted`: links render as their text, with no anchor, and
-  attachments as their file name, with no image and no link.
+  attachments as their caption (else their file name), with no image and
+  no link.
 
 ## The HTML
 
@@ -53,7 +54,7 @@ before it renders. See the [Security](security.md) guide.
 | line break, rule | `br`, `hr` |
 | table | `div.kotoba-table-scroll` with a `table.kotoba-table`: `thead` for a header row, `tbody`, `th scope="col"`/`scope="row"`, `colspan` and `rowspan` |
 | link | `a` with `href` and `rel="noopener nofollow"` |
-| attachment | `figure.kotoba-attachment` with an `img`, and a `figcaption`; a PDF (`figure.kotoba-attachment-pdf`) has an `object` (or a link to it with the `preview` image), a video (`figure.kotoba-attachment-video`) a `video` with controls; other files a download link |
+| attachment | `figure.kotoba-attachment` with an `img` (its `alt` the caption, else the file name), and a `figcaption` with the caption (else the file name); a PDF (`figure.kotoba-attachment-pdf`) has an `object` (or a link to it with the `preview` image), a video (`figure.kotoba-attachment-video`) a `video` with controls; other files a download link |
 | gallery | `div.kotoba-gallery` with the `figure` of each attachment (a grid in `kotoba.css`) |
 | mention | `span.kotoba-mention` with `data-kind` and `data-id` |
 | an app node | what its `render_html/2` gives (see [Custom nodes](custom_nodes.md)) |

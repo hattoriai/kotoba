@@ -594,6 +594,46 @@ figure.kotoba-attachment-pdf > a > img {
   display: inline-flex;
 }
 
+/* The rendered HTML's attachment (the editor's is a div): a figure with an
+   image, a viewer or a player, and its caption. An image keeps its size, up
+   to the width of the text. The galleries below, and the PDF and video
+   rules above, size theirs. */
+figure.kotoba-attachment {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: calc(var(--kotoba-space) / 2);
+  max-width: 100%;
+}
+
+figure.kotoba-attachment > :where(img) {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  border-radius: calc(var(--kotoba-radius) - 2px);
+}
+
+figure.kotoba-attachment > :where(figcaption) {
+  max-width: 100%;
+  color: var(--kotoba-muted);
+  font-size: var(--kotoba-small);
+}
+
+/* The editor's caption of an attachment: on a line of its own, over the
+   file name and size. */
+.kotoba-attachment-captioned {
+  flex-wrap: wrap;
+}
+
+.kotoba-attachment-caption-text {
+  flex-basis: 100%;
+  overflow-wrap: anywhere;
+}
+
+.kotoba-attachment-captioned .kotoba-attachment-name {
+  color: var(--kotoba-muted);
+}
+
 /* Galleries: the editor's (a div of attachment nodes) and the rendered
    HTML's (a div of figures). */
 .kotoba-gallery {
@@ -943,7 +983,8 @@ div.kotoba-unknown {
    falls back to the editor's own property. */
 
 .kotoba-selection-menu,
-.kotoba-link-card {
+.kotoba-link-card,
+.kotoba-caption-field {
   position: absolute;
   z-index: 20;
   display: flex;
@@ -963,12 +1004,14 @@ div.kotoba-unknown {
 
 .kotoba-selection-menu[hidden],
 .kotoba-link-card[hidden],
-.kotoba-link-card [hidden] {
+.kotoba-link-card [hidden],
+.kotoba-caption-field[hidden] {
   display: none;
 }
 
 .kotoba-selection-menu[data-placement="bottom"],
-.kotoba-link-card[data-placement="bottom"] {
+.kotoba-link-card[data-placement="bottom"],
+.kotoba-caption-field[data-placement="bottom"] {
   animation-name: kotoba-float-in-below;
 }
 
@@ -982,7 +1025,8 @@ div.kotoba-unknown {
 
 @media (prefers-reduced-motion: reduce) {
   .kotoba-selection-menu,
-  .kotoba-link-card {
+  .kotoba-link-card,
+  .kotoba-caption-field {
     animation: none;
   }
 }
@@ -1068,6 +1112,39 @@ div.kotoba-unknown {
 
 .kotoba-link-card-url:focus-visible,
 .kotoba-link-card-button:focus-visible {
+  outline: none;
+  box-shadow: var(--kotoba-focus-ring, 0 0 0 2px var(--kotoba-accent));
+}
+
+/* The caption field: under the selected attachment, a line to write its
+   caption on. */
+.kotoba-caption-field {
+  width: min(24rem, 100%);
+  box-sizing: border-box;
+}
+
+.kotoba-caption-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.35rem 0.5rem;
+  border: 0;
+  border-radius: calc(var(--kotoba-radius) - 2px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: var(--kotoba-small);
+  line-height: 1.4;
+}
+
+.kotoba-caption-input::placeholder {
+  color: var(--kotoba-muted);
+}
+
+.kotoba-caption-input:hover {
+  background: var(--kotoba-floating-hover, var(--kotoba-surface));
+}
+
+.kotoba-caption-input:focus-visible {
   outline: none;
   box-shadow: var(--kotoba-focus-ring, 0 0 0 2px var(--kotoba-accent));
 }
