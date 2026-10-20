@@ -113,10 +113,10 @@ defmodule Kotoba.ColorsTest do
       assert html(input) == "<p>ab<mark>c</mark></p>"
     end
 
-    test "text and Markdown have no colors" do
+    test "text and Markdown have no colors: a highlight is the default one" do
       doc = doc([paragraph([colored("t", 128, "color: var(--kotoba-color-red);")])])
       assert Renderer.to_text(doc) == "t"
-      assert Renderer.to_markdown(doc) == "t"
+      assert Renderer.to_markdown(doc) == "==t=="
     end
   end
 
