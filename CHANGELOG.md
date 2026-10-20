@@ -7,11 +7,14 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-10-20
+
 ### Fixed
 
 - A nested list in rendered HTML no longer shows a second marker: the
   item that holds it, which has no text of its own, has the
   `kotoba-li-nested` class, as in the editor.
+  ([#48](https://github.com/hattoriai/kotoba/pull/48))
 
 ## [0.4.0] - 2026-10-20
 
@@ -416,7 +419,8 @@ The first release.
 - Guides: quickstart, forms, uploads, prompts, custom nodes, theming,
   security, accessibility and known limits.
 
-[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/hattoriai/kotoba/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/hattoriai/kotoba/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/hattoriai/kotoba/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/hattoriai/kotoba/compare/v0.2.1...v0.2.2
