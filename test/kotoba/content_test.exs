@@ -230,6 +230,77 @@ defmodule Kotoba.ContentTest do
   end
 
   describe "from_markdown/2" do
+    @shot %Kotoba.Nodes.Attachment{
+      key: "2026/10/a-shot.png",
+      url: "/files/2026/10/a-shot.png",
+      name: "shot.png",
+      content_type: "image/png",
+      bytes: 1024,
+      width: 1280,
+      height: 800
+    }
+
+    test "an attachment: image alone in a paragraph is that attachment" do
+      content =
+        Content.from_markdown("Before.\n\n![The timeline](attachment:shot)\n\nAfter.",
+          attachments: %{"shot" => @shot}
+        )
+
+      {:ok, doc} = Kotoba.Document.parse(content.doc)
+
+      assert [%Kotoba.Nodes.Attachment{key: "2026/10/a-shot.png", width: 1280}] =
+               Kotoba.Document.attachments(doc)
+
+      assert content.html =~ ~s(<figure class="kotoba-attachment">)
+      assert content.html =~ ~s(src="/files/2026/10/a-shot.png")
+      assert [_, _, _] = content.doc["root"]["children"]
+    end
+
+    test "several attachment: images in a paragraph are a gallery" do
+      other = %{@shot | key: "2026/10/b.png", url: "/files/2026/10/b.png", name: "b.png"}
+
+      content =
+        Content.from_markdown("![A](attachment:a)\n![B](attachment:b)",
+          attachments: %{"a" => @shot, "b" => other}
+        )
+
+      assert [
+               %{
+                 "type" => "gallery",
+                 "children" => [%{"name" => "shot.png"}, %{"name" => "b.png"}]
+               }
+             ] =
+               content.doc["root"]["children"]
+
+      assert content.html =~ ~s(<div class="kotoba-gallery">)
+    end
+
+    test "an attachment: image among text, or by URL, stays an image" do
+      content =
+        Content.from_markdown("See ![A](attachment:a) here.\n\n![B](https://example.com/b.png)",
+          attachments: %{"a" => @shot}
+        )
+
+      assert [%{"type" => "paragraph"}, %{"type" => "paragraph"}] =
+               content.doc["root"]["children"]
+    end
+
+    test "with the attachments feature off, the attachments are their names" do
+      content =
+        Content.from_markdown("![A](attachment:a)",
+          attachments: %{"a" => @shot},
+          features: Kotoba.Features.all() -- [:attachments]
+        )
+
+      assert content.text == "shot.png"
+    end
+
+    test "an attachment that is not in the map raises" do
+      assert_raise ArgumentError, ~r/no attachment named "missing"/, fn ->
+        Content.from_markdown("![A](attachment:missing)", attachments: %{})
+      end
+    end
+
     test "a paragraph" do
       assert Content.from_markdown("Hello there.").text == "Hello there."
     end
