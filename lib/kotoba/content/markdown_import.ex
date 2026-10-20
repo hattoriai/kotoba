@@ -27,6 +27,8 @@ defmodule Kotoba.Content.MarkdownImport do
   @parse_options [
     extension: [
       strikethrough: true,
+      underline: true,
+      highlight: true,
       table: true,
       autolink: true,
       tasklist: true,
@@ -37,7 +39,9 @@ defmodule Kotoba.Content.MarkdownImport do
   @bold 1
   @italic 2
   @strikethrough 4
+  @underline 8
   @code 16
+  @highlight 128
 
   @doc "Returns the root node JSON for a Markdown string."
   @spec root(String.t(), keyword()) :: map()
@@ -382,6 +386,12 @@ defmodule Kotoba.Content.MarkdownImport do
 
   defp inline_node(%MDEx.Strikethrough{nodes: nodes}, features, format),
     do: inline(nodes, features, with_format(format, features, :strikethrough, @strikethrough))
+
+  defp inline_node(%MDEx.Underline{nodes: nodes}, features, format),
+    do: inline(nodes, features, with_format(format, features, :underline, @underline))
+
+  defp inline_node(%MDEx.Highlight{nodes: nodes}, features, format),
+    do: inline(nodes, features, with_format(format, features, :highlight, @highlight))
 
   defp inline_node(%MDEx.Code{literal: literal}, features, format),
     do: [text_node(literal, with_format(format, features, :inline_code, @code))]

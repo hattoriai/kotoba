@@ -9,8 +9,10 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.4.0] - 2026-10-20
 
-Attachments of files on the server, one collaboration socket for the
-shared editors of a page, and stable collaborator cursors.
+Attachments of files on the server, underline and highlight in Markdown,
+one collaboration socket for the shared editors of a page, and stable
+collaborator cursors. This release has a breaking change, listed under
+Changed.
 
 ### Added
 
@@ -25,6 +27,15 @@ shared editors of a page, and stable collaborator cursors.
 
 ### Changed
 
+- Underline and highlight have Markdown: `Kotoba.Renderer.to_markdown/2`
+  writes `__underline__` and `==highlight==`, and
+  `Kotoba.Content.from_markdown/2` reads them back. They were dropped
+  before, so a document turned into Markdown and back (an AI translation,
+  say) lost them. Text colors and the color of a highlight still have no
+  Markdown.
+  ([#47](https://github.com/hattoriai/kotoba/pull/47))
+- **Breaking:** `__text__` read from Markdown is an underline, not bold.
+  Kotoba writes bold as `**text**`.
 - The warning of an upload's preview that fails names "the file" rather
   than "the upload".
 - The shared editors of a page share one collaboration socket, each with

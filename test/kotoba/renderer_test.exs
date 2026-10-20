@@ -778,7 +778,7 @@ defmodule Kotoba.RendererTest do
       ]
 
       assert input |> doc() |> Renderer.to_markdown() ==
-               "## Title\n\n**bold** *it* ~~gone~~ ``a`b`` [link](<https://a.b/x y>) and \\*stars\\* under"
+               "## Title\n\n**bold** *it* ~~gone~~ ``a`b`` [link](<https://a.b/x y>) and \\*stars\\* __under__"
     end
 
     test "lists" do
@@ -899,7 +899,7 @@ defmodule Kotoba.RendererTest do
         {"```elixir", "\\`\\`\\`elixir"},
         {"~~~", "\\~\\~\\~"},
         {"---", "\\---"},
-        {"===", "\\==="},
+        {"===", "\\=\\=="},
         {"  # indented", "  \\# indented"},
         {"a\n# b\n1. c", "a\n\\# b\n1\\. c"}
       ]

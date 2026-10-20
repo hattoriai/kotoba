@@ -19,6 +19,8 @@ defmodule Kotoba.Markdown do
   def escape(text) do
     text
     |> String.replace(~r/[\\`*_\[\]~<&]/, "\\\\\\0")
+    # `==` would open a highlight.
+    |> String.replace(~r/=(?==)/, "\\\\=")
     |> then(
       &Regex.replace(@line_start, &1, fn _all, lead, digits, mark, symbol ->
         escape_line_start(lead, digits, mark, symbol)
