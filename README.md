@@ -209,6 +209,7 @@ Restart `mix dev` after a change in `dev/lib`.
 mix test                   # the ExUnit suite
 mix test --include build   # also mix kotoba.build and mix hex.build
 mix test.e2e               # the Playwright browser tests
+npm run typecheck --prefix assets   # the type check of the TypeScript
 mix precommit              # compile, format, credo --strict and test
 mix dialyzer
 ```
