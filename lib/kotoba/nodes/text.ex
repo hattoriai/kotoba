@@ -152,7 +152,10 @@ defmodule Kotoba.Nodes.Text do
     capitalize: {"span", "kotoba-capitalize"}
   ]
 
-  @markdown [bold: "**", italic: "*", strikethrough: "~~"]
+  # Underline and highlight are extensions of Markdown (comrak's, which
+  # Kotoba.Content.from_markdown/2 reads): `__underline__` and `==highlight==`.
+  # Bold is always `**`, so `__` is free for underline.
+  @markdown [bold: "**", italic: "*", underline: "__", strikethrough: "~~", highlight: "=="]
 
   @colors ~w(red orange yellow green blue purple gray)
   @default_highlight "yellow"
@@ -283,8 +286,10 @@ defmodule Kotoba.Nodes.Text do
 
   @doc """
   Returns the formats of the text that Markdown has markers for, in the
-  order of their markers: `:bold`, `:italic` and `:strikethrough`. Inline
-  code is the body itself (see `markdown_body/1`).
+  order of their markers: `:bold`, `:italic`, `:underline`,
+  `:strikethrough` and `:highlight`. Inline code is the body itself (see
+  `markdown_body/1`). A text color, and the color of a highlight, have no
+  Markdown: the text keeps its words and the default highlight.
   """
   @spec markdown_formats(t()) :: [atom()]
   def markdown_formats(node) do

@@ -273,7 +273,9 @@ defmodule Kotoba.Content do
 
   MDEx (comrak, a port of GitHub's cmark-gfm) reads the Markdown:
   CommonMark and GitHub Flavored Markdown, with tables, task lists,
-  strikethrough, autolinks and footnotes. Each construct becomes its
+  strikethrough, autolinks and footnotes, and `__underline__` and
+  `==highlight==`, as `Kotoba.Renderer.to_markdown/2` writes them (bold is
+  `**`). Each construct becomes its
   node: quotes hold blocks, an image is a `Kotoba.Nodes.Image`, and a
   paragraph of `&nbsp;` is a blank line (see `Kotoba.Nodes.Paragraph`), so
   the Markdown of `Kotoba.Renderer.to_markdown/2` reads back to the same

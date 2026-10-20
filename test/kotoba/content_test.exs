@@ -230,6 +230,16 @@ defmodule Kotoba.ContentTest do
   end
 
   describe "from_markdown/2" do
+    test "underline and highlight, as Kotoba writes them, read back" do
+      content = Content.from_markdown("**bold**, __under__, ==mark== and a \\== b")
+
+      assert content.html ==
+               "<p><strong>bold</strong>, <u>under</u>, <mark>mark</mark> and a == b</p>"
+
+      {:ok, doc} = Kotoba.Document.parse(content.doc)
+      assert Kotoba.Renderer.to_markdown(doc) == "**bold**, __under__, ==mark== and a \\== b"
+    end
+
     @shot %Kotoba.Nodes.Attachment{
       key: "2026/10/a-shot.png",
       url: "/files/2026/10/a-shot.png",

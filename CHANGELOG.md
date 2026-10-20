@@ -7,6 +7,15 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Underline and highlight have Markdown: `Kotoba.Renderer.to_markdown/2`
+  writes `__underline__` and `==highlight==`, and
+  `Kotoba.Content.from_markdown/2` reads them back. They were dropped
+  before, so a document turned into Markdown and back (an AI translation,
+  say) lost them. `__text__` read from Markdown is now an underline, not
+  bold. Text colors and the color of a highlight still have no Markdown.
+
 ### Added
 
 - `Kotoba.Attachments.store/2` makes an attachment of a file on the
