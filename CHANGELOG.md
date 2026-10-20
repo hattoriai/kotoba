@@ -7,6 +7,10 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-20
+
+Attachment captions, and two fixes to rendered HTML.
+
 ### Added
 
 - Attachments have a caption: the optional `caption` field of
@@ -25,13 +29,19 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   of `![The timeline of the project](attachment:timeline)` the
   attachment's caption, unless it is empty or the file name. A caption
   the attachment has already wins.
+  ([#49](https://github.com/hattoriai/kotoba/pull/49))
 
 ### Fixed
 
+- A nested list in rendered HTML no longer shows a second marker: the
+  item that holds it, which has no text of its own, has the
+  `kotoba-li-nested` class, as in the editor.
+  ([#48](https://github.com/hattoriai/kotoba/pull/48))
 - `kotoba.css` sizes a rendered image attachment: its `img` is no wider
   than the text and keeps its proportions, with the radius of the
   editor's images, and its `figcaption` is small and muted. A large
   screenshot rendered at its natural width and overflowed the column.
+  ([#49](https://github.com/hattoriai/kotoba/pull/49))
 
 ## [0.4.0] - 2026-10-20
 
@@ -436,7 +446,8 @@ The first release.
 - Guides: quickstart, forms, uploads, prompts, custom nodes, theming,
   security, accessibility and known limits.
 
-[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/hattoriai/kotoba/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/hattoriai/kotoba/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/hattoriai/kotoba/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/hattoriai/kotoba/compare/v0.2.1...v0.2.2

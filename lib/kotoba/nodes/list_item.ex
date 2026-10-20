@@ -18,19 +18,14 @@ defmodule Kotoba.Nodes.ListItem do
 
   @impl Kotoba.Node
   def render_html(node, opts) do
+    # An item that holds only a nested list has no marker of its own, as
+    # in the editor: the nested list's items have theirs.
     class =
-      case {opts[:parent], node.checked} do
-        {%{__struct__: @list, list_type: "check"}, true} ->
-          "kotoba-checked"
-
-        {%{__struct__: @list, list_type: "check"}, false} ->
-          "kotoba-unchecked"
-
-        {%{__struct__: @list, list_type: "check"}, nil} ->
-          unless nested_only?(node), do: "kotoba-unchecked"
-
-        _other ->
-          nil
+      case {nested_only?(node), opts[:parent], node.checked} do
+        {true, _parent, _checked} -> "kotoba-li-nested"
+        {false, %{__struct__: @list, list_type: "check"}, true} -> "kotoba-checked"
+        {false, %{__struct__: @list, list_type: "check"}, _unchecked} -> "kotoba-unchecked"
+        _other -> nil
       end
 
     Renderer.tag("li", [class: class], Renderer.html_children(node, opts))
