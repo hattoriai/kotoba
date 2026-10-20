@@ -194,6 +194,32 @@ root. Its HTML is a `div.kotoba-gallery` with the `figure` of each image,
 and `kotoba.css` lays it out as a grid. `Kotoba.Document.attachments/1`
 returns the attachments of galleries too, in order.
 
+## Captions
+
+An attachment can have a caption: what it shows, in the person's words.
+The file name of a screenshot (`timeline.png`) says little to a reader or
+to a screen reader; a caption ("The timeline of the project") says what is
+in it.
+
+In the editor, a field shows under the attachment that is selected. The
+person clicks in it, or presses Alt+F10, writes the caption, and presses
+Enter (or leaves the field) to keep it; Escape leaves it as it was. The
+caption shows under the attachment, over its file name. Keeping a caption
+is one change of the document: Cmd/Ctrl+Z takes it back, and a shared
+editor (see [Collaboration](collaboration.md)) sends it to the others. An
+empty caption removes it.
+
+The caption is the `caption` of the attachment node (`Kotoba.Nodes.Attachment`,
+JSON key `caption`, absent when there is none). It renders as:
+
+* an image's `alt` text and its `figcaption`;
+* the text of the download link of a PDF, a video or another file, and
+  the name (`aria-label`) of the PDF's viewer and the video's player;
+* the text in `Kotoba.Renderer.to_text/2`, and the text of
+  `![caption](url)` (or `[caption](url)`) in `Kotoba.Renderer.to_markdown/2`.
+
+With no caption, the file name takes its place everywhere, as before.
+
 ## PDF and video previews
 
 A PDF and a video show in the document, not as a file name:
@@ -313,7 +339,9 @@ file, stores it with the storage adapter and returns its node, as an
 upload makes it. Put it in a document with the `:attachments` option of
 `Kotoba.Content.from_markdown/2`: a paragraph of only
 `![alt](attachment:name)` images becomes that attachment, or a gallery of
-several.
+several. The `alt` text is the attachment's caption (see
+[Captions](#captions)), unless it is empty or the file name; a `caption`
+the node has already wins.
 
 ```elixir
 {:ok, timeline} = Kotoba.Attachments.store("priv/seeds/timeline.png")
@@ -324,7 +352,7 @@ Kotoba.Content.from_markdown(
   """
   Every project's work on one line of time.
 
-  ![Timeline](attachment:timeline)
+  ![The timeline of every project](attachment:timeline)
 
   Zoom from a day to a week:
 

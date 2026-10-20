@@ -47,7 +47,7 @@ export const SELECTION_MENU_COMMANDS: readonly string[] = [
 const GAP = 8;
 
 /** The panels of the editor that a floating panel gives way to. */
-const BUSY = ".kotoba-link-form:not([hidden]), .kotoba-color-menu:not([hidden]), .kotoba-menu:not([hidden]), .kotoba-assist-menu:not([hidden])";
+export const BUSY = ".kotoba-link-form:not([hidden]), .kotoba-color-menu:not([hidden]), .kotoba-menu:not([hidden]), .kotoba-assist-menu:not([hidden])";
 
 export interface Floating {
   dispose(): void;

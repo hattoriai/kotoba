@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 
-import { attachFiles, brokenWebm, expectNodes, openEditor, pdf, webm } from "./support";
+import { attachFiles, brokenWebm, expectNodes, openEditor, pdf, png, webm } from "./support";
 
 const EDITOR = "post_body_editor";
 const editor = (page: Page) => page.locator(`#${EDITOR}`);
@@ -118,4 +118,28 @@ test("a file that claims to be a video but is not is a download", async ({ page 
 
   const response = await page.request.get(String(node?.url));
   expect(response.headers()["content-disposition"]).toBe("attachment");
+});
+
+test("a saved image is no wider than its text, and its caption is small", async ({ page }) => {
+  const editable = await openEditor(page);
+  await editable.click();
+  await attachFiles(page, EDITOR, [png("wide.png", 2560, 16)]);
+  await expectNodes(page, "attachment", 1);
+
+  await page.getByRole("button", { name: "Submit" }).click();
+  const figure = page.locator("#stored-content figure.kotoba-attachment");
+  const image = figure.locator("img");
+  await expect(image).toHaveAttribute("width", "2560");
+  const column = await page.locator("#stored-content").boundingBox();
+  const box = await image.boundingBox();
+  expect(box!.width).toBeLessThanOrEqual(column!.width);
+  expect(box!.width).toBeGreaterThan(0);
+  expect(box!.height).toBeLessThan(16);
+  expect(await image.evaluate((element) => getComputedStyle(element).display)).toBe("block");
+
+  const sizes = await figure.evaluate((element) => {
+    const caption = element.querySelector("figcaption")!;
+    return [parseFloat(getComputedStyle(caption).fontSize), parseFloat(getComputedStyle(element).fontSize)];
+  });
+  expect(sizes[0]).toBeLessThan(sizes[1]!);
 });

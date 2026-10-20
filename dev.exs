@@ -994,6 +994,7 @@ defmodule KotobaDev.CollabLive do
       <button type="submit" id="collab-save">Publish accepted revision</button>
     </.form>
     <button id="collab-insert" phx-click="insert">Insert tag</button>
+    <button id="collab-attach" phx-click="attach">Insert image</button>
     <.kotoba_content :if={@saved} content={@saved} id="collab-saved" />
     <p :if={@saved} id="collab-saved-text">{@saved.text}</p>
     """
@@ -1024,6 +1025,20 @@ defmodule KotobaDev.CollabLive do
     do:
       {:noreply,
        Kotoba.Live.insert_node(socket, "shared_editor", %KotobaDev.Nodes.Tag{label: "shared"})}
+
+  # An image attachment, for the shared caption (its file is not stored).
+  def handle_event("attach", _params, socket),
+    do:
+      {:noreply,
+       Kotoba.Live.insert_node(socket, "shared_editor", %Kotoba.Nodes.Attachment{
+         key: "dev/shared.png",
+         url: "/uploads/kotoba/dev/shared.png",
+         name: "shared.png",
+         content_type: "image/png",
+         bytes: 1024,
+         width: 160,
+         height: 90
+       })}
 end
 
 defmodule KotobaDev.ManyCollabLive do

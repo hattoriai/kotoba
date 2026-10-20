@@ -29,7 +29,7 @@ not (`Kotoba.Features`):
 | `code_blocks` | code blocks, highlighted, with a language picker | Code block, Code language | Tab inserts a tab | ` ``` `, ` ```elixir ` |
 | `horizontal_rules` | horizontal rules | Horizontal rule | | `---`, `***`, `___` |
 | `tables` | tables | Table, and the Table group | Tab, Shift+Tab | |
-| `attachments` | files, images and galleries (with `uploads`) | Attach a file, and the Image group | drop, paste; `Alt+Left`, `Alt+Right` in a gallery | |
+| `attachments` | files, images and galleries (with `uploads`) | Attach a file, and the Image group | drop, paste; `Alt+Left`, `Alt+Right` in a gallery; `Alt+F10` to the caption | |
 | `mentions` | prompts and mentions (with `prompts`) | | the trigger | |
 | `images` | images from a URL, in the text | | | `![alt](url)` (pasted) |
 | `footnotes` | footnotes and their references | | | `[^1]` and `[^1]: text` (pasted) |
@@ -362,6 +362,15 @@ automatic link (a URL typed in the text) has only the URL. Alt+F10 moves
 the focus to the card, and Escape closes it until the caret moves.
 Cmd/Ctrl+click on a link in the editor opens it in a new tab. The card is
 a `div.kotoba-link-card`, themed with the same properties as the
+selection menu.
+
+## The caption field
+
+When an attachment is selected, a field shows under it for its caption
+(see [Captions](uploads.md#captions)). Alt+F10 moves the focus to it,
+Enter keeps the caption, and Escape in the editor hides it until the
+selection changes. It is a `div.kotoba-caption-field` with an
+`input.kotoba-caption-input`, themed with the same properties as the
 selection menu.
 
 ## More

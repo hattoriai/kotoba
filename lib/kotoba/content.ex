@@ -299,8 +299,10 @@ defmodule Kotoba.Content do
       (`Kotoba.Nodes.Attachment`, as `Kotoba.Attachments.store/2` returns
       them). A paragraph of only `![alt](attachment:name)` images becomes
       the attachment of that name, or a gallery of several, as the editor
-      makes them for a file someone drops in. A name that is not in the
-      map raises `ArgumentError`.
+      makes them for a file someone drops in. The image's alternative
+      text is the attachment's `caption` (its `alt` and `figcaption` in
+      HTML), unless it is empty or the file name; a `caption` the node has
+      already wins. A name that is not in the map raises `ArgumentError`.
     * `:nodes` and `:policy` - as in `rerender/2`.
 
   ## Examples

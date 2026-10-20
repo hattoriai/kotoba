@@ -45,7 +45,8 @@ Render content from people that the app does not trust with the
 ```
 
 With `:untrusted`, links render as their text, with no anchor, and
-attachments render as their file name, with no image and no link. See
+attachments render as their caption (else their file name), escaped, with
+no image and no link. See
 `Kotoba.Sanitizer`.
 
 ## The cached HTML
