@@ -119,7 +119,9 @@ defmodule Kotoba.MixProject do
         "guides/security.md",
         "guides/accessibility.md",
         "guides/limits.md",
-        "CHANGELOG.md"
+        "CHANGELOG.md",
+        "CONTRIBUTING.md",
+        "SECURITY.md"
       ],
       groups_for_extras: [
         Guides: [
