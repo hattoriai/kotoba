@@ -13,14 +13,24 @@
 
 import {
   $applyNodeReplacement,
+  $createParagraphNode,
+  $createTextNode,
+  $getNearestNodeFromDOMNode,
+  $getNodeByKey,
+  $getRoot,
   $getSelection,
+  $isDecoratorNode,
+  $isParagraphNode,
   $isElementNode,
   $isRangeSelection,
   $isTextNode,
   COMMAND_PRIORITY_LOW,
+  COMMAND_PRIORITY_NORMAL,
+  DROP_COMMAND,
   DecoratorNode,
   KEY_BACKSPACE_COMMAND,
   KEY_DELETE_COMMAND,
+  PASTE_COMMAND,
   mergeRegister,
   type EditorConfig,
   type LexicalEditor,
@@ -243,4 +253,128 @@ export function registerEmbedKeys(editor: LexicalEditor): () => void {
     editor.registerCommand(KEY_BACKSPACE_COMMAND, remove(true), COMMAND_PRIORITY_LOW),
     editor.registerCommand(KEY_DELETE_COMMAND, remove(false), COMMAND_PRIORITY_LOW),
   );
+}
+
+/** Asks the server what a URL is: `reply` gets the embed (`kind`, `ref`, `title`), or `null` for a link. */
+export type EmbedResolver = (url: string, reply: (embed: unknown) => void) => void;
+
+const URL_ONLY = /^https?:\/\/\S+$/i;
+
+/** The URL of a paste or a drop that is a URL and nothing else, or `null`. */
+export function soleUrl(data: DataTransfer | null): string | null {
+  if (data === null || data.types.includes("application/x-lexical-editor")) return null;
+  const list = data.getData("text/uri-list").split(/\r?\n/).filter((line) => line !== "" && !line.startsWith("#"));
+  const text = (list.length === 1 ? list[0] : data.getData("text/plain")).trim();
+  return URL_ONLY.test(text) ? text : null;
+}
+
+function embedOf(payload: unknown): EmbedPayload | null {
+  if (typeof payload !== "object" || payload === null) return null;
+  const { kind, ref, title } = payload as Record<string, unknown>;
+  if (typeof kind !== "string" || typeof ref !== "string" || kind === "" || ref === "") return null;
+  return { kind, ref, title: typeof title === "string" ? title : "" };
+}
+
+/**
+ * A link to something the app embeds becomes the embed: a URL pasted alone
+ * on an empty line goes in as a link, and becomes the embed when the
+ * server says what it is; a URL dropped on the editor goes in after the
+ * block it is dropped on, as the embed or else as a link.
+ */
+export function registerEmbedLinks(
+  editor: LexicalEditor,
+  options: { resolve: EmbedResolver; announce: (message: string) => void; timeout?: number },
+): () => void {
+  const ask = (url: string, then: (embed: EmbedPayload | null) => void): void => {
+    let done = false;
+    const fallback = window.setTimeout(() => {
+      if (done) return;
+      done = true;
+      then(null);
+    }, options.timeout ?? 5000);
+    options.resolve(url, (payload) => {
+      if (done) return;
+      done = true;
+      window.clearTimeout(fallback);
+      then(embedOf(payload));
+    });
+  };
+
+  const announce = (embed: EmbedPayload): void => options.announce(`Embedded ${embed.title || embed.kind}`);
+
+  return mergeRegister(
+    editor.registerCommand(
+      PASTE_COMMAND,
+      (event) => {
+        if (!(event instanceof ClipboardEvent)) return false;
+        const url = soleUrl(event.clipboardData);
+        const selection = $getSelection();
+        if (url === null || !$isRangeSelection(selection) || !selection.isCollapsed()) return false;
+        const block = selection.anchor.getNode().getTopLevelElement();
+        if (!$isParagraphNode(block) || block.getTextContent() !== "") return false;
+
+        event.preventDefault();
+        selection.insertRawText(url);
+        const key = block.getKey();
+        ask(url, (embed) => {
+          if (embed === null) return;
+          editor.update(() => {
+            const paragraph = $getNodeByKey(key);
+            // The person went on writing on the line: it stays a link.
+            if (!$isParagraphNode(paragraph) || paragraph.getTextContent().trim() !== url) return;
+            const node = $createEmbedNode(embed);
+            paragraph.replace(node);
+            $afterEmbed(node);
+          });
+          announce(embed);
+        });
+        return true;
+      },
+      // Before the Markdown paste.
+      COMMAND_PRIORITY_NORMAL,
+    ),
+    editor.registerCommand(
+      DROP_COMMAND,
+      (event) => {
+        const url = soleUrl(event.dataTransfer);
+        if (url === null) return false;
+        const target = event.target instanceof Node ? $getNearestNodeFromDOMNode(event.target) : null;
+        const block = target?.getTopLevelElement() ?? (target !== null && $isDecoratorNode(target) ? target : null);
+        const key = block?.getKey() ?? null;
+
+        event.preventDefault();
+        ask(url, (embed) => {
+          editor.update(() => {
+            const after = key === null ? null : $getNodeByKey(key);
+            const node = embed === null ? $linkParagraph(url) : $createEmbedNode(embed);
+            if (after !== null && after.isAttached()) after.insertAfter(node);
+            else $getRoot().append(node);
+            if (embed !== null) $afterEmbed(node);
+            else node.selectEnd();
+          });
+          if (embed !== null) announce(embed);
+        });
+        return true;
+      },
+      COMMAND_PRIORITY_NORMAL,
+    ),
+  );
+}
+
+// A paragraph with the URL as a link.
+function $linkParagraph(url: string) {
+  const paragraph = $createParagraphNode();
+  paragraph.append($createTextNode(url));
+  return paragraph;
+}
+
+// The caret goes after an embed: on the next block, or a new paragraph.
+function $afterEmbed(node: LexicalNode): void {
+  const next = node.getNextSibling();
+  if ($isParagraphNode(next)) next.selectStart();
+  else {
+    const paragraph = $createParagraphNode();
+    node.insertAfter(paragraph);
+    paragraph.select();
+  }
 }

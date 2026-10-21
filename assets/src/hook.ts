@@ -115,7 +115,7 @@ import {
 } from "./protocol";
 import { createSuggestions, type AssistAction, type Suggestions } from "./suggestions";
 import { buildCommandBar, createToolbar, type EmbedButton, type Toolbar } from "./toolbar";
-import { registerEmbeds } from "./nodes/embed";
+import { registerEmbedLinks, registerEmbeds } from "./nodes/embed";
 import { EMBED_ICONS, type EmbedIcon } from "./icons";
 import { SELECTION_MENU_COMMANDS, attachLinkCard, attachSelectionMenu, type Floating } from "./selection_menu";
 import { createUploads, type Uploads } from "./uploads";
@@ -435,6 +435,16 @@ class Instance {
       this.resendEmbeds = embeds.resend;
 
       const component = document.querySelector<HTMLElement>(embedsTarget);
+      // Links to what the app embeds become embeds (kotoba_embeds's `resolve`).
+      if (component?.dataset.resolve === "true" && !this.config.readonly) {
+        this.cleanups.push(
+          registerEmbedLinks(editor, {
+            resolve: (url, reply) =>
+              this.pushEmbeds({ action: "resolve", url }, (payload) => reply((payload as { embed?: unknown } | null)?.embed ?? null)),
+            announce: this.announce,
+          }),
+        );
+      }
       if (component?.dataset.picker === "true") {
         const icon = component.dataset.icon;
         embedButton = {
@@ -834,10 +844,10 @@ class Instance {
   };
 
   /** Sends `kotoba:embeds` to the editor's Kotoba.Embeds component. */
-  private pushEmbeds(payload: Record<string, unknown>): void {
+  private pushEmbeds(payload: Record<string, unknown>, reply?: (payload: unknown) => void): void {
     const target = this.config.embeds;
     if (target === null || this.destroyed || document.querySelector(target) === null) return;
-    this.hook.pushEventTo(target, "kotoba:embeds", { ...payload, v: PROTOCOL_VERSION, id: this.id });
+    this.hook.pushEventTo(target, "kotoba:embeds", { ...payload, v: PROTOCOL_VERSION, id: this.id }, reply);
   }
 
   /** After a reconnection: a new LiveView process knows no embeds yet. */

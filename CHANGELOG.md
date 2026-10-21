@@ -28,6 +28,10 @@ On Issho 0.3: agents move with Issho's motion, and following is the room's.
   LiveView's own content (its events, its LiveComponents), and stays as
   people type around it. An editor has embeds with `embeds`, and each
   editor chooses what it embeds.
+- A link to something the app embeds becomes the embed: pasted alone on a
+  line, or dropped on the editor, a URL goes to `kotoba_embeds/1`'s
+  `resolve` (`fn url -> embed | nil end`), and becomes the canvas it
+  links to; any other URL stays a link.
 - An embeds picker of your options (`kotoba_embed_option/1`), opened from
   a toolbar button of your naming (`label="Canvas"`, `icon="canvas"`), and
   `Kotoba.Live.insert_embed/4`.

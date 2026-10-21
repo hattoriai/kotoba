@@ -2,7 +2,7 @@
 // that the development app renders).
 
 import { expect, test, type Page } from "@playwright/test";
-import { openEditor, readDocument, settle } from "./support";
+import { openEditor, pasteData, readDocument, settle } from "./support";
 
 const EDITOR = "embeds-body";
 const polls = (page: Page) => page.locator(`#${EDITOR} .kotoba-embed-slot .poll`);
@@ -105,4 +105,39 @@ test("the reading page: no toolbar, and read-only embeds", async ({ page }) => {
   await expect(page.locator(`#${EDITOR} .kotoba-toolbar`)).toBeHidden();
   await expect(polls(page).locator("li button").first()).toBeDisabled();
   await expect(polls(page).getByRole("button", { name: "Full screen" })).toBeEnabled();
+});
+
+test("a link to a poll of the app, pasted alone on a line, becomes the poll; in a sentence it stays a link", async ({ page }) => {
+  const editable = await open(page);
+  await page.getByText("Vote in the poll").click();
+  await page.keyboard.press("End");
+  await page.keyboard.press("Enter");
+  await pasteData(page, editable, { text: "https://kotoba.test/polls/launch" });
+  await expect(polls(page)).toHaveCount(2);
+  await expect(polls(page).nth(1)).toContainText("When do we launch?");
+  const embeds = (await readDocument(page, "doc_body")).root.children!.filter((node) => node.type === "embed");
+  expect(embeds.map((node) => node.ref)).toEqual(["lunch", "launch"]);
+
+  // In a sentence, and to what the app does not know: links.
+  await page.keyboard.type("See ");
+  await pasteData(page, editable, { text: "https://kotoba.test/polls/lunch" });
+  await page.keyboard.press("Enter");
+  await pasteData(page, editable, { text: "https://example.com/elsewhere" });
+  await page.waitForTimeout(400);
+  await expect(polls(page)).toHaveCount(2);
+  await expect(editable.locator("a", { hasText: "https://kotoba.test/polls/lunch" })).toBeVisible();
+  await expect(editable.locator("a", { hasText: "https://example.com/elsewhere" })).toBeVisible();
+});
+
+test("a link dropped on the editor becomes the poll", async ({ page }) => {
+  const editable = await open(page);
+  await page.getByText("The team decides").evaluate((element) => {
+    const data = new DataTransfer();
+    data.setData("text/uri-list", "https://kotoba.test/polls/launch");
+    data.setData("text/plain", "https://kotoba.test/polls/launch");
+    element.dispatchEvent(new DragEvent("drop", { dataTransfer: data, bubbles: true, cancelable: true }));
+  });
+  await expect(polls(page)).toHaveCount(2);
+  await expect(polls(page).first()).toContainText("When do we launch?");
+  expect(await editable.locator(":scope > *").first().innerText()).toContain("The team decides");
 });

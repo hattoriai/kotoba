@@ -7,7 +7,8 @@ defmodule Kotoba.Embeds do
   `embeds` tells it, with `"kotoba:embeds"` events, when an embed's slot
   comes and goes (`"mount"` with the slot's id and the embed's `kind`,
   `ref` and `title`; `"unmount"`), and when a person asks to insert one
-  (`"picker"`). The component renders the app's `:embed` slot for each
+  (`"picker"`), and asks what a pasted or dropped URL is (`"resolve"`,
+  answered with the embed or `nil`). The component renders the app's `:embed` slot for each
   embed, and LiveView teleports it into the embed's slot in the document
   (a portal), so that the content is the LiveView's own: its events, its
   LiveComponents (a canvas, a grid) and its updates, in the document.
@@ -59,6 +60,22 @@ defmodule Kotoba.Embeds do
      assign(socket, :picker, socket.assigns.picker_slot != [] and !socket.assigns.readonly)}
   end
 
+  # A URL pasted or dropped in the editor: the app's `resolve` says the
+  # embed it is, or nil for a link.
+  def handle_event("kotoba:embeds", %{"action" => "resolve", "url" => url}, socket)
+      when is_binary(url) do
+    embed =
+      with resolve when resolve != nil <- socket.assigns.resolve,
+           false <- socket.assigns.readonly,
+           %{} = found <- call(resolve, url) do
+        embed_json(found)
+      else
+        _none -> nil
+      end
+
+    {:reply, %{embed: embed}, socket}
+  end
+
   def handle_event("kotoba:embeds", _params, socket), do: {:noreply, socket}
 
   def handle_event("close_picker", _params, socket),
@@ -81,6 +98,22 @@ defmodule Kotoba.Embeds do
   defp string(value) when is_binary(value), do: value
   defp string(_value), do: ""
 
+  defp call(fun, url) when is_function(fun, 1), do: fun.(url)
+  defp call({module, function}, url), do: apply(module, function, [url])
+
+  defp embed_json(%Kotoba.Nodes.Embed{} = node), do: embed_json(Map.from_struct(node))
+
+  defp embed_json(%{} = embed) do
+    kind = embed |> field(:kind) |> to_string()
+    ref = embed |> field(:ref) |> to_string()
+
+    if kind == "" or ref == "",
+      do: nil,
+      else: %{kind: kind, ref: ref, title: to_string(field(embed, :title) || "")}
+  end
+
+  defp field(map, key), do: Map.get(map, key, Map.get(map, to_string(key)))
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -91,6 +124,7 @@ defmodule Kotoba.Embeds do
       data-label={@label}
       data-icon={@icon}
       data-picker={to_string(@picker_slot != [])}
+      data-resolve={to_string(@resolve != nil)}
     >
       <.portal
         :for={{slot, embed} <- @embeds}

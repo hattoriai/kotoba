@@ -117,6 +117,21 @@ defmodule Kotoba.EmbedsTest do
     refute has_element?(view, "#body-embeds-picker")
   end
 
+  test "a link the app knows is the embed it is; another is a link" do
+    {view, html} = open()
+    assert html =~ ~s(data-resolve="true")
+
+    embeds(view, %{"action" => "resolve", "url" => "https://app.test/counters/12"})
+    assert_reply(view, %{embed: %{kind: "counter", ref: "12", title: "Counter 12"}})
+
+    embeds(view, %{"action" => "resolve", "url" => "https://elsewhere.test/x"})
+    assert_reply(view, %{embed: nil})
+
+    {view, _html} = open("?readonly=true")
+    embeds(view, %{"action" => "resolve", "url" => "https://app.test/counters/12"})
+    assert_reply(view, %{embed: nil})
+  end
+
   test "a read-only editor's embeds are read-only and have no picker" do
     {view, _html} = open("?readonly=true")
     mount(view, 3)

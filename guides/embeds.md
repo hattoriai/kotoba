@@ -88,6 +88,47 @@ end
 `:let` on `:picker` gets `close`, a JS command that closes it, for a
 Cancel of your own. Escape and a click outside close it too.
 
+### A link that becomes the embed
+
+People share links: a link to a canvas of your app, pasted or dropped in
+the editor, can become the canvas itself. Give `kotoba_embeds/1` a
+`resolve` function of the URL:
+
+```elixir
+def resolve(url) do
+  with %URI{host: "app.example.com", path: path} <- URI.parse(url),
+       {:ok, %{route: "/diagrams/:id", path_params: %{"id" => id}}} <- route(path),
+       %Diagram{} = diagram <- Diagrams.get_for(current_user(), id) do
+    %{kind: "canvas", ref: diagram.id, title: diagram.title}
+  else
+    _other -> nil
+  end
+end
+
+defp route(path) do
+  case Phoenix.Router.route_info(MyAppWeb.Router, "GET", path, "app.example.com") do
+    :error -> :error
+    info -> {:ok, info}
+  end
+end
+```
+
+```heex
+<.kotoba_embeds for="post-body" resolve={&resolve/1}>
+```
+
+* A URL pasted alone on an empty line goes in as a link at once, and
+  becomes the embed when the server answers. A person who goes on
+  typing on that line keeps the link, and so does a URL pasted in a
+  sentence.
+* A URL dropped on the editor (dragged from another tab) goes in after
+  the block it lands on: the embed, or a link.
+* `resolve` returns `nil` for a URL that is not yours, or not this
+  person's to see: it stays a link. Check the person's access in it, as
+  for any of your pages.
+* A read-only editor resolves nothing. Undo turns the embed back into the
+  link.
+
 ### In the document
 
 * Keys in an embed are the embed's: Delete in a canvas deletes its node,
