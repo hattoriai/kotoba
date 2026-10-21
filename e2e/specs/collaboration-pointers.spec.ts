@@ -50,6 +50,50 @@ test("a person's pointer is on the same element of the other's page, and their c
   await context.close();
 });
 
+// Where a word is on a page: the box of its characters.
+async function word(page: Page, text: string): Promise<{ left: number; right: number; top: number; bottom: number } | null> {
+  return page.evaluate((text) => {
+    const root = document.querySelector("#notebook_one .kotoba-editable")!;
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+      const at = node.textContent!.indexOf(text);
+      if (at < 0) continue;
+      const range = document.createRange();
+      range.setStart(node, at);
+      range.setEnd(node, at + text.length);
+      const { left, right, top, bottom } = range.getBoundingClientRect();
+      return { left, right, top, bottom };
+    }
+    return null;
+  }, text);
+}
+
+test("a pointer over the text is on the same word of the other's page, however it wraps there", async ({ page, browser }) => {
+  const notebook = `notebook:${crypto.randomUUID()}`;
+  await page.setViewportSize({ width: 1200, height: 900 });
+  await open(page, notebook, "Ada");
+  const context = await browser.newContext({ viewport: { width: 600, height: 900 } });
+  const other = await context.newPage();
+  await open(other, notebook, "Grace");
+
+  // A paragraph that wraps in other places on Grace's narrower page.
+  await page.locator("#notebook_one .kotoba-editable").click();
+  await page.keyboard.type("Every blade has a smith, and every smith a forge. ".repeat(4) + "ZEBRA ends it.");
+  await expect(other.locator("#notebook_one .kotoba-editable")).toContainText("ZEBRA");
+
+  const mine = (await word(page, "ZEBRA"))!;
+  await page.mouse.move((mine.left + mine.right) / 2, (mine.top + mine.bottom) / 2);
+
+  await expect(pointer(other, "Ada")).toBeVisible();
+  await expect.poll(async () => {
+    const box = await pointer(other, "Ada").boundingBox();
+    const theirs = await word(other, "ZEBRA");
+    if (!box || !theirs) return false;
+    return box.x >= theirs.left - 2 && box.x <= theirs.right + 2 && box.y >= theirs.top - 2 && box.y <= theirs.bottom + 4;
+  }).toBe(true);
+  await context.close();
+});
+
 test("a pointer beyond the viewport is a marker at its edge that goes to it", async ({ page, browser }) => {
   const notebook = `notebook:${crypto.randomUUID()}`;
   await page.setViewportSize({ width: 900, height: 900 });

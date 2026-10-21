@@ -92,9 +92,14 @@ class Client implements Collaboration {
 
   async start(): Promise<void> {
     this.host.setReadonly(true);
-    // Issho's pointer of an agent at work here goes to its caret (Issho 0.2.1 and later).
-    const locate = (issho as unknown as { locate?: (element: Element, locator: (at: unknown) => DOMRect | null) => () => void }).locate;
-    if (locate) this.cleanups.push(locate(this.host.element, at => (isSelection(at) ? this.presence.caretBox(at) : null)));
+    // Issho's pointers: an agent at work here is drawn at its caret, and a
+    // person's pointer over the text is a place of it (a caret), drawn at
+    // that place on each screen however the text wraps there.
+    this.cleanups.push(issho.locate(this.host.element, at => (isSelection(at) ? this.presence.caretBox(at) : null)));
+    this.cleanups.push(issho.point(this.host.element, (x, y) => {
+      const anchor = this.binding.anchorAt(x, y);
+      return anchor ? { anchor, focus: anchor } : null;
+    }));
     const api = this.host.api.lexical;
     this.cleanups.push(this.host.editor.registerUpdateListener(({ tags, dirtyElements, dirtyLeaves }) => {
       if (tags.has(COLLAB_TAG) || !this.view || this.readonly || (dirtyElements.size === 0 && dirtyLeaves.size === 0)) return;

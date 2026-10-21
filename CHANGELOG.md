@@ -48,6 +48,9 @@ On Issho 0.3: agents move with Issho's motion, and following is the room's.
   (`--collab-sweep`, 350ms). None of it with reduced motion.
 - An agent's page pointer (`Issho.Components.pointers/1`) goes to its
   caret, and follows it.
+- A person's page pointer over the text is a place of it (Issho's
+  `point`): each page draws it on the same word, however the text wraps
+  there.
 
 ## [0.6.0] - 2026-10-21
 

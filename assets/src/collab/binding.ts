@@ -369,6 +369,20 @@ export class Binding {
     return { key: entry[0], offset, type: "text" };
   }
 
+  /** The anchor under a point of the viewport (a person's pointer, for Issho's pointers), or null. */
+  anchorAt(clientX: number, clientY: number): Anchor | null {
+    const range = caretRange(clientX, clientY);
+    const root = this.host.editor.getRootElement();
+    if (!range || !root?.contains(range.startContainer)) return null;
+    let anchor: Anchor | null = null;
+    this.host.editor.getEditorState().read(() => {
+      const selection = this.host.api.lexical.$createRangeSelection();
+      selection.applyDOMRange(range);
+      anchor = this.anchor(selection.anchor);
+    }, { editor: this.host.editor });
+    return anchor;
+  }
+
   /** Maps awareness anchors to DOM points for the cursor layer. */
   domPoint(anchor: Anchor): { node: Node; offset: number } | null {
     let point: ReturnType<Binding["point"]> = null;
@@ -388,6 +402,17 @@ export class Binding {
     }
     return null;
   }
+}
+
+// The caret position under a point of the viewport, as a range.
+function caretRange(x: number, y: number): StaticRange | null {
+  const doc = document as Document & {
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+  };
+  const position = doc.caretPositionFromPoint?.(x, y);
+  if (position) return new StaticRange({ startContainer: position.offsetNode, startOffset: position.offset, endContainer: position.offsetNode, endOffset: position.offset });
+  return doc.caretRangeFromPoint?.(x, y) ?? null;
 }
 
 /** Redo reuses identities; it restores inserted nodes/characters rather than reinserting them. */
