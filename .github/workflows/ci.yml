@@ -143,7 +143,7 @@ jobs:
       - run: npm ci
         working-directory: assets
 
-      # Issho from its branch until Issho 0.3 is on Hex: its bundle and types, built.
+      # Issho from its main branch until Issho 0.3 is on Hex: its bundle and types, built.
       - run: mix deps.get && mix issho.build
         working-directory: deps/issho
 
@@ -197,7 +197,7 @@ jobs:
       - run: npx playwright install --with-deps ${{ matrix.browser }}
         working-directory: e2e
 
-      # Issho from its branch until Issho 0.3 is on Hex: its bundle and types, built.
+      # Issho from its main branch until Issho 0.3 is on Hex: its bundle and types, built.
       - run: mix deps.get && mix issho.build
         working-directory: deps/issho
 
