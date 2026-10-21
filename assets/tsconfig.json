@@ -21,7 +21,7 @@
     "types": [],
     "paths": {
       "issho": [
-        "../deps/issho/assets/src/index.ts"
+        "../deps/issho/priv/static/types/index.d.ts"
       ]
     }
   },

@@ -50,8 +50,7 @@ Application.put_env(:kotoba, KotobaDev.Endpoint,
     if(watch?,
       do: [
         kotoba_esm: {Esbuild, :install_and_run, [:kotoba_esm, ~w(--watch)]},
-        kotoba_dev_nodes: {Esbuild, :install_and_run, [:kotoba_dev_nodes, ~w(--watch)]},
-        kotoba_dev_issho: {Esbuild, :install_and_run, [:kotoba_dev_issho, ~w(--watch)]}
+        kotoba_dev_nodes: {Esbuild, :install_and_run, [:kotoba_dev_nodes, ~w(--watch)]}
       ],
       else: []
     ),
@@ -1340,9 +1339,9 @@ defmodule KotobaDev.Endpoint do
 
   # The node modules, then the editor bundle and its style sheets.
   plug(Plug.Static, at: "/assets/nodes", from: Path.expand("tmp/dev/nodes", __DIR__))
-  plug(Plug.Static, at: "/vendor/issho", from: Path.expand("tmp/dev/issho", __DIR__))
+  plug(Plug.Static, at: "/vendor/issho", from: Path.expand("deps/issho/priv/static", __DIR__))
   # Issho's theme, from its source until a release of Issho with it is on Hex.
-  plug(Plug.Static, at: "/vendor/issho-css", from: Path.expand("deps/issho/assets/css", __DIR__))
+  plug(Plug.Static, at: "/vendor/issho-css", from: Path.expand("deps/issho/priv/static", __DIR__))
   plug(Plug.Static, at: "/assets", from: Path.expand("priv/static", __DIR__))
   plug(Plug.Static, at: "/vendor/phoenix", from: {:phoenix, "priv/static"})
   plug(Plug.Static, at: "/vendor/phoenix_live_view", from: {:phoenix_live_view, "priv/static"})
