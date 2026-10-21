@@ -94,7 +94,7 @@ import { CODE_LANGUAGES, type CodeLanguage, PLAIN_TEXT, findCodeLanguage } from 
 import type { ResolvedControl } from "./extensions";
 import { FEATURES, type Feature } from "./features";
 import { $readImageState, $runGalleryCommand, type GalleryCommand, type ImageState } from "./gallery";
-import { TOOLBAR_ICONS, renderIcon } from "./icons";
+import { EMBED_ICONS, TOOLBAR_ICONS, renderIcon, type EmbedIcon } from "./icons";
 import { $domSelection, $selectedLinkUrl } from "./link";
 
 export type BlockType =
@@ -154,6 +154,7 @@ export type ToolbarCommand =
   | "rule"
   | "table"
   | "upload"
+  | "embed"
   | "assist"
   | "code-language"
   | "table-row-before"
@@ -211,6 +212,7 @@ export const TOOLBAR_ITEMS: readonly ToolbarItem[] = [
   { command: "rule", label: "Horizontal rule", group: "Insert", feature: "horizontal_rules" },
   { command: "table", label: "Table", group: "Insert", done: "Table inserted", feature: "tables" },
   { command: "upload", label: "Attach a file", group: "Insert", feature: "attachments" },
+  { command: "embed", label: "Embed", group: "Insert", feature: "embeds" },
   { command: "assist", label: "Assist", group: "Assist" },
   { command: "code-language", label: "Code language", group: "Code", feature: "code_blocks" },
   { command: "table-row-before", label: "Insert row above", group: "Table", done: "Row inserted", feature: "tables" },
@@ -422,6 +424,7 @@ export function runCommand(editor: LexicalEditor, command: ToolbarCommand, state
     case "image-next":
     case "link":
     case "upload":
+    case "embed":
     case "code-language":
       return;
   }
@@ -515,6 +518,8 @@ interface ToolbarOptions {
   onColors?(button: HTMLElement): void;
   /** Opens the Assist menu. Without it, the editor has no Assist button. */
   onAssist?(button: HTMLElement): void;
+  /** The Embed button's words and icon, and what it opens. Without it, the editor has no Embed button. */
+  embed?: EmbedButton;
   announce(message: string): void;
   /** The languages of the code language picker. The default is every language. */
   codeLanguages?: readonly CodeLanguage[];
@@ -526,6 +531,13 @@ interface ToolbarOptions {
   className?: string;
   /** `false` when Alt+F10 does not move the focus to this toolbar. */
   focusShortcut?: boolean;
+}
+
+/** The Embed button of an editor with embeds (`Kotoba.Embeds`): the app names it ("Canvas"). */
+export interface EmbedButton {
+  label: string;
+  icon: EmbedIcon;
+  open(button: HTMLElement): void;
 }
 
 /** The state of an extension's control, read from the editor state. */
@@ -545,7 +557,7 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
   const features: ReadonlySet<Feature> = options.features ?? new Set(FEATURES);
   const controls = new Map((options.controls ?? []).map((control) => [control.id, control]));
   const assist = options.onAssist !== undefined;
-  const toolbar = options.existing ?? buildToolbar(options.uploads, assist, features, [...controls.values()]);
+  const toolbar = options.existing ?? buildToolbar(options.uploads, assist, features, [...controls.values()], options.embed ?? null);
   if (options.existing === null) options.host.prepend(toolbar);
 
   toolbar.setAttribute("role", "toolbar");
@@ -567,6 +579,7 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
   // A command of a feature that is off.
   const off = (command: string): boolean => {
     if (command === "assist") return !assist;
+    if (command === "embed" && options.embed === undefined) return true;
     const feature = TOOLBAR_ITEMS.find((item) => item.command === command)?.feature;
     return feature !== undefined && !features.has(feature);
   };
@@ -685,6 +698,8 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
       } else if (command === "assist") {
         button.setAttribute("aria-haspopup", "menu");
         if (!button.hasAttribute("aria-expanded")) button.setAttribute("aria-expanded", "false");
+      } else if (command === "embed") {
+        button.setAttribute("aria-haspopup", "dialog");
       }
 
       const unavailable =
@@ -751,6 +766,8 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
       options.onAssist?.(button);
     } else if (command === "upload") {
       options.onUpload();
+    } else if (command === "embed") {
+      options.embed?.open(button);
     } else if (command === "undo" || command === "redo") {
       runCommand(editor, command, state);
     } else if (IMAGE_COMMANDS.has(command)) {
@@ -768,7 +785,7 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
       });
     }
 
-    if (command !== "link" && command !== "upload" && command !== "highlight" && command !== "assist") {
+    if (command !== "link" && command !== "upload" && command !== "embed" && command !== "highlight" && command !== "assist") {
       const item = TOOLBAR_ITEMS.find((entry) => entry.command === command);
       if (item && (TOGGLE_FORMATS.has(command) || BLOCK_COMMANDS.has(command) || TABLE_TOGGLES.has(command))) {
         const pressed = button.getAttribute("aria-pressed") !== "true";
@@ -892,12 +909,19 @@ export function createToolbar(editor: LexicalEditor, options: ToolbarOptions): T
  * Builds the buttons of `commands`, in that order, in groups: a new group
  * starts where the toolbar group of a command changes. The commands of a
  * feature that is off, `upload` without uploads, `assist` without an
- * Assist menu, and names that are not commands are left out. An
+ * Assist menu, `embed` without embeds, and names that are not commands are
+ * left out. An
  * extension's command gets its control's button.
  */
 export function buildCommandBar(
   commands: readonly string[],
-  options: { uploads: boolean; assist: boolean; features: ReadonlySet<Feature>; controls: readonly ResolvedControl[] },
+  options: {
+    uploads: boolean;
+    assist: boolean;
+    features: ReadonlySet<Feature>;
+    controls: readonly ResolvedControl[];
+    embed?: Pick<EmbedButton, "label" | "icon"> | null;
+  },
 ): HTMLElement {
   const bar = document.createElement("div");
   let group: HTMLElement | null = null;
@@ -911,6 +935,7 @@ export function buildCommandBar(
       if (SELECT_COMMANDS.has(item.command)) continue;
       if (item.command === "upload" && !options.uploads) continue;
       if (item.command === "assist" && !options.assist) continue;
+      if (item.command === "embed" && !options.embed) continue;
       if (item.feature !== undefined && !options.features.has(item.feature)) continue;
     }
 
@@ -930,11 +955,13 @@ export function buildCommandBar(
     button.className = "kotoba-toolbar-button";
     button.dataset.kotobaCommand = command;
     button.tabIndex = -1;
-    const label = item?.label ?? control?.label ?? command;
+    const label = (item?.command === "embed" ? options.embed?.label : undefined) ?? item?.label ?? control?.label ?? command;
     button.setAttribute("aria-label", label);
     button.title = item?.shortcut ? `${label} (${item.shortcut})` : label;
 
-    if (item !== undefined) {
+    if (item?.command === "embed") {
+      button.append(renderIcon(EMBED_ICONS[options.embed?.icon ?? "embed"]));
+    } else if (item !== undefined) {
       button.append(renderIcon(TOOLBAR_ICONS[item.command as Exclude<ToolbarCommand, "code-language">]));
     } else {
       let icon: Element | null = null;
@@ -961,6 +988,7 @@ function buildToolbar(
   assist: boolean,
   features: ReadonlySet<Feature>,
   controls: readonly ResolvedControl[],
+  embed: Pick<EmbedButton, "label" | "icon"> | null,
 ): HTMLElement {
   const toolbar = document.createElement("div");
   toolbar.dataset.kotobaToolbar = "";
@@ -1008,6 +1036,7 @@ function buildToolbar(
   for (const item of TOOLBAR_ITEMS) {
     if (item.command === "upload" && !uploads) continue;
     if (item.command === "assist" && !assist) continue;
+    if (item.command === "embed" && embed === null) continue;
     if (item.feature !== undefined && !features.has(item.feature)) continue;
     if (item.inDefault === false) continue;
     if (item.group === "History" && !extensionsPlaced) placeExtensions();
@@ -1042,11 +1071,18 @@ function buildToolbar(
     button.type = "button";
     button.className = "kotoba-toolbar-button";
     button.dataset.kotobaCommand = item.command;
-    button.setAttribute("aria-label", item.label);
-    button.title = item.shortcut ? `${item.label} (${item.shortcut})` : item.label;
+    const label = item.command === "embed" && embed !== null ? embed.label : item.label;
+    button.setAttribute("aria-label", label);
+    button.title = item.shortcut ? `${label} (${item.shortcut})` : label;
     button.tabIndex = -1;
 
-    button.append(renderIcon(TOOLBAR_ICONS[item.command as Exclude<ToolbarCommand, "code-language">]));
+    button.append(
+      renderIcon(
+        item.command === "embed" && embed !== null
+          ? EMBED_ICONS[embed.icon]
+          : TOOLBAR_ICONS[item.command as Exclude<ToolbarCommand, "code-language">],
+      ),
+    );
 
     group.append(button);
   }

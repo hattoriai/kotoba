@@ -67,6 +67,10 @@
   /* The width of a PDF or a video, and the height of a PDF's viewer. */
   --kotoba-media-width: 40rem;
   --kotoba-pdf-height: 28rem;
+  /* An embed's frame in the document, and the full screen layer over the page. */
+  --kotoba-embed-height: 24rem;
+  --kotoba-embed-radius: calc(var(--kotoba-radius) + 4px);
+  --kotoba-embed-layer: 60;
 }
 
 .kotoba {
@@ -1229,3 +1233,228 @@ div.kotoba-unknown {
 .kotoba-content :where(pre .token:is(.attr-name, .property)) { color: var(--kotoba-token-attr); }
 .kotoba-content :where(pre .token.operator) { color: var(--kotoba-token-operator); }
 .kotoba-content :where(pre .token.punctuation) { color: var(--kotoba-token-punctuation); }
+
+/* -- Embeds (Kotoba.Embeds) --------------------------------------------- */
+
+/* An editor with show_toolbar={false}: a page that reads the document. */
+.kotoba[data-toolbar="false"] > .kotoba-toolbar {
+  display: none;
+}
+
+.kotoba-embed {
+  margin: var(--kotoba-space, 0.75em) 0;
+}
+
+/* The slot of an embed's live content. It is the app's: none of the
+   editor's text styles reach it. */
+.kotoba-embed-slot {
+  height: var(--kotoba-embed-height);
+  border-radius: var(--kotoba-embed-radius);
+  font-size: var(--kotoba-font-size);
+  line-height: normal;
+  white-space: normal;
+  overflow-wrap: normal;
+  cursor: auto;
+  user-select: auto;
+  -webkit-user-select: auto;
+}
+
+.kotoba-embed.kotoba-selected {
+  outline: none;
+}
+
+.kotoba-embed.kotoba-selected .kotoba-embed-slot {
+  outline: 2px solid var(--kotoba-accent);
+  outline-offset: 2px;
+}
+
+/* The content a portal puts in a slot, or in the full screen layer. */
+.kotoba-embed-content {
+  height: 100%;
+}
+
+/* An embed in an editor without Kotoba.Embeds, or before its content
+   comes: its title. */
+.kotoba-embed-slot:empty,
+.kotoba-embed-placeholder {
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--kotoba-border);
+  background: var(--kotoba-surface);
+  color: var(--kotoba-muted);
+}
+
+.kotoba-embed-placeholder {
+  min-height: 4rem;
+  padding: var(--kotoba-padding);
+  border-radius: calc(var(--kotoba-radius) + 4px);
+}
+
+/* Full screen: a layer over the page, the content in it. */
+.kotoba-embed-full {
+  position: fixed;
+  inset: 0;
+  z-index: var(--kotoba-embed-layer);
+  display: grid;
+  place-items: center;
+}
+
+.kotoba-embed-full[hidden] {
+  display: none;
+}
+
+.kotoba-embed-scrim {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in oklab, var(--kotoba-text) 32%, transparent);
+  backdrop-filter: blur(3px);
+  animation: kotoba-embed-fade 150ms ease-out;
+}
+
+.kotoba-embed-full-body {
+  position: relative;
+  width: min(1440px, calc(100vw - 3rem));
+  height: calc(100vh - 3rem);
+  overflow: hidden;
+  border-radius: calc(var(--kotoba-radius) + 8px);
+  background: var(--kotoba-background);
+  box-shadow: 0 24px 80px rgb(0 0 0 / 0.25);
+  font-family: var(--kotoba-font);
+  font-size: var(--kotoba-font-size);
+  line-height: normal;
+  animation: kotoba-embed-rise 180ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+/* The embeds picker. */
+.kotoba-embed-picker-layer {
+  position: fixed;
+  inset: 0;
+  z-index: var(--kotoba-embed-layer);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 14vh;
+}
+
+.kotoba-embed-picker-layer .kotoba-embed-scrim {
+  background: color-mix(in oklab, var(--kotoba-text) 16%, transparent);
+  backdrop-filter: none;
+}
+
+.kotoba-embed-picker {
+  position: relative;
+  width: min(28rem, calc(100vw - 2rem));
+  overflow: hidden;
+  border: 1px solid var(--kotoba-border);
+  border-radius: calc(var(--kotoba-radius) + 6px);
+  background: var(--kotoba-background);
+  box-shadow: 0 16px 48px rgb(0 0 0 / 0.18);
+  color: var(--kotoba-text);
+  font-family: var(--kotoba-font);
+  font-size: var(--kotoba-font-size);
+  animation: kotoba-embed-rise 150ms cubic-bezier(0.2, 0.9, 0.3, 1);
+}
+
+.kotoba-embed-picker-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.5rem 0.5rem 1rem;
+  border-bottom: 1px solid var(--kotoba-border);
+  color: var(--kotoba-muted);
+}
+
+.kotoba-embed-picker-close {
+  display: grid;
+  place-items: center;
+  width: 1.875rem;
+  height: 1.875rem;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--kotoba-radius) + 2px);
+  background: none;
+  color: var(--kotoba-muted);
+  cursor: pointer;
+}
+
+.kotoba-embed-picker-close:hover {
+  background: var(--kotoba-surface);
+  color: var(--kotoba-text);
+}
+
+.kotoba-embed-picker-body {
+  max-height: 60vh;
+  overflow: auto;
+  padding: 0.375rem;
+}
+
+/* A section of the picker: the app's heading in it. */
+.kotoba-embed-picker-body h3 {
+  margin: 0.5rem 0.625rem 0.25rem;
+  color: var(--kotoba-muted);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.kotoba-embed-option {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.625rem;
+  border: 0;
+  border-radius: calc(var(--kotoba-radius) + 4px);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.kotoba-embed-option:hover,
+.kotoba-embed-option:focus-visible {
+  background: var(--kotoba-surface);
+  outline: none;
+}
+
+.kotoba-embed-option-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: calc(var(--kotoba-radius) + 5px);
+  background: color-mix(in oklab, var(--kotoba-accent) 12%, transparent);
+  color: var(--kotoba-accent);
+}
+
+.kotoba-embed-option-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.kotoba-embed-option-title {
+  font-weight: 500;
+}
+
+.kotoba-embed-option-about {
+  color: var(--kotoba-muted);
+  font-size: 0.8125rem;
+}
+
+@keyframes kotoba-embed-fade {
+  from { opacity: 0; }
+}
+
+@keyframes kotoba-embed-rise {
+  from { opacity: 0; transform: translateY(8px) scale(0.985); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .kotoba-embed-scrim,
+  .kotoba-embed-full-body,
+  .kotoba-embed-picker { animation: none; }
+}

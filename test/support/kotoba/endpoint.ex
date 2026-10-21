@@ -17,6 +17,7 @@ defmodule KotobaTest.Router do
   scope "/" do
     pipe_through(:browser)
     live("/editor", KotobaTest.EditorLive)
+    live("/embeds", KotobaTest.EmbedsLive)
   end
 end
 
