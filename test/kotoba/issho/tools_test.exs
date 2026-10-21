@@ -8,6 +8,7 @@ defmodule Kotoba.Issho.ToolsTest do
   alias Kotoba.Collab
   alias Kotoba.Collab.{Document, Store}
   alias Kotoba.Content
+  alias Kotoba.Issho.Text
 
   defmodule MCP do
     @moduledoc false
@@ -218,8 +219,8 @@ defmodule Kotoba.Issho.ToolsTest do
   } do
     # Ada selects "the docs" in her editor.
     {:ok, %{"state" => state}} = Participant.read(ada, document)
-    {:ok, range} = Kotoba.Issho.Text.find(state, "the docs")
-    :ok = Participant.place(ada, %{"doc" => document, "at" => Kotoba.Issho.Text.place(range)})
+    {:ok, range} = Text.find(state, "the docs")
+    :ok = Participant.place(ada, %{"doc" => document, "at" => Text.place(range)})
 
     assert {:ok, %{"selected" => %{"block" => 1, "text" => "the docs"}}} =
              call(client, "read_text", %{"document" => document, "of" => "ada"})
