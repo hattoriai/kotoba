@@ -54,8 +54,10 @@ On Issho 0.3: agents move with Issho's motion, and following is the room's.
   An editor that lists its people says whom it follows: "Following Ada",
   with Stop, in their colour, and a ring of it around the editor
   (`.kotoba-collab-following`, `data-collab-following`,
-  `--collab-follow-color`; restyled with `--collab-following-background`,
-  `--collab-following-text` and `--collab-following-ring`).
+  `--collab-follow-color`), in Issho's look of following, the same on
+  every block of the page (restyled with Issho's
+  `--issho-following-background`, `--issho-following-text` and
+  `--issho-following-ring`).
 - `Kotoba.Collab.token/3`'s `follow: false`: an editor that takes no part
   in following, though its room's other blocks do.
 - The person's motion, as the app says it (Issho's `data-issho-motion`):

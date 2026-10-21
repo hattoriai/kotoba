@@ -307,15 +307,16 @@ with a Stop button, in their colour, and a ring of their colour around
 the editor. On an Issho page, where the editor leaves its people to
 Issho's list (`people: false`), Issho's list says it.
 
-Restyle it with CSS: the line is `.kotoba-collab-following` (its button
-`.kotoba-collab-following-stop`), the editor carries
-`data-collab-following` while it follows, and these properties, set on
-`.kotoba` or the page, change the defaults:
+The look is Issho's, the same as its people list's and every other
+block's on the page: the line carries Issho's classes (`issho-following`,
+`issho-following-stop`) besides its own (`.kotoba-collab-following`), the
+editor carries `data-collab-following` while it follows, and Issho's
+properties, on the page, restyle all of them at once:
 
-    .kotoba {
-      --collab-following-background: #111827;  /* the person's colour */
-      --collab-following-text: #fff;
-      --collab-following-ring: none;            /* 2px of the person's colour */
+    :root {
+      --issho-following-background: #111827;  /* the person's colour */
+      --issho-following-text: #fff;
+      --issho-following-ring: none;            /* a ring of the person's colour */
     }
 
 `--collab-follow-color` is the followed person's colour, for your own
