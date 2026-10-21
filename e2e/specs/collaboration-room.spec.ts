@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { focusEnd, openEditor } from "./support";
+import { MOD, focusEnd, openEditor } from "./support";
 
 // Two shared editors of one room, as two blocks of a notebook: one connection, one list of people,
 // and a person's cursor that goes from one editor to the other.
@@ -82,4 +82,28 @@ test("the page lists the room's people once, whatever its editors", async ({ pag
   await expect(people).toContainText("Grace");
   await context.close();
   await expect(people.locator("li")).toHaveCount(1);
+});
+
+test("undo takes back the last change on the page, in whichever editor it was made", async ({ page }) => {
+  await open(page, `notebook:${crypto.randomUUID()}`, "Ada");
+  await focusEnd(page, editor(page, "one"));
+  await page.keyboard.type("first");
+  await focusEnd(page, editor(page, "two"));
+  await page.keyboard.type("second");
+  await focusEnd(page, editor(page, "one"));
+
+  // From the first editor, undo takes back the second editor's change, and goes there.
+  await page.keyboard.press(`${MOD}+Z`);
+  await expect(editor(page, "two")).toHaveText("");
+  await expect(editor(page, "one")).toHaveText("first");
+  await expect(editor(page, "two")).toBeFocused();
+  await page.keyboard.press(`${MOD}+Z`);
+  await expect(editor(page, "one")).toHaveText("");
+  await expect(editor(page, "one")).toBeFocused();
+
+  await page.keyboard.press(`${MOD}+Shift+Z`);
+  await expect(editor(page, "one")).toHaveText("first");
+  await page.keyboard.press(`${MOD}+Shift+Z`);
+  await expect(editor(page, "two")).toHaveText("second");
+  for (const block of ["one", "two"]) await expect(page.locator(`#notebook_${block} [data-collab-status]`)).toHaveText("Saved");
 });
