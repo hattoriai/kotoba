@@ -193,8 +193,12 @@ defmodule Kotoba.CollabTest do
              "socket" => "/issho/socket",
              "role" => "read",
              "undo" => "editor",
+             "follow" => true,
              "user" => %{"id" => "7", "name" => "Ada", "color" => "#e84a1c"}
            } = credentials
+
+    # An editor that takes no part in following, though the room's others do.
+    assert %{"follow" => false} = Collab.token(instance, "post:5", user: %{id: 7}, follow: false)
 
     assert {:ok, %Issho.Identity{key: "7"}, :read} =
              Issho.Token.verify(instance, credentials["token"], "post:5")

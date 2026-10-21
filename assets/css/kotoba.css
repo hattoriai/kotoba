@@ -1194,6 +1194,13 @@ div.kotoba-unknown {
 :root[data-issho-motion="full"] .kotoba-collab-caret { transition: left var(--collab-caret-glide, var(--collab-caret-travel, 120ms)) ease-out, top var(--collab-caret-glide, var(--collab-caret-travel, 120ms)) ease-out; }
 .kotoba-collab-people button { all: unset; cursor: pointer; }
 .kotoba-collab-people button[aria-pressed="true"] { text-decoration: underline; text-decoration-color: var(--collab-color); }
+/* Following someone in the editor: a line in their colour, with Stop, and a ring of it around the editor. */
+/* Set these on .kotoba (or the page) to restyle it: --collab-following-background, --collab-following-text, --collab-following-ring (none for no ring). */
+.kotoba[data-collab-following] { box-shadow: var(--collab-following-ring, 0 0 0 2px var(--collab-follow-color)); }
+.kotoba-collab-following { display: inline-flex; align-items: center; gap: .5rem; margin: 0 auto 0 0; padding: .125rem .25rem .125rem .625rem; border-radius: 999px; background: var(--collab-following-background, var(--collab-follow-color)); color: var(--collab-following-text, #fff); font-size: .75rem; font-weight: 500; line-height: 1.25rem; white-space: nowrap; }
+.kotoba-collab-following[hidden] { display: none; }
+.kotoba-collab-following-stop { padding: 0 .5rem; border: 0; border-radius: 999px; background: rgba(255, 255, 255, .22); color: inherit; font: inherit; cursor: pointer; }
+.kotoba-collab-following-stop:hover, .kotoba-collab-following-stop:focus-visible { background: rgba(255, 255, 255, .36); outline: none; }
 
 /* A readable baseline for <.kotoba_content>. Each rule has the specificity
    of one class (.kotoba-content :where(a)), so it wins over an element reset

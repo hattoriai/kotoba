@@ -83,7 +83,7 @@ class Client implements Collaboration {
     this.recover.addEventListener("click", () => this.download());
     this.bar.append(this.status, this.recover);
     host.element.prepend(this.bar);
-    this.presence = new Presence(host, this.binding, () => this.room?.session ?? "", this.bar, host.credentials.people !== false, roomOf(host.credentials));
+    this.presence = new Presence(host, this.binding, () => this.room?.session ?? "", this.bar, host.credentials.people !== false, host.credentials.follow === false ? "" : roomOf(host.credentials));
     this.revisionInput = document.createElement("input");
     this.revisionInput.type = "hidden";
     this.revisionInput.name = `kotoba_collab[${host.element.id}]`;

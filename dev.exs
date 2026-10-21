@@ -1198,7 +1198,13 @@ defmodule KotobaDev.CollabLive do
     name = Map.get(params, "name", "Ada")
     user = %{id: name, name: name, color: if(name == "Ada", do: "#2563eb", else: "#be185d")}
     role = if params["role"] == "read", do: :read, else: :write
-    collab = Kotoba.Collab.token(KotobaDev.Issho, id, user: user, role: role)
+
+    collab =
+      Kotoba.Collab.token(KotobaDev.Issho, id,
+        user: user,
+        role: role,
+        follow: params["follow"] != "false"
+      )
 
     {:ok,
      assign(socket,
