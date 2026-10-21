@@ -1175,6 +1175,58 @@ defmodule KotobaDev.NestedCollabLive do
   end
 end
 
+defmodule KotobaDev.NotebookLive do
+  @moduledoc false
+  # Two shared editors of one room, as two blocks of a notebook:
+  # /collab/notebook?document=ID&name=Ada. A person's cursor goes from one
+  # to the other.
+  use Phoenix.LiveView
+  import Kotoba.Components
+
+  @blocks ~w(one two)
+
+  def mount(params, _session, socket) do
+    notebook = Map.get(params, "document", "notebook")
+    name = Map.get(params, "name", "Ada")
+    user = %{id: name, name: name, color: if(name == "Ada", do: "#2563eb", else: "#be185d")}
+
+    collab =
+      Map.new(
+        @blocks,
+        &{&1, Kotoba.Collab.token(KotobaDev.Issho, "#{notebook}/#{&1}", user: user)}
+      )
+
+    {:ok,
+     assign(socket,
+       notebook: notebook,
+       user: user,
+       collab: collab,
+       form: to_form(%{}, as: :notebook)
+     )}
+  end
+
+  def render(assigns) do
+    assigns = assign(assigns, :blocks, @blocks)
+
+    ~H"""
+    <h1>Notebook</h1>
+    <.form for={@form} id="notebook-form">
+      <.kotoba :for={block <- @blocks} field={@form[block]} id={"notebook_#{block}"} label={"Block #{block}"} collab={@collab[block]} />
+    </.form>
+    """
+  end
+
+  def handle_event("kotoba:collab_token", %{"document_id" => "" <> id}, socket) do
+    case Enum.find(@blocks, &("#{socket.assigns.notebook}/#{&1}" == id)) do
+      nil ->
+        {:reply, %{}, socket}
+
+      _block ->
+        {:reply, Kotoba.Collab.token(KotobaDev.Issho, id, user: socket.assigns.user), socket}
+    end
+  end
+end
+
 defmodule KotobaDev.Router do
   use Phoenix.Router
 
@@ -1197,6 +1249,7 @@ defmodule KotobaDev.Router do
     live("/collab", KotobaDev.CollabLive)
     live("/collab/many", KotobaDev.ManyCollabLive)
     live("/collab/nested", KotobaDev.NestedCollabLive)
+    live("/collab/notebook", KotobaDev.NotebookLive)
   end
 end
 

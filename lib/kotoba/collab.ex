@@ -36,6 +36,12 @@ if Code.ensure_loaded?(Issho) do
     @doc """
     Makes short-lived join credentials from the LiveView's authenticated user.
 
+    The credentials join the document's room (`Issho.Policy.room/1`): the
+    part of its id before the first `"/"`, or the whole id. The editors of
+    a page whose documents share a room (`"notebook:7/cell-1"`,
+    `"notebook:7/cell-2"`) share its people, and a person's cursor goes
+    from one editor to the other.
+
     Options: `:user` (required), `:role` (`:write` or `:read`), `:socket`
     (the Issho socket's path, `"/issho/socket"` by default) and
     `:max_channels` (that socket's `:max_channels_per_transport`, 100 by
@@ -61,10 +67,12 @@ if Code.ensure_loaded?(Issho) do
       }
 
       actor = %{id: user["id"], name: user["name"], color: user["color"]}
+      room = Issho.Policy.room(document_id)
 
       %{
         "document_id" => document_id,
-        "token" => Issho.Token.sign(instance, actor, document_id, can: role),
+        "room" => room,
+        "token" => Issho.Token.sign(instance, actor, room, can: role),
         "socket" => Keyword.get(opts, :socket, "/issho/socket"),
         "max_channels" => max_channels,
         "user" => user,

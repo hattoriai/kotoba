@@ -156,6 +156,12 @@ defmodule Kotoba.CollabTest do
     assert {:ok, %Issho.Identity{key: "7"}, :read} =
              Issho.Token.verify(instance, credentials["token"], "post:5")
 
+    notebook = Collab.token(instance, "notebook:7/cell-1", user: %{id: 7})
+    assert notebook["room"] == "notebook:7"
+
+    assert {:ok, _identity, :write} =
+             Issho.Token.verify(instance, notebook["token"], "notebook:7")
+
     assert_raise ArgumentError, fn ->
       Collab.token(instance, "post:5", user: %{id: 7}, role: :admin)
     end

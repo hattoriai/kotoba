@@ -10,8 +10,11 @@ registerEngine(kotobaEngine);
 interface FormBarrier { clients: Set<Client>; resubmit: boolean; busy: boolean; handler: (event: SubmitEvent) => void }
 const forms = new WeakMap<HTMLFormElement, FormBarrier>();
 
-// The editors of a page that share a room (two editors of one document): the room stays while one does.
+// The editors of a page share the room of their documents ("notebook:7" for
+// "notebook:7/cell-1"), and with it its people and their cursors: a person's
+// cursor goes from one editor to another. The room stays while an editor of it does.
 const rooms = new Map<string, number>();
+const roomOf = (credentials: CollabCredentials): string => credentials.room ?? credentials.document_id.split("/")[0];
 
 class Client implements Collaboration {
   private readRole: boolean;
@@ -94,6 +97,14 @@ class Client implements Collaboration {
     this.cleanups.push(this.host.editor.registerCommand(api.REDO_COMMAND, () => this.history(true), api.COMMAND_PRIORITY_CRITICAL));
     this.cleanups.push(this.host.editor.registerCommand(api.SELECTION_CHANGE_COMMAND, () => { this.awareness(); return false; }, api.COMMAND_PRIORITY_LOW));
     // Transactions wait while a person composes text with an input method; the document renders after.
+    // The place is the focused editor's: leaving an editor clears it, unless another editor of the room took it.
+    const focus = (): void => this.awareness();
+    this.host.editable.addEventListener("focusin", focus);
+    this.host.editable.addEventListener("focusout", focus);
+    this.cleanups.push(() => {
+      this.host.editable.removeEventListener("focusin", focus);
+      this.host.editable.removeEventListener("focusout", focus);
+    });
     const compositionStart = (): void => this.doc?.hold();
     const compositionEnd = (): void => {
       setTimeout(() => {
@@ -113,8 +124,9 @@ class Client implements Collaboration {
     (this.host.element as HTMLElement & { kotobaCollab?: Collaboration }).kotobaCollab = this;
 
     const id = this.credentials.document_id;
+    const roomName = roomOf(this.credentials);
     try {
-      this.room = await joinRoom(id, {
+      this.room = await joinRoom(roomName, {
         socket: this.credentials.socket,
         token: this.credentials.token,
         maxChannels: this.credentials.max_channels ?? 100,
@@ -122,7 +134,7 @@ class Client implements Collaboration {
         drafts: this.drafts,
         renew: async () => (await this.refreshCredentials()).token,
       });
-      rooms.set(id, (rooms.get(id) ?? 0) + 1);
+      rooms.set(roomName, (rooms.get(roomName) ?? 0) + 1);
       if (this.disposed) { this.release(); return; }
       this.readRole ||= this.room.can === "read";
       this.cleanups.push(this.room.onStaleDraft(stale => this.stale(stale)));
@@ -278,11 +290,15 @@ class Client implements Collaboration {
     clearTimeout(this.awarenessTimer);
     this.awarenessTimer = setTimeout(() => {
       if (!this.connected || this.failure || this.disposed || !this.room) return;
-      const selection = this.readonly ? null : this.binding.selection();
+      const id = this.credentials.document_id;
+      const focused = this.host.editable.contains(document.activeElement);
+      const selection = this.readonly || !focused ? null : this.binding.selection();
       const signature = JSON.stringify(selection);
       if (signature === this.lastAwareness) return;
       this.lastAwareness = signature;
-      this.room.aware({ place: selection ? { doc: this.credentials.document_id, at: selection as never } : null });
+      const current = this.room.awareness.state?.place as { doc?: string } | null | undefined;
+      if (selection) this.room.aware({ place: { doc: id, at: selection as never } });
+      else if (!current || current.doc === id) this.room.aware({ place: null });
     }, 40);
   }
 
@@ -350,10 +366,10 @@ class Client implements Collaboration {
 
   // The room goes with the last editor of the page in it.
   private release(): void {
-    const id = this.credentials.document_id;
-    const count = (rooms.get(id) ?? 1) - 1;
-    if (count > 0) rooms.set(id, count);
-    else { rooms.delete(id); this.room?.leave(); }
+    const room = roomOf(this.credentials);
+    const count = (rooms.get(room) ?? 1) - 1;
+    if (count > 0) rooms.set(room, count);
+    else { rooms.delete(room); this.room?.leave(); }
   }
 
   dispose(): void {
@@ -363,7 +379,8 @@ class Client implements Collaboration {
     this.waiters.splice(0).forEach(waiter => waiter.reject(new Error("The editor closed")));
     this.cleanups.reverse().forEach(cleanup => cleanup());
     if (this.room) {
-      if ((rooms.get(this.credentials.document_id) ?? 0) > 1) this.room.aware({ place: null });
+      const place = this.room.awareness.state?.place as { doc?: string } | null | undefined;
+      if ((rooms.get(roomOf(this.credentials)) ?? 0) > 1 && place?.doc === this.credentials.document_id) this.room.aware({ place: null });
       void this.room.flushDrafts().finally(() => this.release());
     }
     this.presence.dispose();

@@ -91,7 +91,8 @@ export class Presence {
           const caretRange = document.createRange();
           caretRange.setStart(focus.node, focus.offset);
           caretRange.collapse(true);
-          const rect = caretRange.getClientRects()[0];
+          // An empty line has no rectangle for a collapsed range: the caret goes at the line's start.
+          const rect = caretRange.getClientRects()[0] ?? lineStart(focus.node);
           if (!rect) continue;
           const caret = document.createElement("span");
           caret.className = "kotoba-collab-caret";
@@ -122,4 +123,11 @@ export class Presence {
     this.list.remove();
     this.layer.remove();
   }
+}
+
+function lineStart(node: Node): DOMRect | null {
+  const element = node instanceof Element ? node : node.parentElement;
+  if (!element) return null;
+  const box = element.getBoundingClientRect();
+  return new DOMRect(box.left, box.top, 0, box.height);
 }

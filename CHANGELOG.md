@@ -36,6 +36,16 @@ A page of Kotoba and other Issho components shares one connection.
 - `Kotoba.Collab.content/2` gives `{:ok, %{"epoch", "revision", "content"}}`
   with the content as a `Kotoba.Content`.
 - Two editors of one document on a page share its channel.
+- The editors of a page whose documents share an Issho room
+  (`"notebook:7/cell-1"`, `"notebook:7/cell-2"`: the part before the
+  `"/"`) share one connection and the room's people, and a person's
+  cursor goes from one editor to the other. `Kotoba.Collab.token/3`
+  signs for the room and says it in the credentials' `"room"`; the
+  policy's `authorize/3` is asked about the room.
+
+### Fixed
+
+- A collaborator's caret on an empty line shows, at the line's start.
 
 ### Removed
 
