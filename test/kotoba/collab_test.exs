@@ -4,6 +4,10 @@ defmodule Kotoba.CollabTest do
   alias Kotoba.Collab
   alias Kotoba.Collab.{Document, Store}
   alias Kotoba.Content
+
+  import Phoenix.LiveViewTest
+
+  @endpoint KotobaTest.Endpoint
   alias Kotoba.Issho.Place
 
   defmodule Policy do
@@ -19,6 +23,27 @@ defmodule Kotoba.CollabTest do
 
     def document(_identity, _document_id),
       do: Collab.document(store: {Store.Memory, :kotoba_collab_store})
+  end
+
+  defmodule CredentialsLive do
+    @moduledoc false
+    # A LiveView that signs an editor's credentials, as an app's does.
+    use Phoenix.LiveView
+
+    on_mount(Issho.Live)
+
+    @impl true
+    def mount(_params, %{"instance" => instance, "document" => document, "role" => role}, socket) do
+      user = %{id: 7, name: "Ada", color: "#e84a1c"}
+
+      credentials =
+        Collab.token(instance, document, user: user, role: String.to_existing_atom(role))
+
+      {:ok, assign(socket, credentials: credentials)}
+    end
+
+    @impl true
+    def render(assigns), do: ~H"<pre id='credentials'>{JSON.encode!(@credentials)}</pre>"
   end
 
   setup do
@@ -142,12 +167,29 @@ defmodule Kotoba.CollabTest do
              stored("post:4")
   end
 
-  test "credentials name the document, the person and their role", %{instance: instance} do
+  defp credentials(instance, document, role \\ "write") do
+    {:ok, view, _html} =
+      live_isolated(Phoenix.ConnTest.build_conn(), CredentialsLive,
+        session: %{"instance" => instance, "document" => document, "role" => role}
+      )
+
     credentials =
-      Collab.token(instance, "post:5", user: %{id: 7, name: "Ada", color: "#e84a1c"}, role: :read)
+      view
+      |> element("#credentials")
+      |> render()
+      |> LazyHTML.from_fragment()
+      |> LazyHTML.text()
+      |> JSON.decode!()
+
+    {view, credentials}
+  end
+
+  test "credentials name the document, its room, the person and their role", %{instance: instance} do
+    {_view, credentials} = credentials(instance, "post:5", "read")
 
     assert %{
              "document_id" => "post:5",
+             "room" => "post:5",
              "socket" => "/issho/socket",
              "role" => "read",
              "user" => %{"id" => "7", "name" => "Ada", "color" => "#e84a1c"}
@@ -156,7 +198,7 @@ defmodule Kotoba.CollabTest do
     assert {:ok, %Issho.Identity{key: "7"}, :read} =
              Issho.Token.verify(instance, credentials["token"], "post:5")
 
-    notebook = Collab.token(instance, "notebook:7/cell-1", user: %{id: 7})
+    {_view, notebook} = credentials(instance, "notebook:7/cell-1")
     assert notebook["room"] == "notebook:7"
 
     assert {:ok, _identity, :write} =
@@ -165,6 +207,17 @@ defmodule Kotoba.CollabTest do
     assert_raise ArgumentError, fn ->
       Collab.token(instance, "post:5", user: %{id: 7}, role: :admin)
     end
+  end
+
+  test "the LiveView renews an editor's grant of its room, without code of the app's",
+       %{instance: instance} do
+    {view, _credentials} = credentials(instance, "notebook:8/cell-1")
+
+    render_hook(view, "issho:grant", %{"room" => "notebook:8"})
+    assert_reply(view, %{"room" => "notebook:8", "token" => token, "can" => "write"})
+
+    assert {:ok, %Issho.Identity{key: "7"}, :write} =
+             Issho.Token.verify(instance, token, "notebook:8")
   end
 
   test "a selection is a place Kotoba checks" do

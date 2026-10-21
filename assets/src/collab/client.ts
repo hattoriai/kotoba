@@ -14,6 +14,15 @@ const forms = new WeakMap<HTMLFormElement, FormBarrier>();
 // "notebook:7/cell-1"), and with it its people and their cursors: a person's
 // cursor goes from one editor to another. The room stays while an editor of it does.
 const rooms = new Map<string, number>();
+// The editors of each room: its grant is renewed through any of them still on the page.
+const editors = new Map<string, Set<Client>>();
+
+async function renew(room: string): Promise<string> {
+  for (const client of editors.get(room) ?? []) {
+    try { return await client.renewGrant(); } catch { /* The next editor of the room may. */ }
+  }
+  throw new Error("No editor of the room could renew its grant");
+}
 const roomOf = (credentials: CollabCredentials): string => credentials.room ?? credentials.document_id.split("/")[0];
 
 class Client implements Collaboration {
@@ -125,6 +134,8 @@ class Client implements Collaboration {
 
     const id = this.credentials.document_id;
     const roomName = roomOf(this.credentials);
+    editors.set(roomName, (editors.get(roomName) ?? new Set()).add(this));
+    this.cleanups.push(() => editors.get(roomName)?.delete(this));
     try {
       this.room = await joinRoom(roomName, {
         socket: this.credentials.socket,
@@ -132,7 +143,7 @@ class Client implements Collaboration {
         maxChannels: this.credentials.max_channels ?? 100,
         self: this.credentials.user.id,
         drafts: this.drafts,
-        renew: async () => (await this.refreshCredentials()).token,
+        renew: () => renew(roomName),
       });
       rooms.set(roomName, (rooms.get(roomName) ?? 0) + 1);
       if (this.disposed) { this.release(); return; }
@@ -359,9 +370,11 @@ class Client implements Collaboration {
     this.credentials = credentials;
   }
 
-  private async refreshCredentials(): Promise<CollabCredentials> {
+  /** A new token for the room, from the LiveView that granted it. */
+  async renewGrant(): Promise<string> {
+    if (this.disposed) throw new Error("The editor closed");
     this.updateCredentials(await this.host.refreshCredentials());
-    return this.credentials;
+    return this.credentials.token;
   }
 
   // The room goes with the last editor of the page in it.

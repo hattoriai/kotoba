@@ -34,7 +34,10 @@ if Code.ensure_loaded?(Issho) do
     end
 
     @doc """
-    Makes short-lived join credentials from the LiveView's authenticated user.
+    Makes short-lived join credentials from the LiveView's authenticated
+    user, in a LiveView with Issho's hook (`on_mount Issho.Live`): an Issho
+    grant for the document's room, which the LiveView renews when the
+    editor asks, after asking the policy again (`Issho.Live.grant/4`).
 
     The credentials join the document's room (`Issho.Policy.room/1`): the
     part of its id before the first `"/"`, or the whole id. The editors of
@@ -69,11 +72,18 @@ if Code.ensure_loaded?(Issho) do
       actor = %{id: user["id"], name: user["name"], color: user["color"]}
       room = Issho.Policy.room(document_id)
 
+      grant =
+        Issho.Live.grant(instance, actor, room,
+          can: role,
+          socket: Keyword.get(opts, :socket, "/issho/socket"),
+          max_channels: max_channels
+        )
+
       %{
         "document_id" => document_id,
         "room" => room,
-        "token" => Issho.Token.sign(instance, actor, room, can: role),
-        "socket" => Keyword.get(opts, :socket, "/issho/socket"),
+        "token" => grant["token"],
+        "socket" => grant["socket"],
         "max_channels" => max_channels,
         "user" => user,
         "role" => Atom.to_string(role)

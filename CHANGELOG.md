@@ -28,6 +28,9 @@ A page of Kotoba and other Issho components shares one connection.
   - call `Kotoba.Collab.token/3`, `content/2,3` and `transact/4` with the
     Issho instance (`MyApp.Issho`) in place of the LiveView socket or the
     supervisor;
+  - add `on_mount Issho.Live` to the LiveViews of shared editors, and
+    remove your `handle_event("kotoba:collab_token", ...)`: Issho renews
+    the credentials it granted, asking your policy again;
   - map `issho` in an import map, next to `kotoba/collab`.
 
   `Kotoba.Collab.Store` is unchanged, and documents it saved before open

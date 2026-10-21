@@ -44,3 +44,24 @@ test("a person's cursor goes from one editor of the room to another", async ({ p
   await expect(carets(page, "two")).toHaveCount(0);
   await context.close();
 });
+
+test("the LiveView renews the room's grant for its editors, every three minutes", async ({ page }) => {
+  const notebook = `notebook:${crypto.randomUUID()}`;
+  const grants: string[] = [];
+  page.on("websocket", socket => {
+    if (!socket.url().includes("/live/")) return;
+    socket.on("framesent", frame => {
+      if (typeof frame.payload !== "string") return;
+      const [, , , event, payload] = JSON.parse(frame.payload) as [string, string, string, string, { event?: string; value?: { room?: string } }];
+      if (event === "event" && payload.event === "issho:grant") grants.push(payload.value?.room ?? "");
+    });
+  });
+  await page.clock.install();
+  await open(page, notebook, "Ada");
+  await page.clock.fastForward(180_000);
+  // One renewal for the room, however many of its editors are on the page.
+  await expect.poll(() => grants).toEqual([notebook]);
+  await focusEnd(page, editor(page, "two"));
+  await page.keyboard.type("renewed");
+  await expect(page.locator("#notebook_two [data-collab-status]")).toHaveText("Saved");
+});

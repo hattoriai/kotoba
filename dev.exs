@@ -978,6 +978,7 @@ end
 
 defmodule KotobaDev.CollabLive do
   use Phoenix.LiveView
+  on_mount(Issho.Live)
   import Kotoba.Components
 
   def mount(params, _session, socket) do
@@ -1011,20 +1012,6 @@ defmodule KotobaDev.CollabLive do
     <.kotoba_content :if={@saved} content={@saved} id="collab-saved" />
     <p :if={@saved} id="collab-saved-text">{@saved.text}</p>
     """
-  end
-
-  def handle_event("kotoba:collab_token", %{"document_id" => id}, socket) do
-    if id == socket.assigns.document_id do
-      credentials =
-        Kotoba.Collab.token(KotobaDev.Issho, id,
-          user: socket.assigns.user,
-          role: socket.assigns.role
-        )
-
-      {:reply, credentials, socket}
-    else
-      {:reply, %{}, socket}
-    end
   end
 
   def handle_event("save", %{"kotoba_collab" => %{"shared_editor" => json}}, socket) do
@@ -1063,6 +1050,7 @@ defmodule KotobaDev.ManyCollabLive do
   # /collab/many?document=ID&count=20&name=Ada. ?repeat=1 adds a last editor of
   # the first editor's document; ?socket=small signs for KotobaDev.SmallCollabSocket.
   use Phoenix.LiveView
+  on_mount(Issho.Live)
   import Kotoba.Components
 
   # Nested (KotobaDev.NestedCollabLive): the page's query comes in the session.
@@ -1107,14 +1095,6 @@ defmodule KotobaDev.ManyCollabLive do
     """
   end
 
-  def handle_event("kotoba:collab_token", %{"document_id" => id}, socket) do
-    if Map.has_key?(socket.assigns.collab, id) do
-      {:reply, Kotoba.Collab.token(KotobaDev.Issho, id, socket.assigns.signing), socket}
-    else
-      {:reply, %{}, socket}
-    end
-  end
-
   def handle_event("remove", _params, socket),
     do: {:noreply, assign(socket, editors: Enum.drop(socket.assigns.editors, -1))}
 
@@ -1142,6 +1122,7 @@ defmodule KotobaDev.NestedCollabLive do
   # The many-editors page as a nested LiveView, under a page with a shared
   # editor of its own: /collab/nested?document=ID&count=3&name=Ada.
   use Phoenix.LiveView
+  on_mount(Issho.Live)
   import Kotoba.Components
 
   def mount(params, _session, socket) do
@@ -1167,12 +1148,6 @@ defmodule KotobaDev.NestedCollabLive do
     {live_render(@socket, KotobaDev.ManyCollabLive, id: "nested", session: %{"params" => @params})}
     """
   end
-
-  def handle_event("kotoba:collab_token", %{"document_id" => id}, socket) do
-    if id == socket.assigns.document_id,
-      do: {:reply, Kotoba.Collab.token(KotobaDev.Issho, id, user: socket.assigns.user), socket},
-      else: {:reply, %{}, socket}
-  end
 end
 
 defmodule KotobaDev.NotebookLive do
@@ -1181,6 +1156,7 @@ defmodule KotobaDev.NotebookLive do
   # /collab/notebook?document=ID&name=Ada. A person's cursor goes from one
   # to the other.
   use Phoenix.LiveView
+  on_mount(Issho.Live)
   import Kotoba.Components
 
   @blocks ~w(one two)
@@ -1214,16 +1190,6 @@ defmodule KotobaDev.NotebookLive do
       <.kotoba :for={block <- @blocks} field={@form[block]} id={"notebook_#{block}"} label={"Block #{block}"} collab={@collab[block]} />
     </.form>
     """
-  end
-
-  def handle_event("kotoba:collab_token", %{"document_id" => "" <> id}, socket) do
-    case Enum.find(@blocks, &("#{socket.assigns.notebook}/#{&1}" == id)) do
-      nil ->
-        {:reply, %{}, socket}
-
-      _block ->
-        {:reply, Kotoba.Collab.token(KotobaDev.Issho, id, user: socket.assigns.user), socket}
-    end
   end
 end
 

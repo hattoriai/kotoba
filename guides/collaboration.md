@@ -188,6 +188,13 @@ is `Kotoba.Collab.token/3`'s `:max_channels`, 100 by default, the default
 
 ## LiveView and forms
 
+Shared editors need Issho's hook in their LiveView, in its `live_session`
+or in the LiveView itself:
+
+```elixir
+live_session :default, on_mount: [Issho.Live] do
+```
+
 Authorize the authenticated user before signing credentials:
 
 ```elixir
@@ -202,20 +209,17 @@ socket = assign(socket, collab: collab)
 ```
 
 Use `role: :read` for viewers. `readonly` also locks the UI, but authorization
-and the signed role enforce permissions. The browser renews credentials
-through the LiveView every three minutes and after an expired join. Handle
-`kotoba:collab_token`, check the editor/document against your socket assigns,
-recheck access, then reply with fresh credentials:
+and the signed role enforce permissions. The credentials are an Issho grant
+for the document's room (`Issho.Live.grant/4`): the browser renews it
+through the LiveView every three minutes and after an expired join, and
+Issho's hook answers, after asking your policy again, so a person whose
+access went away gets no new grant. Your LiveView handles no event for it.
 
-```elixir
-def handle_event("kotoba:collab_token", %{"id" => "body_editor", "document_id" => id}, socket) do
-  user = socket.assigns.current_user
-  # Check id against socket.assigns.document.id and authorize again here.
-  credentials = Kotoba.Collab.token(MyApp.Issho, id,
-    user: %{id: user.id, name: user.name}, role: :write)
-  {:reply, credentials, socket}
-end
-```
+The editors of a page whose documents are in one room
+(`"notebook:7/cell-1"` and `"notebook:7/cell-2"` are both in
+`"notebook:7"`) share the room: one connection, one grant, the same
+people, and a person's cursor goes from one editor to the other. The
+policy's `authorize/3` is asked about the room.
 
 The hidden content input holds the visible local document. It can include
 unsent edits, so it is not proof that the authority accepted them. On submit,
