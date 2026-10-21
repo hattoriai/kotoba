@@ -45,7 +45,10 @@ if Code.ensure_loaded?(Issho) do
     `"notebook:7/cell-2"`) share its people, and a person's cursor goes
     from one editor to the other.
 
-    Options: `:user` (required), `:role` (`:write` or `:read`), `:people`
+    Options: `:user` (required), `:role` (`:write` or `:read`), `:undo`
+    (`:editor`, the editor's own steps; `:page`, the person's last change
+    in any editor or component of the page, with Issho's undo; `false`,
+    none), `:people`
     (whether the editor lists the room's people, `true`; `false` when the
     page shows Issho's list, `Issho.Components.people/1`), `:socket`
     (the Issho socket's path, `"/issho/socket"` by default) and
@@ -89,9 +92,20 @@ if Code.ensure_loaded?(Issho) do
         "max_channels" => max_channels,
         "user" => user,
         "role" => Atom.to_string(role),
-        "people" => Keyword.get(opts, :people, true)
+        "people" => Keyword.get(opts, :people, true),
+        "undo" => undo(Keyword.get(opts, :undo, :editor))
       }
     end
+
+    defp undo(mode) when mode in [:editor, :page], do: Atom.to_string(mode)
+    defp undo(false), do: false
+
+    defp undo(other),
+      do:
+        raise(
+          ArgumentError,
+          "collaboration :undo is :editor, :page or false, got: #{inspect(other)}"
+        )
 
     @doc """
     The document's accepted content now: `{:ok, %{"epoch" => ..., "revision"

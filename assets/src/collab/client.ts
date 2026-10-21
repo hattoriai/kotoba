@@ -41,6 +41,7 @@ class Client implements Collaboration {
   // so undo takes back the person's last change wherever on the page they made it.
   private undoStack: Change[] = [];
   private redoStack: Change[] = [];
+  private readonly undo: "page" | "editor" | false;
   private readonly steps: HistoryOwner = {
     undo: () => this.step(false),
     redo: () => this.step(true),
@@ -62,6 +63,7 @@ class Client implements Collaboration {
 
   constructor(private readonly host: CollaborationHost) {
     this.credentials = host.credentials;
+    this.undo = host.credentials.undo ?? "editor";
     this.readRole = host.credentials.role === "read";
     const drafts = defaultDraftStore();
     this.drafts = drafts.store;
@@ -97,22 +99,27 @@ class Client implements Collaboration {
       const isTyping = (op: Operation): boolean => op.op === "insert_text" || op.op === "text_visibility" || (op.op === "insert_node" && op.data.type === "text") || op.op === "set_attrs";
       const typing = change.forward.some(op => op.op === "insert_text") && change.forward.every(isTyping);
       const last = this.undoStack[this.undoStack.length - 1];
-      if (typing && last && Date.now() - this.lastEdit < 300 && last.forward.every(isTyping)) {
+      if (this.undo === false) {
+        // No undo: no steps to keep.
+      } else if (typing && last && Date.now() - this.lastEdit < 300 && last.forward.every(isTyping)) {
         (last.forward as Operation[]).push(...change.forward);
         last.inverse.unshift(...change.inverse);
       } else {
         this.undoStack.push(change);
-        pageHistory.record(this.steps);
+        if (this.undo === "page") pageHistory.record(this.steps);
       }
       this.lastEdit = Date.now();
       this.redoStack = [];
       this.enqueue(change.forward, false);
       this.historyState();
     }));
-    this.cleanups.push(this.host.editor.registerCommand(api.UNDO_COMMAND, () => { pageHistory.undo(); return true; }, api.COMMAND_PRIORITY_CRITICAL));
-    this.cleanups.push(this.host.editor.registerCommand(api.REDO_COMMAND, () => { pageHistory.redo(); return true; }, api.COMMAND_PRIORITY_CRITICAL));
-    this.cleanups.push(pageHistory.on(() => this.historyState()));
-    this.cleanups.push(() => pageHistory.forget(this.steps));
+    // Undo is the app's choice: this editor's own steps, the page's (Issho's pageHistory), or none.
+    this.cleanups.push(this.host.editor.registerCommand(api.UNDO_COMMAND, () => { this.history(false); return true; }, api.COMMAND_PRIORITY_CRITICAL));
+    this.cleanups.push(this.host.editor.registerCommand(api.REDO_COMMAND, () => { this.history(true); return true; }, api.COMMAND_PRIORITY_CRITICAL));
+    if (this.undo === "page") {
+      this.cleanups.push(pageHistory.on(() => this.historyState()));
+      this.cleanups.push(() => pageHistory.forget(this.steps));
+    }
     this.cleanups.push(this.host.editor.registerCommand(api.SELECTION_CHANGE_COMMAND, () => { this.awareness(); return false; }, api.COMMAND_PRIORITY_LOW));
     // Transactions wait while a person composes text with an input method; the document renders after.
     // The place is the focused editor's: leaving an editor clears it, unless another editor of the room took it.
@@ -236,7 +243,13 @@ class Client implements Collaboration {
     this.recoveryDraft = envelope(state);
   }
 
-  // Takes back (or puts back) this editor's last step, for the page's history; false when it cannot.
+  private history(isRedo: boolean): void {
+    if (this.undo === "page") void (isRedo ? pageHistory.redo() : pageHistory.undo());
+    else if (this.undo === "editor") this.step(isRedo);
+    this.historyState();
+  }
+
+  // Takes back (or puts back) this editor's last step; false when it cannot.
   private step(isRedo: boolean): boolean {
     if (this.readonly || this.failure || this.disposed) return false;
     const source = isRedo ? this.redoStack : this.undoStack;
@@ -253,8 +266,9 @@ class Client implements Collaboration {
 
   private historyState(): void {
     const api = this.host.api.lexical;
-    this.host.editor.dispatchCommand(api.CAN_UNDO_COMMAND, pageHistory.canUndo);
-    this.host.editor.dispatchCommand(api.CAN_REDO_COMMAND, pageHistory.canRedo);
+    const [canUndo, canRedo] = this.undo === "page" ? [pageHistory.canUndo, pageHistory.canRedo] : this.undo === "editor" ? [this.undoStack.length > 0, this.redoStack.length > 0] : [false, false];
+    this.host.editor.dispatchCommand(api.CAN_UNDO_COMMAND, canUndo);
+    this.host.editor.dispatchCommand(api.CAN_REDO_COMMAND, canRedo);
   }
 
   // The revision with every change of this editor, once the server has accepted them all.

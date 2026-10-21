@@ -252,8 +252,8 @@ accepted revision until it reconnects. Custom JavaScript save flows can call
 
 An agent edits a shared document as a person does, and the people see it:
 its name in the list, its selection in its colour, its text written a
-few characters at a time, merged with their own edits. `Kotoba.Issho.MCP`
-gives it the editor's verbs over MCP:
+few characters at a time, merged with their own edits. `Kotoba.Issho.tools/0`
+gives it the editor's verbs, however it reaches your app:
 
 | Tool | What it does |
 |---|---|
@@ -270,16 +270,29 @@ Text is quoted, not counted, so the agent says what it means. Its
 changes are the operations an editor sends, through the same authority,
 checks and store.
 
-Serve it with Issho's room tools, as your app serves MCP (see Issho's
-agents guide for authorization, and for whom an agent acts):
+Give them to your app's own model, through its API, with Issho's room
+tools:
+
+```elixir
+tools = Issho.Tools.room() ++ Kotoba.Issho.tools()
+ctx = Issho.Tool.Context.new(MyApp.Issho, assistant, on_behalf_of: current_user)
+
+Issho.Tools.schemas(tools)                    # the tools of a request to the model
+Issho.Tools.call(tools, name, input, ctx)     # each tool use in its answer
+```
+
+or serve the same tools to MCP clients (with `{:sake, "~> 0.4"}`):
 
 ```elixir
 defmodule MyApp.MCP do
-  use Sake.Server, name: "my-app", version: "1.0.0"
-  mount Issho.MCP
-  mount Kotoba.Issho.MCP
+  use Issho.MCP,
+    name: "my-app",
+    version: "1.0.0",
+    tools: Issho.Tools.room() ++ Kotoba.Issho.tools()
 end
 ```
+
+See Issho's agents guide for who an agent is, and for whom it acts.
 
 The repository's development app serves them at `/mcp`: with `mix dev`
 running and `/collab/notebook` open, connect Claude Code with

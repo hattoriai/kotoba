@@ -107,3 +107,13 @@ test("undo takes back the last change on the page, in whichever editor it was ma
   await expect(editor(page, "two")).toHaveText("second");
   for (const block of ["one", "two"]) await expect(page.locator(`#notebook_${block} [data-collab-status]`)).toHaveText("Saved");
 });
+
+test("an app can leave undo out", async ({ page }) => {
+  await openEditor(page, `/collab/notebook?document=notebook:${crypto.randomUUID()}&name=Ada&undo=false`, "notebook_one");
+  await expect(page.locator("#notebook_one [data-collab-status]")).toHaveText("Saved");
+  await focusEnd(page, editor(page, "one"));
+  await page.keyboard.type("stays");
+  await page.keyboard.press(`${MOD}+Z`);
+  await expect(editor(page, "one")).toHaveText("stays");
+  await expect(page.locator("#notebook_one").getByRole("button", { name: "Undo", exact: true })).toHaveAttribute("aria-disabled", "true");
+});

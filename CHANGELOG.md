@@ -14,13 +14,14 @@ A page of Kotoba and other Issho components shares one connection.
 
 ### Added
 
-- Agents in shared documents: `Kotoba.Issho.MCP`, tools an agent uses
-  over MCP as a person uses the editor: read the blocks, select text (the
+- Agents in shared documents: `Kotoba.Issho.tools/0`, tools an agent
+  uses as a person uses the editor, however it reaches the app (its own
+  model through an API with Issho's `Issho.Tools`, or MCP with
+  `Issho.MCP`): read the blocks, select text (the
   people see its selection, in its colour), type (they see it written, a
   few characters at a time), replace, delete, format, link, add blocks,
   copy and paste, between the documents of a room too. Its changes are
-  the editor's operations, and merge with everyone's. Serve it with
-  Issho's `Issho.MCP`.
+  the editor's operations, and merge with everyone's.
 
 ### Changed
 
@@ -55,9 +56,11 @@ A page of Kotoba and other Issho components shares one connection.
   cursor goes from one editor to the other. `Kotoba.Collab.token/3`
   signs for the room and says it in the credentials' `"room"`; the
   policy's `authorize/3` is asked about the room.
-- Undo in shared editors is the page's (Issho's `pageHistory`): it takes
-  back the person's last change in whichever editor, or other component,
-  they made it, and that editor takes the focus.
+- Undo in shared editors is the app's choice (`Kotoba.Collab.token/3`'s
+  `:undo`): the editor's own steps (`:editor`, as before), the page's
+  (`:page`, Issho's `pageHistory`: the person's last change in whichever
+  editor or component they made it, which takes the focus), or none
+  (`false`).
 - `Kotoba.Collab.token/3` takes `people: false` for a page that lists the
   room's people once, with Issho's `Issho.Components.people/1`: the
   editors then list and announce no one.

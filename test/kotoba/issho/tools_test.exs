@@ -1,12 +1,18 @@
-defmodule Kotoba.Issho.MCPTest do
+defmodule Kotoba.Issho.ToolsTest do
   use ExUnit.Case, async: false
 
   import Sake.Test
 
   alias Issho.Participant
+  alias Issho.Tool.Context
   alias Kotoba.Collab
   alias Kotoba.Collab.{Document, Store}
   alias Kotoba.Content
+
+  defmodule MCP do
+    @moduledoc false
+    use Issho.MCP, name: "kotoba-test", version: "0.0.0", tools: Kotoba.Issho.tools()
+  end
 
   defmodule Policy do
     @moduledoc false
@@ -39,7 +45,9 @@ defmodule Kotoba.Issho.MCPTest do
     {:ok, _} = Participant.open(ada, document)
 
     client =
-      connect(Kotoba.Issho.MCP, client_info: %{"name" => "claude-code", "title" => "Claude Code"})
+      connect(Kotoba.Issho.ToolsTest.MCP,
+        client_info: %{"name" => "claude-code", "title" => "Claude Code"}
+      )
 
     %{instance: instance, document: document, client: client, ada: ada}
   end
@@ -171,5 +179,35 @@ defmodule Kotoba.Issho.MCPTest do
     # Its caret is after the new heading: nothing selected to link.
     assert {:error, "Select some text to make a link."} =
              call(client, "link_text", %{"document" => document, "url" => "https://x.io"})
+  end
+
+  test "an app's own model uses the same tools, through its API, with no MCP",
+       %{instance: instance, document: document, ada: ada} do
+    tools = Issho.Tools.room() ++ Kotoba.Issho.tools()
+    assert Enum.any?(Issho.Tools.schemas(tools), &(&1["name"] == "link_text"))
+
+    ctx =
+      Context.new(instance, %{id: "assistant:ada", name: "Assistant", kind: :agent},
+        on_behalf_of: %{id: "ada", name: "Ada"}
+      )
+
+    assert {:ok, _} =
+             Issho.Tools.call(
+               tools,
+               "select_text",
+               %{"document" => document, "text" => "the docs"},
+               ctx
+             )
+
+    assert {:ok, _} =
+             Issho.Tools.call(
+               tools,
+               "link_text",
+               %{"document" => document, "url" => "https://kotoba.dev"},
+               ctx
+             )
+
+    assert html(ada, document) =~
+             ~s(<a href="https://kotoba.dev" rel="noopener nofollow">the docs</a>)
   end
 end

@@ -192,6 +192,7 @@ defmodule Kotoba.CollabTest do
              "room" => "post:5",
              "socket" => "/issho/socket",
              "role" => "read",
+             "undo" => "editor",
              "user" => %{"id" => "7", "name" => "Ada", "color" => "#e84a1c"}
            } = credentials
 
@@ -206,6 +207,10 @@ defmodule Kotoba.CollabTest do
 
     assert_raise ArgumentError, fn ->
       Collab.token(instance, "post:5", user: %{id: 7}, role: :admin)
+    end
+
+    assert_raise ArgumentError, fn ->
+      Collab.token(instance, "post:5", user: %{id: 7}, undo: :always)
     end
   end
 

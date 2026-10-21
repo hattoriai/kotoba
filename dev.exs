@@ -1174,7 +1174,11 @@ defmodule KotobaDev.NotebookLive do
       Map.new(
         @blocks,
         &{&1,
-         Kotoba.Collab.token(KotobaDev.Issho, "#{notebook}/#{&1}", user: user, people: false)}
+         Kotoba.Collab.token(KotobaDev.Issho, "#{notebook}/#{&1}",
+           user: user,
+           people: false,
+           undo: if(params["undo"] == "false", do: false, else: :page)
+         )}
       )
 
     {:ok,
@@ -1206,9 +1210,10 @@ defmodule KotobaDev.MCP do
   # with no authorization (development only): an agent is named for its
   # client and acts as itself. Claude Code connects with
   # `claude mcp add --transport http kotoba-dev http://localhost:4099/mcp`.
-  use Sake.Server, name: "kotoba-dev", version: "0.0.0"
-  mount(Issho.MCP)
-  mount(Kotoba.Issho.MCP)
+  use Issho.MCP,
+    name: "kotoba-dev",
+    version: "0.0.0",
+    tools: Issho.Tools.room() ++ Kotoba.Issho.tools()
 end
 
 defmodule KotobaDev.AgentPlug do

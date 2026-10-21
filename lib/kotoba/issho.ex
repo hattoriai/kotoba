@@ -85,5 +85,34 @@ if Code.ensure_loaded?(Issho.Binding) do
     """
 
     use Issho.Binding, engine: Kotoba.Issho.Engine, place: Kotoba.Issho.Place
+
+    @doc ~S"""
+    Kotoba's tools for agents (`Issho.Tool`): an agent reads a shared
+    document, selects text (the people see its selection), types (they see
+    it written), replaces, deletes, formats, links, adds blocks, copies
+    and pastes, as a person does in the editor, and its changes merge with
+    theirs. Give them to your app's model (`Issho.Tools`), or serve them to
+    MCP clients (`Issho.MCP`), with Issho's room tools:
+
+        tools = Issho.Tools.room() ++ Kotoba.Issho.tools()
+
+    A tool names its document by id (`"notebook:7/intro"`); the room is the
+    part before the `"/"`. Text is quoted, not counted: `select_text` with
+    the words, then `link_text` with no text links the selection.
+    """
+    @spec tools() :: [module()]
+    def tools,
+      do: [
+        Kotoba.Issho.Tools.Read,
+        Kotoba.Issho.Tools.Select,
+        Kotoba.Issho.Tools.Type,
+        Kotoba.Issho.Tools.Replace,
+        Kotoba.Issho.Tools.Delete,
+        Kotoba.Issho.Tools.Format,
+        Kotoba.Issho.Tools.Link,
+        Kotoba.Issho.Tools.AddBlock,
+        Kotoba.Issho.Tools.Copy,
+        Kotoba.Issho.Tools.Paste
+      ]
   end
 end

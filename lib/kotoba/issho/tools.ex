@@ -1,12 +1,12 @@
-if Code.ensure_loaded?(Issho.MCP.Session) do
-  defmodule Kotoba.Issho.MCP.Doc do
+if Code.ensure_loaded?(Issho.Tool) do
+  defmodule Kotoba.Issho.Tools.Doc do
     @moduledoc false
     # A tool call on a shared Kotoba document, as the caller's agent: the
     # document open, its text, where the agent's selection is, and its
     # changes committed as its own, seen by everyone as they happen.
 
-    alias Issho.{Agents, Participant}
-    alias Issho.MCP.Session
+    alias Issho.Participant
+    alias Issho.Tool.Context
     alias Kotoba.Issho.Text
 
     defstruct [:ctx, :participant, :room, :document, :state]
@@ -14,7 +14,7 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
     def open(ctx, document) do
       room = Issho.Policy.room(document)
 
-      with {:ok, participant, ^document, snapshot} <- Session.open(ctx, room, document) do
+      with {:ok, participant, ^document, snapshot} <- Context.open(ctx, room, document) do
         {:ok,
          %__MODULE__{
            ctx: ctx,
@@ -39,7 +39,7 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
     def commit(%__MODULE__{} = doc, ops) do
       case Participant.transact(doc.participant, doc.document, ops) do
         {:ok, _receipt} -> {:ok, refresh(doc)}
-        {:error, reason} -> Session.error(reason)
+        {:error, reason} -> Context.error(reason)
       end
     end
 
@@ -133,31 +133,30 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
     end
 
     def remember(%__MODULE__{} = doc, name, value),
-      do: Agents.put(Session.instance(doc.ctx), Session.key(doc.ctx), doc.room, name, value)
+      do: Context.remember(doc.ctx, doc.room, name, value)
 
-    def recall(%__MODULE__{} = doc, name),
-      do: Agents.get(Session.instance(doc.ctx), Session.key(doc.ctx), doc.room, name)
+    def recall(%__MODULE__{} = doc, name), do: Context.recall(doc.ctx, doc.room, name)
 
-    def error({:error, reason}), do: Session.error(reason)
+    def error({:error, reason}), do: Context.error(reason)
   end
 
-  defmodule Kotoba.Issho.MCP.Read do
+  defmodule Kotoba.Issho.Tools.Read do
     @moduledoc false
-    use Sake.Tool,
+    use Issho.Tool,
       name: "read_text",
       description: """
       Reads a shared rich text document: its blocks (paragraphs, headings,
       list items, quotes, code), numbered from 1, each with its text and
       links. Quote this text to select or change it.
       """,
-      annotations: [read_only: true, idempotent: true, open_world: false]
+      annotations: [read_only: true, idempotent: true]
 
     arg :document, :string, required: true, description: "The document's id: \"notebook:7/intro\""
 
-    alias Kotoba.Issho.{MCP.Doc, Text}
+    alias Kotoba.Issho.{Text, Tools.Doc}
 
     @impl true
-    def execute(%{document: document}, ctx) do
+    def call(%{document: document}, ctx) do
       case Doc.open(ctx, document) do
         {:ok, doc} ->
           {:ok, %{"document" => document, "blocks" => Text.read(doc.state)}}
@@ -168,26 +167,26 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
     end
   end
 
-  defmodule Kotoba.Issho.MCP.Select do
+  defmodule Kotoba.Issho.Tools.Select do
     @moduledoc false
-    use Sake.Tool,
+    use Issho.Tool,
       name: "select_text",
       description: """
       Selects text, as a person does with the mouse: the others see your
       selection, in your colour, and the tools that change text change it
       when you do not quote text to them.
       """,
-      annotations: [idempotent: true, open_world: false]
+      annotations: [idempotent: true]
 
     arg :document, :string, required: true
     arg :text, :string, required: true, description: "The text, quoted exactly"
     arg :occurrence, :integer, min: 1, description: "Which occurrence (1, the first)"
     arg :block, :integer, min: 1, description: "Only in this block"
 
-    alias Kotoba.Issho.MCP.Doc
+    alias Kotoba.Issho.Tools.Doc
 
     @impl true
-    def execute(args, ctx) do
+    def call(args, ctx) do
       with {:ok, doc} <- Doc.open(ctx, args.document),
            {:ok, range} <- Doc.range(doc, args),
            :ok <- Doc.point(doc, range) do
@@ -198,9 +197,9 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
     end
   end
 
-  defmodule Kotoba.Issho.MCP.Type do
+  defmodule Kotoba.Issho.Tools.Type do
     @moduledoc false
-    use Sake.Tool,
+    use Issho.Tool,
       name: "type_text",
       description: """
       Types text into a shared document, as a person types: the others see
@@ -210,7 +209,7 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
       block. The text takes the formatting of the text before it, and
       `marks` on top.
       """,
-      annotations: [open_world: false]
+      annotations: []
 
     alias Kotoba.Issho.Text
 
@@ -228,10 +227,10 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
 
     arg :typing, :boolean, description: "Type it a few characters at a time (true), or at once"
 
-    alias Kotoba.Issho.MCP.Doc
+    alias Kotoba.Issho.Tools.Doc
 
     @impl true
-    def execute(args, ctx) do
+    def call(args, ctx) do
       typing? = Map.get(args, :typing) != false and String.length(args.text) <= 2_000
       marks = for {mark, value} <- args[:marks] || %{}, into: %{}, do: {to_string(mark), value}
 
@@ -245,15 +244,15 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
     end
   end
 
-  defmodule Kotoba.Issho.MCP.Replace do
+  defmodule Kotoba.Issho.Tools.Replace do
     @moduledoc false
-    use Sake.Tool,
+    use Issho.Tool,
       name: "replace_text",
       description: """
       Replaces text with other text: quoted text, or your selection. The new
       text takes the formatting of the text it replaces.
       """,
-      annotations: [destructive: true, open_world: false]
+      annotations: [destructive: true]
 
     arg :document, :string, required: true
     arg :text, :string, description: "The text to replace, quoted; your selection unless given"
@@ -262,10 +261,10 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
     arg :block, :integer, min: 1
     arg :typing, :boolean
 
-    alias Kotoba.Issho.{MCP.Doc, Text}
+    alias Kotoba.Issho.{Text, Tools.Doc}
 
     @impl true
-    def execute(args, ctx) do
+    def call(args, ctx) do
       with {:ok, doc} <- Doc.open(ctx, args.document),
            {:ok, range} <- Doc.range(doc, args),
            marks = range |> Text.selected() |> List.first() |> marks_of(),
@@ -296,22 +295,22 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
     end
   end
 
-  defmodule Kotoba.Issho.MCP.Delete do
+  defmodule Kotoba.Issho.Tools.Delete do
     @moduledoc false
-    use Sake.Tool,
+    use Issho.Tool,
       name: "delete_text",
       description: "Deletes text: quoted text, or your selection.",
-      annotations: [destructive: true, open_world: false]
+      annotations: [destructive: true]
 
     arg :document, :string, required: true
     arg :text, :string, description: "The text to delete, quoted; your selection unless given"
     arg :occurrence, :integer, min: 1
     arg :block, :integer, min: 1
 
-    alias Kotoba.Issho.{MCP.Doc, Text}
+    alias Kotoba.Issho.{Text, Tools.Doc}
 
     @impl true
-    def execute(args, ctx) do
+    def call(args, ctx) do
       with {:ok, doc} <- Doc.open(ctx, args.document),
            {:ok, range} <- Doc.range(doc, args),
            :ok <- Doc.point(doc, range),
@@ -324,16 +323,16 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
     end
   end
 
-  defmodule Kotoba.Issho.MCP.Format do
+  defmodule Kotoba.Issho.Tools.Format do
     @moduledoc false
-    use Sake.Tool,
+    use Issho.Tool,
       name: "format_text",
       description: """
       Formats text, as the toolbar does: bold, italic, underline,
       strikethrough, code, highlight, subscript, superscript (true to set,
       false to clear). Quoted text, or your selection.
       """,
-      annotations: [idempotent: true, open_world: false]
+      annotations: [idempotent: true]
 
     alias Kotoba.Issho.Text
 
@@ -346,10 +345,10 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
         {:object, Text.mark_args()},
         required: true
 
-    alias Kotoba.Issho.MCP.Doc
+    alias Kotoba.Issho.Tools.Doc
 
     @impl true
-    def execute(args, ctx) do
+    def call(args, ctx) do
       marks =
         for {mark, value} <- args.marks,
             not is_nil(value),
@@ -370,13 +369,13 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
     end
   end
 
-  defmodule Kotoba.Issho.MCP.Link do
+  defmodule Kotoba.Issho.Tools.Link do
     @moduledoc false
-    use Sake.Tool,
+    use Issho.Tool,
       name: "link_text",
       description:
         "Makes text a link to a URL, as the link command does: quoted text, or your selection.",
-      annotations: [idempotent: true, open_world: false]
+      annotations: [idempotent: true]
 
     arg :document, :string, required: true
     arg :url, :string, required: true, max_length: 2_048
@@ -384,10 +383,10 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
     arg :occurrence, :integer, min: 1
     arg :block, :integer, min: 1
 
-    alias Kotoba.Issho.{MCP.Doc, Text}
+    alias Kotoba.Issho.{Text, Tools.Doc}
 
     @impl true
-    def execute(args, ctx) do
+    def call(args, ctx) do
       with {:ok, doc} <- Doc.open(ctx, args.document),
            {:ok, range} <- Doc.range(doc, args),
            :ok <- Doc.point(doc, range),
@@ -400,25 +399,25 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
     end
   end
 
-  defmodule Kotoba.Issho.MCP.AddBlock do
+  defmodule Kotoba.Issho.Tools.AddBlock do
     @moduledoc false
-    use Sake.Tool,
+    use Issho.Tool,
       name: "add_block",
       description: """
       Adds a block with text after block `after` (0 puts it first): a
       paragraph, a heading (h1 to h6) or a quote.
       """,
-      annotations: [open_world: false]
+      annotations: []
 
     arg :document, :string, required: true
     arg :after, :integer, required: true, min: 0
     arg :type, {:enum, ~w(paragraph h1 h2 h3 h4 h5 h6 quote)}, required: true
     arg :text, :string, required: true, max_length: 20_000
 
-    alias Kotoba.Issho.{MCP.Doc, Text}
+    alias Kotoba.Issho.{Text, Tools.Doc}
 
     @impl true
-    def execute(args, ctx) do
+    def call(args, ctx) do
       with {:ok, doc} <- Doc.open(ctx, args.document),
            {:ok, ops, _state, caret} <-
              Text.insert_block(doc.state, args.after, args.type, args.text),
@@ -431,23 +430,23 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
     end
   end
 
-  defmodule Kotoba.Issho.MCP.Copy do
+  defmodule Kotoba.Issho.Tools.Copy do
     @moduledoc false
-    use Sake.Tool,
+    use Issho.Tool,
       name: "copy_text",
       description:
         "Copies text, with its formatting, for paste_text: quoted text, or your selection.",
-      annotations: [read_only: true, idempotent: true, open_world: false]
+      annotations: [read_only: true, idempotent: true]
 
     arg :document, :string, required: true
     arg :text, :string, description: "The text to copy, quoted; your selection unless given"
     arg :occurrence, :integer, min: 1
     arg :block, :integer, min: 1
 
-    alias Kotoba.Issho.{MCP.Doc, Text}
+    alias Kotoba.Issho.{Text, Tools.Doc}
 
     @impl true
-    def execute(args, ctx) do
+    def call(args, ctx) do
       with {:ok, doc} <- Doc.open(ctx, args.document),
            {:ok, range} <- Doc.range(doc, args),
            :ok <- Doc.point(doc, range) do
@@ -469,9 +468,9 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
     end
   end
 
-  defmodule Kotoba.Issho.MCP.Paste do
+  defmodule Kotoba.Issho.Tools.Paste do
     @moduledoc false
-    use Sake.Tool,
+    use Issho.Tool,
       name: "paste_text",
       description: """
       Pastes what you copied, with its formatting: `after` or `before`
@@ -479,7 +478,7 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
       else at the end of your selection. It may be in another document of
       the same room.
       """,
-      annotations: [open_world: false]
+      annotations: []
 
     arg :document, :string, required: true
     arg :after, :string
@@ -488,10 +487,10 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
     arg :block, :integer, min: 1
     arg :occurrence, :integer, min: 1
 
-    alias Kotoba.Issho.MCP.Doc
+    alias Kotoba.Issho.Tools.Doc
 
     @impl true
-    def execute(args, ctx) do
+    def call(args, ctx) do
       with {:ok, doc} <- Doc.open(ctx, args.document),
            runs when is_list(runs) <-
              Doc.recall(doc, :clipboard) || {:error, "Copy some text first."},
@@ -502,51 +501,5 @@ if Code.ensure_loaded?(Issho.MCP.Session) do
         error -> Doc.error(error)
       end
     end
-  end
-
-  defmodule Kotoba.Issho.MCP do
-    @moduledoc ~S"""
-    Kotoba's tools for agents, over MCP with Issho: an agent reads a shared
-    document, selects text (the people see its selection), types (they see
-    it written), replaces, deletes, formats, links, adds blocks, copies and
-    pastes, as a person does in the editor, and its changes merge with
-    theirs.
-
-    Serve it with `Issho.MCP`, as your app serves MCP (see `Issho.MCP` and
-    `Issho.MCP.Session` for who the agent is):
-
-        defmodule MyApp.MCP do
-          use Sake.Server, name: "my-app", version: "1.0.0"
-          mount Issho.MCP
-          mount Kotoba.Issho.MCP
-        end
-
-    A tool names its document by id (`"notebook:7/intro"`); the room is the
-    part before the `"/"`. Text is quoted, not counted: `select_text` with
-    the words, then `link_text` with no text links the selection.
-    """
-
-    use Sake.Server,
-      name: "kotoba",
-      version: "0.6.0",
-      instructions: """
-      Shared rich text documents. read_text first, then quote text to work
-      on it: select_text shows the others what you are about to change, and
-      the changing tools act on your selection when you quote nothing.
-      type_text writes as a person does, a few characters at a time.
-      """
-
-    tools [
-      Kotoba.Issho.MCP.Read,
-      Kotoba.Issho.MCP.Select,
-      Kotoba.Issho.MCP.Type,
-      Kotoba.Issho.MCP.Replace,
-      Kotoba.Issho.MCP.Delete,
-      Kotoba.Issho.MCP.Format,
-      Kotoba.Issho.MCP.Link,
-      Kotoba.Issho.MCP.AddBlock,
-      Kotoba.Issho.MCP.Copy,
-      Kotoba.Issho.MCP.Paste
-    ]
   end
 end
