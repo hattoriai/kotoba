@@ -7,6 +7,8 @@ export interface CollabCredentials {
   room?: string;
   /** Whether the editor lists the room's people (true), or the page does with Issho's list. */
   people?: boolean;
+  /** Whether the editor takes part in following, the room's (true), or not (false). */
+  follow?: boolean;
   /** Undo: this editor's own steps ("editor"), the page's, across its components ("page"), or none (false). */
   undo?: "page" | "editor" | false;
   token: string;

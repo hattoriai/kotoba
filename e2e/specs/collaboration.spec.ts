@@ -62,6 +62,24 @@ test("following someone in the editor: a line in their colour, with Stop, and a 
   await expect(people.getByRole("button", { name: "Grace" })).toHaveAttribute("aria-pressed", "false");
 });
 
+test("an editor without following: no one to follow in its list, and it shows no one followed", async ({ page, context }) => {
+  const other = await context.newPage();
+  const id = crypto.randomUUID();
+  await openEditor(page, `/collab?document=${id}&name=Ada&role=write&follow=false`, "shared_editor");
+  await expect(status(page)).toHaveText("Saved");
+  await open(other, id, "Grace");
+  const people = page.getByRole("list", { name: "People in this document" });
+  await expect(people).toContainText("Grace");
+  await expect(people.getByRole("button")).toHaveCount(0);
+  // The room follows Grace (another block of the page could): this editor shows nothing of it.
+  await page.evaluate(() => {
+    document.documentElement.dataset.isshoFollowing = JSON.stringify({ [document.querySelector<HTMLElement>("#shared_editor")!.dataset.isshoDoc!.split("/")[0]]: "Grace" });
+    document.dispatchEvent(new CustomEvent("issho:following", { detail: {} }));
+  });
+  await expect(page.locator("#shared_editor .kotoba-collab-following")).toBeHidden();
+  await expect(page.locator("#shared_editor")).not.toHaveAttribute("data-collab-following", "");
+});
+
 test("offline edits survive reload and merge with online edits", async ({ browser }) => {
   const first = await browser.newContext();
   const second = await browser.newContext();
