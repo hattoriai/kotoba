@@ -39,8 +39,8 @@ On Issho 0.3: agents move with Issho's motion, and following is the room's.
   farther they go (up to 400ms; `--collab-caret-glide` for a fixed time),
   and a selection made from a caret sweeps from its start to its end
   (`--collab-sweep`, 350ms). None of it with reduced motion.
-- With Issho 0.2.1, an agent's page pointer (`Issho.Components.pointers/1`)
-  goes to its caret, and follows it.
+- An agent's page pointer (`Issho.Components.pointers/1`) goes to its
+  caret, and follows it.
 
 ## [0.6.0] - 2026-10-21
 

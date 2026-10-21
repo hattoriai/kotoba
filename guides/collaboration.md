@@ -281,7 +281,7 @@ its caret gliding and the selection sweeping from its start to its end.
 It moves with Issho's motion (`Issho.Motion`): only when someone of the
 room sees the editor, and within a tool call's time budget; a person
 who wants no motion (the app says so, Issho's `data-issho-motion`) sees
-its changes land. With Issho 0.2.1 and its page pointers (`Issho.Components.pointers/1`),
+its changes land. With Issho's page pointers (`Issho.Components.pointers/1`),
 its pointer goes to its caret and glides with it across the page. An app
 that wants changes to appear at once says so:
 
