@@ -1,4 +1,4 @@
-import { defaultDraftStore, joinRoom, registerEngine, releaseRoom, type Peer, type Person as IsshoPerson, type Room, type SharedDocument, type State as IsshoState, type StaleDraft } from "issho";
+import { defaultDraftStore, holdForm, joinRoom, registerEngine, releaseRoom, type Peer, type Person as IsshoPerson, type Room, type SharedDocument, type State as IsshoState, type StaleDraft } from "issho";
 import type { Collaboration, CollaborationHost, CollabCredentials } from "../collaboration";
 import { Binding, COLLAB_TAG, redo, type Change, type SharedSelection } from "./binding";
 import { kotobaEngine } from "./engine";
@@ -6,9 +6,6 @@ import { apply, clone, envelope, equal, type Operation, type State } from "./mod
 import { Presence, type Person } from "./presence";
 
 registerEngine(kotobaEngine);
-
-interface FormBarrier { clients: Set<Client>; resubmit: boolean; busy: boolean; handler: (event: SubmitEvent) => void }
-const forms = new WeakMap<HTMLFormElement, FormBarrier>();
 
 // The editors of a page share the room of their documents ("notebook:7" for
 // "notebook:7/cell-1"), and with it its people and their cursors: a person's
@@ -262,38 +259,19 @@ class Client implements Collaboration {
     return revision;
   }
 
+  // A form publishes the revision the server accepted (Issho's holdForm): on submit, this editor
+  // locks, sends what it has, and notes the accepted revision in its field.
   private watchForm(): void {
     const form = this.host.element.closest("form");
     if (!form) return;
-    let barrier = forms.get(form);
-    if (!barrier) {
-      barrier = { clients: new Set(), resubmit: false, busy: false, handler: () => {} };
-      const shared = barrier;
-      shared.handler = (event): void => {
-        if (shared.resubmit) { shared.resubmit = false; return; }
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        if (shared.busy) return;
-        shared.busy = true;
-        const editing = [...shared.clients].map(client => ({ client, editable: client.host.editor.isEditable() }));
-        editing.forEach(({ client }) => client.host.editor.setEditable(false));
-        void Promise.all(editing.map(({ client }) => client.flush())).then(() => {
-          shared.resubmit = true;
-          form.requestSubmit((event.submitter as HTMLButtonElement | HTMLInputElement | null) ?? undefined);
-        }).catch(error => this.host.announce(error instanceof Error ? error.message : "The form could not be saved")).finally(() => {
-          shared.busy = false;
-          editing.forEach(({ client, editable }) => { if (!client.disposed && !client.failure) client.host.editor.setEditable(editable && !client.readonly); });
-        });
-      };
-      forms.set(form, shared);
-      form.addEventListener("submit", shared.handler, true);
-    }
-    barrier.clients.add(this);
-    const shared = barrier;
-    this.cleanups.push(() => {
-      shared.clients.delete(this);
-      if (shared.clients.size === 0) { form.removeEventListener("submit", shared.handler, true); forms.delete(form); }
-    });
+    let editable = true;
+    const lock = (locked: boolean): void => {
+      if (locked) {
+        editable = this.host.editor.isEditable();
+        this.host.editor.setEditable(false);
+      } else if (!this.disposed && !this.failure) this.host.editor.setEditable(editable && !this.readonly);
+    };
+    this.cleanups.push(holdForm(form, { flush: () => this.flush(), lock }, reason => this.host.announce(reason)));
   }
 
   private awareness(): void {
