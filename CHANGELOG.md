@@ -5,6 +5,43 @@ All notable changes to Kotoba are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-10-21
+
+On Issho 0.3: agents move with Issho's motion, and following is the room's.
+
+### Changed (breaking)
+
+- Requires `{:issho, "~> 0.3"}`.
+- An agent moves with `Issho.Motion`: it goes to where it works and
+  selects as a drag does only when someone of the room sees it, within a
+  tool call's time budget; Issho's `travel: false` turns it off for every
+  component, Kotoba's own `travel: false` for the editor's agents.
+
+### Added
+
+- Following someone, from the editor's people list or the page's
+  (`Issho.Components.pointers/1`, `Issho.Components.people/1`): the
+  editor follows them to their caret. On an Issho page the page scrolls to
+  them; an editor alone in its room scrolls to their caret itself. Going
+  one's own way in the editor (a key, a click, a scroll) stops following.
+- The person's motion, as the app says it (Issho's `data-issho-motion`):
+  carets glide and selections sweep only for a person who wants motion.
+
+- An agent moves as a person does, so that the people can follow it: its
+  caret goes to where it works, it selects text as a drag does, holds a
+  moment on what it is about to format, link, replace or delete, and types
+  at a person's pace; `add_block` adds an empty block and types its text
+  in it. Only where it goes is sent (where it presses, where it lets go);
+  each browser draws the way. Options: `config :kotoba, Kotoba.Issho,
+  pace: 25, travel: true` (`pace: 0, travel: false` for changes that
+  appear at once).
+- Others' carets glide from place to place in the editor, longer the
+  farther they go (up to 400ms; `--collab-caret-glide` for a fixed time),
+  and a selection made from a caret sweeps from its start to its end
+  (`--collab-sweep`, 350ms). None of it with reduced motion.
+- An agent's page pointer (`Issho.Components.pointers/1`) goes to its
+  caret, and follows it.
+
 ## [0.6.0] - 2026-10-21
 
 Collaboration runs on [Issho](https://hex.pm/packages/issho): the same

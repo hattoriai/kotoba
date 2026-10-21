@@ -143,6 +143,10 @@ jobs:
       - run: npm ci
         working-directory: assets
 
+      # Issho from its main branch until Issho 0.3 is on Hex: its bundle and types, built.
+      - run: mix deps.get && mix issho.build
+        working-directory: deps/issho
+
       - run: npm run typecheck
         working-directory: assets
 
@@ -192,6 +196,10 @@ jobs:
 
       - run: npx playwright install --with-deps ${{ matrix.browser }}
         working-directory: e2e
+
+      # Issho from its main branch until Issho 0.3 is on Hex: its bundle and types, built.
+      - run: mix deps.get && mix issho.build
+        working-directory: deps/issho
 
       # The Playwright web server runs `mix kotoba.build` (the real bundle),
       # builds the dev node modules and starts `mix dev` without watchers.

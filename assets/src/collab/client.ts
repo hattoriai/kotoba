@@ -1,4 +1,5 @@
 import { defaultDraftStore, holdForm, joinRoom, pageHistory, registerEngine, releaseRoom, type HistoryOwner, type Peer, type Person as IsshoPerson, type Room, type SharedDocument, type State as IsshoState, type StaleDraft } from "issho";
+import * as issho from "issho";
 import type { Collaboration, CollaborationHost, CollabCredentials } from "../collaboration";
 import { Binding, COLLAB_TAG, redo, type Change, type SharedSelection } from "./binding";
 import { kotobaEngine } from "./engine";
@@ -82,7 +83,7 @@ class Client implements Collaboration {
     this.recover.addEventListener("click", () => this.download());
     this.bar.append(this.status, this.recover);
     host.element.prepend(this.bar);
-    this.presence = new Presence(host, this.binding, () => this.room?.session ?? "", this.bar, host.credentials.people !== false);
+    this.presence = new Presence(host, this.binding, () => this.room?.session ?? "", this.bar, host.credentials.people !== false, roomOf(host.credentials));
     this.revisionInput = document.createElement("input");
     this.revisionInput.type = "hidden";
     this.revisionInput.name = `kotoba_collab[${host.element.id}]`;
@@ -91,6 +92,9 @@ class Client implements Collaboration {
 
   async start(): Promise<void> {
     this.host.setReadonly(true);
+    // Issho's pointer of an agent at work here goes to its caret (Issho 0.2.1 and later).
+    const locate = (issho as unknown as { locate?: (element: Element, locator: (at: unknown) => DOMRect | null) => () => void }).locate;
+    if (locate) this.cleanups.push(locate(this.host.element, at => (isSelection(at) ? this.presence.caretBox(at) : null)));
     const api = this.host.api.lexical;
     this.cleanups.push(this.host.editor.registerUpdateListener(({ tags, dirtyElements, dirtyLeaves }) => {
       if (tags.has(COLLAB_TAG) || !this.view || this.readonly || (dirtyElements.size === 0 && dirtyLeaves.size === 0)) return;
@@ -407,4 +411,9 @@ export async function createCollaboration(host: CollaborationHost): Promise<Coll
   const client = new Client(host);
   await client.start();
   return client;
+}
+
+function isSelection(at: unknown): at is SharedSelection {
+  const point = (value: unknown): boolean => typeof value === "object" && value !== null && typeof (value as { node?: unknown }).node === "string";
+  return typeof at === "object" && at !== null && point((at as SharedSelection).anchor) && point((at as SharedSelection).focus);
 }

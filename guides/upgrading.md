@@ -1,4 +1,31 @@
-# Upgrading to Kotoba 0.6
+# Upgrading
+
+## To Kotoba 0.7
+
+Kotoba 0.7 runs on [Issho](https://hex.pm/packages/issho) 0.3, which makes
+agents move as people do and following someone the room's, across every
+block of a page. An editor that is not shared needs nothing.
+
+### What changes
+
+| 0.6 | 0.7 |
+| --- | --- |
+| `{:issho, "~> 0.2"}` | `{:issho, "~> 0.3"}` |
+| an agent's edits appeared at once | it goes to the text, selects as a drag does, holds a moment, and types at a person's pace (`config :kotoba, Kotoba.Issho, pace: 25, travel: true`), when someone sees it (`Issho.Motion`) |
+| no following | the editor's people list follows on a click, and the editor follows the one followed in the room to their caret |
+
+### Steps
+
+1. **Update** `{:kotoba, "~> 0.7"}` and `{:issho, "~> 0.3"}`.
+2. **For changes that appear at once**, as in 0.6:
+   `config :kotoba, Kotoba.Issho, pace: 0, travel: false` (or Issho's
+   `config :issho, Issho.Motion, travel: false` for every component).
+3. **On a page of several blocks**, add Issho's pointers
+   (`Issho.Components.pointers/1`): an agent's pointer goes from block to
+   block, the page follows the one followed, and a person's motion is the
+   app's to say (`motion` on the pointers).
+
+## To Kotoba 0.6
 
 Kotoba 0.6 moves shared editing onto [Issho](https://hex.pm/packages/issho),
 collaboration for Phoenix, which Hakushi's canvases were built on, and
@@ -8,7 +35,7 @@ uploads, prompts and custom nodes need nothing.
 
 This guide is for an app with shared editors (`collab` on `<.kotoba>`).
 
-## Why
+### Why
 
 Kotoba 0.5 brought its own collaboration: a document supervisor, a
 channel, a socket, credentials and their renewal, cursors and people.
@@ -49,7 +76,7 @@ rules, its policy of nodes and features, the editor, the offline drafts
 and the form flow. Issho is the document's authority, the room's people
 and their cursors, and the connection.
 
-## What changes
+### What changes
 
 | 0.5 | 0.6 |
 | --- | --- |
@@ -66,7 +93,7 @@ they are, with their epoch, revision, history and receipts, and are saved
 in Issho's form with their next change. The editors' browsers keep their
 offline drafts.
 
-## Steps
+### Steps
 
 1. **Add Issho** to your dependencies:
 
@@ -162,7 +189,7 @@ offline drafts.
 6. **Map `issho`** in an import map, next to `kotoba/collab`; with esbuild
    it is found in `deps/`, as `phoenix` is.
 
-## Then
+### Then
 
 - On a page of several editors, put their documents in one room
   (`"notebook:7/cell-1"`, `"notebook:7/cell-2"`), list its people once

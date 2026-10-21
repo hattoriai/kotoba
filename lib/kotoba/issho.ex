@@ -99,6 +99,18 @@ if Code.ensure_loaded?(Issho.Binding) do
     A tool names its document by id (`"notebook:7/intro"`); the room is the
     part before the `"/"`. Text is quoted, not counted: `select_text` with
     the words, then `link_text` with no text links the selection.
+
+    An agent moves as a person does, so that the people follow it: its
+    caret goes to where it works, it selects as a drag does and holds a
+    moment before it changes the selection, and it types at a person's
+    pace. Only where it goes is sent; each browser draws the way there.
+    For changes that appear at once:
+
+        config :kotoba, Kotoba.Issho, pace: 0, travel: false
+
+    `pace`: the milliseconds it takes to type a character (25; a long text
+    is typed in at most 8 seconds). `travel`: whether it goes to where it
+    works and drags (true).
     """
     @spec tools() :: [module()]
     def tools,
