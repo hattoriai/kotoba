@@ -34,7 +34,8 @@ export class Presence {
     this.list.className = "kotoba-collab-people";
     this.list.setAttribute("aria-label", "People in this document");
     this.followingLine = document.createElement("p");
-    this.followingLine.className = "kotoba-collab-following";
+    // Issho's look of following (its classes and properties), the same on every block of the page.
+    this.followingLine.className = "kotoba-collab-following issho-following";
     this.followingLine.setAttribute("role", "status");
     this.followingLine.dataset.isshoFollowControl = "";
     this.followingLine.hidden = true;
@@ -105,11 +106,12 @@ export class Presence {
     const color = this.color(person);
     element.dataset.collabFollowing = "";
     element.style.setProperty("--collab-follow-color", color);
+    this.followingLine.style.setProperty("--issho-color", color);
     const text = document.createElement("span");
     text.textContent = `Following ${person.user.name}`;
     const stop = document.createElement("button");
     stop.type = "button";
-    stop.className = "kotoba-collab-following-stop";
+    stop.className = "kotoba-collab-following-stop issho-following-stop";
     stop.textContent = "Stop";
     stop.addEventListener("click", () => follow(this.room, null));
     this.followingLine.replaceChildren(text, stop);
