@@ -111,3 +111,31 @@ test("a pointer beyond the viewport is a marker at its edge that goes to it", as
   await expect(pointer(other, "Ada")).toHaveAttribute("data-edge", "");
   await context.close();
 });
+
+// A place between blocks has no caret of a line (the start of the
+// document, before its first block): it is the top of the block there, a
+// line high, not the whole editor, whose far corner is off the screen.
+test("a place between blocks is the top of the block there, a line high", async ({ page }) => {
+  const notebook = `notebook:${crypto.randomUUID()}`;
+  await page.setViewportSize({ width: 1200, height: 900 });
+  await open(page, notebook, "Ada");
+
+  const { box, first, editor } = await page.evaluate(() => {
+    const element = [...document.querySelectorAll("#notebook_one [data-issho-doc], #notebook_one")].find(
+      (one) => (one as unknown as Record<symbol, unknown>)[Symbol.for("issho.locator")],
+    ) as unknown as Record<symbol, (at: unknown) => DOMRect | null> & Element;
+    const start = { node: "root", before: null, offset: 0 };
+    const rect = element[Symbol.for("issho.locator")]({ anchor: start, focus: start });
+    const editable = document.querySelector("#notebook_one .kotoba-editable")!;
+    const block = editable.firstElementChild!.getBoundingClientRect();
+    return {
+      box: rect && { top: rect.top, height: rect.height },
+      first: { top: block.top },
+      editor: { height: editable.getBoundingClientRect().height },
+    };
+  });
+
+  expect(box).not.toBeNull();
+  expect(Math.abs(box!.top - first.top)).toBeLessThan(2);
+  expect(box!.height).toBeLessThan(Math.min(60, editor.height));
+});
