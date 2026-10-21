@@ -45,6 +45,9 @@ A page of Kotoba and other Issho components shares one connection.
   cursor goes from one editor to the other. `Kotoba.Collab.token/3`
   signs for the room and says it in the credentials' `"room"`; the
   policy's `authorize/3` is asked about the room.
+- `Kotoba.Collab.token/3` takes `people: false` for a page that lists the
+  room's people once, with Issho's `Issho.Components.people/1`: the
+  editors then list and announce no one.
 
 ### Fixed
 

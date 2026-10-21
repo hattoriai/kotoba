@@ -65,3 +65,21 @@ test("the LiveView renews the room's grant for its editors, every three minutes"
   await page.keyboard.type("renewed");
   await expect(page.locator("#notebook_two [data-collab-status]")).toHaveText("Saved");
 });
+
+test("the page lists the room's people once, whatever its editors", async ({ page, browser }) => {
+  const notebook = `notebook:${crypto.randomUUID()}`;
+  await open(page, notebook, "Ada");
+  const people = page.getByRole("list", { name: "People here" });
+  await expect(people.locator("li")).toHaveCount(1);
+  await expect(people).toContainText("Ada (you)");
+  // The editors list no one: the page does.
+  await expect(page.getByRole("list", { name: "People in this document" })).toHaveCount(0);
+
+  const context = await browser.newContext();
+  const other = await context.newPage();
+  await open(other, notebook, "Grace");
+  await expect(people.locator("li")).toHaveCount(2);
+  await expect(people).toContainText("Grace");
+  await context.close();
+  await expect(people.locator("li")).toHaveCount(1);
+});

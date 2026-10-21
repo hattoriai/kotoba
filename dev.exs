@@ -312,6 +312,7 @@ defmodule KotobaDev.Layouts do
         <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
         <title>Kotoba development</title>
         <link rel="stylesheet" href="/assets/kotoba.css" />
+        <link rel="stylesheet" href="/vendor/issho-css/issho.css" />
         <link :if={@sumi} rel="stylesheet" href="/assets/kotoba-sumi.css" />
         <style>
           body { font-family: system-ui, sans-serif; margin: 0; background: #fafaf9; color: #1c1917; }
@@ -340,11 +341,12 @@ defmodule KotobaDev.Layouts do
           import { LiveSocket } from "phoenix_live_view"
           import { Kotoba, registerCollaboration } from "kotoba"
           import { enableCollaboration } from "kotoba/collab"
+          import { Hooks as IsshoHooks } from "issho"
           enableCollaboration(registerCollaboration)
 
           const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
           const liveSocket = new LiveSocket("/live", Socket, {
-            hooks: { Kotoba },
+            hooks: { Kotoba, ...IsshoHooks },
             params: { _csrf_token: csrfToken }
           })
           liveSocket.connect()
@@ -1166,10 +1168,12 @@ defmodule KotobaDev.NotebookLive do
     name = Map.get(params, "name", "Ada")
     user = %{id: name, name: name, color: if(name == "Ada", do: "#2563eb", else: "#be185d")}
 
+    # The page lists the people, once: the editors do not.
     collab =
       Map.new(
         @blocks,
-        &{&1, Kotoba.Collab.token(KotobaDev.Issho, "#{notebook}/#{&1}", user: user)}
+        &{&1,
+         Kotoba.Collab.token(KotobaDev.Issho, "#{notebook}/#{&1}", user: user, people: false)}
       )
 
     {:ok,
@@ -1177,6 +1181,7 @@ defmodule KotobaDev.NotebookLive do
        notebook: notebook,
        user: user,
        collab: collab,
+       grant: Issho.Live.grant(KotobaDev.Issho, user, notebook),
        form: to_form(%{}, as: :notebook)
      )}
   end
@@ -1186,6 +1191,7 @@ defmodule KotobaDev.NotebookLive do
 
     ~H"""
     <h1>Notebook</h1>
+    <Issho.Components.people id="notebook-people" grant={@grant} />
     <.form for={@form} id="notebook-form">
       <.kotoba :for={block <- @blocks} field={@form[block]} id={"notebook_#{block}"} label={"Block #{block}"} collab={@collab[block]} />
     </.form>
@@ -1244,6 +1250,8 @@ defmodule KotobaDev.Endpoint do
   # The node modules, then the editor bundle and its style sheets.
   plug(Plug.Static, at: "/assets/nodes", from: Path.expand("tmp/dev/nodes", __DIR__))
   plug(Plug.Static, at: "/vendor/issho", from: Path.expand("tmp/dev/issho", __DIR__))
+  # Issho's theme, from its source until a release of Issho with it is on Hex.
+  plug(Plug.Static, at: "/vendor/issho-css", from: {:issho, "assets/css"})
   plug(Plug.Static, at: "/assets", from: Path.expand("priv/static", __DIR__))
   plug(Plug.Static, at: "/vendor/phoenix", from: {:phoenix, "priv/static"})
   plug(Plug.Static, at: "/vendor/phoenix_live_view", from: {:phoenix_live_view, "priv/static"})

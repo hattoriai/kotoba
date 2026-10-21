@@ -5,6 +5,8 @@ export interface CollabCredentials {
   document_id: string;
   /** The Issho room the document is in: the editors of a room share its people and cursors. */
   room?: string;
+  /** Whether the editor lists the room's people (true), or the page does with Issho's list. */
+  people?: boolean;
   token: string;
   socket: string;
   max_channels?: number;
@@ -47,6 +49,6 @@ export function attachCollaboration(host: CollaborationHost): Promise<Collaborat
 export function readCollabCredentials(json: string | undefined): CollabCredentials | null {
   if (!json) return null;
   const data = JSON.parse(json) as CollabCredentials;
-  if (!data || typeof data.document_id !== "string" || typeof data.token !== "string" || typeof data.socket !== "string" || (data.room !== undefined && typeof data.room !== "string") || !["read", "write"].includes(data.role) || typeof data.user?.id !== "string" || (data.max_channels !== undefined && !(Number.isInteger(data.max_channels) && data.max_channels > 0))) throw new Error("Invalid Kotoba collaboration credentials");
+  if (!data || typeof data.document_id !== "string" || typeof data.token !== "string" || typeof data.socket !== "string" || (data.room !== undefined && typeof data.room !== "string") || (data.people !== undefined && typeof data.people !== "boolean") || !["read", "write"].includes(data.role) || typeof data.user?.id !== "string" || (data.max_channels !== undefined && !(Number.isInteger(data.max_channels) && data.max_channels > 0))) throw new Error("Invalid Kotoba collaboration credentials");
   return data;
 }

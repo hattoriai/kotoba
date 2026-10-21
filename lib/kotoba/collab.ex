@@ -45,7 +45,9 @@ if Code.ensure_loaded?(Issho) do
     `"notebook:7/cell-2"`) share its people, and a person's cursor goes
     from one editor to the other.
 
-    Options: `:user` (required), `:role` (`:write` or `:read`), `:socket`
+    Options: `:user` (required), `:role` (`:write` or `:read`), `:people`
+    (whether the editor lists the room's people, `true`; `false` when the
+    page shows Issho's list, `Issho.Components.people/1`), `:socket`
     (the Issho socket's path, `"/issho/socket"` by default) and
     `:max_channels` (that socket's `:max_channels_per_transport`, 100 by
     default).
@@ -86,7 +88,8 @@ if Code.ensure_loaded?(Issho) do
         "socket" => grant["socket"],
         "max_channels" => max_channels,
         "user" => user,
-        "role" => Atom.to_string(role)
+        "role" => Atom.to_string(role),
+        "people" => Keyword.get(opts, :people, true)
       }
     end
 

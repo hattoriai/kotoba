@@ -1,4 +1,4 @@
-import { defaultDraftStore, joinRoom, registerEngine, type Peer, type Person as IsshoPerson, type Room, type SharedDocument, type State as IsshoState, type StaleDraft } from "issho";
+import { defaultDraftStore, joinRoom, registerEngine, releaseRoom, type Peer, type Person as IsshoPerson, type Room, type SharedDocument, type State as IsshoState, type StaleDraft } from "issho";
 import type { Collaboration, CollaborationHost, CollabCredentials } from "../collaboration";
 import { Binding, COLLAB_TAG, redo, type Change, type SharedSelection } from "./binding";
 import { kotobaEngine } from "./engine";
@@ -12,8 +12,8 @@ const forms = new WeakMap<HTMLFormElement, FormBarrier>();
 
 // The editors of a page share the room of their documents ("notebook:7" for
 // "notebook:7/cell-1"), and with it its people and their cursors: a person's
-// cursor goes from one editor to another. The room stays while an editor of it does.
-const rooms = new Map<string, number>();
+// cursor goes from one editor to another. Each editor holds the room (Issho's
+// joinRoom and releaseRoom), as the page's other components do.
 // The editors of each room: its grant is renewed through any of them still on the page.
 const editors = new Map<string, Set<Client>>();
 
@@ -76,7 +76,7 @@ class Client implements Collaboration {
     this.recover.addEventListener("click", () => this.download());
     this.bar.append(this.status, this.recover);
     host.element.prepend(this.bar);
-    this.presence = new Presence(host, this.binding, () => this.room?.session ?? "", this.bar);
+    this.presence = new Presence(host, this.binding, () => this.room?.session ?? "", this.bar, host.credentials.people !== false);
     this.revisionInput = document.createElement("input");
     this.revisionInput.type = "hidden";
     this.revisionInput.name = `kotoba_collab[${host.element.id}]`;
@@ -145,7 +145,6 @@ class Client implements Collaboration {
         drafts: this.drafts,
         renew: () => renew(roomName),
       });
-      rooms.set(roomName, (rooms.get(roomName) ?? 0) + 1);
       if (this.disposed) { this.release(); return; }
       this.readRole ||= this.room.can === "read";
       this.cleanups.push(this.room.onStaleDraft(stale => this.stale(stale)));
@@ -377,12 +376,9 @@ class Client implements Collaboration {
     return this.credentials.token;
   }
 
-  // The room goes with the last editor of the page in it.
+  // The page leaves the room when no editor or other component holds it.
   private release(): void {
-    const room = roomOf(this.credentials);
-    const count = (rooms.get(room) ?? 1) - 1;
-    if (count > 0) rooms.set(room, count);
-    else { rooms.delete(room); this.room?.leave(); }
+    void releaseRoom(roomOf(this.credentials));
   }
 
   dispose(): void {
@@ -393,7 +389,7 @@ class Client implements Collaboration {
     this.cleanups.reverse().forEach(cleanup => cleanup());
     if (this.room) {
       const place = this.room.awareness.state?.place as { doc?: string } | null | undefined;
-      if ((rooms.get(roomOf(this.credentials)) ?? 0) > 1 && place?.doc === this.credentials.document_id) this.room.aware({ place: null });
+      if (place?.doc === this.credentials.document_id) this.room.aware({ place: null });
       void this.room.flushDrafts().finally(() => this.release());
     }
     this.presence.dispose();

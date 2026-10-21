@@ -13,11 +13,12 @@ export class Presence {
   private initialized = false;
   private readonly observer: ResizeObserver;
 
-  constructor(private readonly host: CollaborationHost, private readonly binding: Binding, private readonly session: () => string, bar: HTMLElement) {
+  // `list`: whether the editor lists the people, or the page does (Issho's people list).
+  constructor(private readonly host: CollaborationHost, private readonly binding: Binding, private readonly session: () => string, bar: HTMLElement, private readonly listed = true) {
     this.list = document.createElement("ul");
     this.list.className = "kotoba-collab-people";
     this.list.setAttribute("aria-label", "People in this document");
-    bar.append(this.list);
+    if (listed) bar.append(this.list);
     this.layer = document.createElement("div");
     this.layer.className = "kotoba-collab-cursors";
     this.layer.setAttribute("aria-hidden", "true");
@@ -33,7 +34,7 @@ export class Presence {
     for (const session of this.lastSelections.keys()) if (!sessions.has(session)) this.lastSelections.delete(session);
     const unique = new Map(people.map(person => [person.user.id, person]));
     const next = new Set(unique.keys());
-    if (this.initialized) {
+    if (this.initialized && this.listed) {
       for (const [id, person] of unique) if (!this.known.has(id)) this.host.announce(`${person.user.name} joined`);
       for (const id of this.known) if (!next.has(id)) this.host.announce("A participant left");
     }
