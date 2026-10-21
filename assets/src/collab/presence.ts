@@ -50,7 +50,8 @@ export class Presence {
   }
 
   offline(): void { this.receive(this.people.filter(person => person.session === this.session())); }
-  private color(person: Person): string { return /^#[0-9a-f]{6}$/i.test(person.user.color) ? person.user.color : "#2563eb"; }
+  // A person's own colour, or their colour of Issho's palette (the same as in Issho's people list).
+  private color(person: Person): string { return /^#[0-9a-f]{6}$/i.test(person.user.color) || /^var\(--issho-person-[1-8], #[0-9a-f]{6}\)$/i.test(person.user.color) ? person.user.color : "#2563eb"; }
   private readonly onScroll = (): void => this.draw();
 
   draw(): void {

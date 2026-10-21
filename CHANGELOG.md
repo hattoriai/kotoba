@@ -12,6 +12,16 @@ editor, document model, merge rules, offline drafts and form flow, with
 Issho as the document's authority, the room's people and their cursors.
 A page of Kotoba and other Issho components shares one connection.
 
+### Added
+
+- Agents in shared documents: `Kotoba.Issho.MCP`, tools an agent uses
+  over MCP as a person uses the editor: read the blocks, select text (the
+  people see its selection, in its colour), type (they see it written, a
+  few characters at a time), replace, delete, format, link, add blocks,
+  copy and paste, between the documents of a room too. Its changes are
+  the editor's operations, and merge with everyone's. Serve it with
+  Issho's `Issho.MCP`.
+
 ### Changed
 
 - **Breaking:** collaboration needs `{:issho, "~> 0.2"}`. To upgrade:

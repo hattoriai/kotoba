@@ -308,7 +308,7 @@ class Client implements Collaboration {
     const byKey = new Map<string, IsshoPerson>(this.room.presence.everyone.map(person => [person.key, person]));
     const user = (key: string): Person["user"] => {
       const person = byKey.get(key);
-      return { id: key, name: person?.name ?? "Anonymous", color: person?.color ?? "" };
+      return { id: key, name: person?.name ?? "Anonymous", color: person?.color ?? `var(--issho-person-${person?.palette ?? 1}, #2563eb)` };
     };
     const role = (key: string): Person["role"] => byKey.get(key)?.can ?? "write";
     const selections = this.room.awareness.peers.flatMap((peer: Peer): Person[] => {

@@ -30,6 +30,7 @@ Application.put_env(:phoenix, :json_library, JSON)
 Logger.configure(level: :info)
 Application.put_env(:kotoba, :nodes, [KotobaDev.Nodes.Tag, KotobaDev.Nodes.Callout])
 Application.put_env(:kotoba, :allowed_link_schemes, ~w(http https mailto tel))
+Application.put_env(:issho, Issho.MCP, instance: KotobaDev.Issho)
 Application.put_env(:kotoba, :storage, Kotoba.Storage.Local)
 Application.put_env(:kotoba, Kotoba.Storage.Local, root: uploads, url_prefix: "/uploads/kotoba")
 
@@ -1199,16 +1200,61 @@ defmodule KotobaDev.NotebookLive do
   end
 end
 
+defmodule KotobaDev.MCP do
+  @moduledoc false
+  # MCP for agents: Issho's room tools and Kotoba's text tools, at /mcp,
+  # with no authorization (development only): an agent is named for its
+  # client and acts as itself. Claude Code connects with
+  # `claude mcp add --transport http kotoba-dev http://localhost:4099/mcp`.
+  use Sake.Server, name: "kotoba-dev", version: "0.0.0"
+  mount(Issho.MCP)
+  mount(Kotoba.Issho.MCP)
+end
+
+defmodule KotobaDev.AgentPlug do
+  @moduledoc false
+  # For the browser tests: calls a tool of /mcp as an MCP client does, over
+  # HTTP, with Sake's client. POST {"tool": ..., "arguments": {...}}.
+  @behaviour Plug
+
+  def init(opts), do: opts
+
+  def call(conn, _opts) do
+    %{"tool" => tool, "arguments" => arguments} = conn.body_params
+    url = "http://127.0.0.1:#{conn.port}/mcp"
+
+    {:ok, session} =
+      Sake.Client.connect(url, client_info: %{"name" => "claude-code", "title" => "Claude Code"})
+
+    reply =
+      case Sake.Client.call_tool(session, tool, arguments) do
+        {:ok, %{is_error: true, text: text}, _session} -> %{"error" => text}
+        {:ok, result, _session} -> %{"result" => result.structured || result.text}
+        {:error, reason, _session} -> %{"error" => inspect(reason)}
+      end
+
+    conn
+    |> Plug.Conn.put_resp_content_type("application/json")
+    |> Plug.Conn.send_resp(200, JSON.encode!(reply))
+  end
+end
+
 defmodule KotobaDev.Router do
   use Phoenix.Router
 
   import Phoenix.LiveView.Router
+  import Sake.Router
 
   pipeline :browser do
     plug(:fetch_session)
     plug(:fetch_live_flash)
     plug(:protect_from_forgery)
     plug(:put_root_layout, html: {KotobaDev.Layouts, :root})
+  end
+
+  scope "/" do
+    sake_endpoint("/mcp", server: KotobaDev.MCP, secret: String.duplicate("kotoba-dev-mcp-", 4))
+    post("/dev/agent", KotobaDev.AgentPlug, [])
   end
 
   scope "/" do
@@ -1251,7 +1297,7 @@ defmodule KotobaDev.Endpoint do
   plug(Plug.Static, at: "/assets/nodes", from: Path.expand("tmp/dev/nodes", __DIR__))
   plug(Plug.Static, at: "/vendor/issho", from: Path.expand("tmp/dev/issho", __DIR__))
   # Issho's theme, from its source until a release of Issho with it is on Hex.
-  plug(Plug.Static, at: "/vendor/issho-css", from: {:issho, "assets/css"})
+  plug(Plug.Static, at: "/vendor/issho-css", from: Path.expand("deps/issho/assets/css", __DIR__))
   plug(Plug.Static, at: "/assets", from: Path.expand("priv/static", __DIR__))
   plug(Plug.Static, at: "/vendor/phoenix", from: {:phoenix, "priv/static"})
   plug(Plug.Static, at: "/vendor/phoenix_live_view", from: {:phoenix_live_view, "priv/static"})
