@@ -247,6 +247,7 @@ defmodule Kotoba.Components do
         phx-update="ignore"
         data-input={@input_id}
         data-collab={@collab}
+        data-issho-doc={@collab && @collab["document_id"]}
         data-readonly={to_string(@readonly)}
         data-change={to_string(@change)}
         data-placeholder={@placeholder}
