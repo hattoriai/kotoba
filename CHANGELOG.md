@@ -10,7 +10,9 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 Collaboration runs on [Issho](https://hex.pm/packages/issho): the same
 editor, document model, merge rules, offline drafts and form flow, with
 Issho as the document's authority, the room's people and their cursors.
-A page of Kotoba and other Issho components shares one connection.
+A page of Kotoba and other Issho components shares one connection. Why,
+what it gives a page, and the steps: the
+[Upgrading to 0.6](guides/upgrading.md) guide.
 
 ### Added
 
