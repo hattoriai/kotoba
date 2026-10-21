@@ -120,6 +120,7 @@ defmodule Kotoba.MixProject do
         "guides/suggestions.md",
         "guides/custom_nodes.md",
         "guides/extensions.md",
+        "guides/embeds.md",
         "guides/theming.md",
         "guides/security.md",
         "guides/accessibility.md",
@@ -139,6 +140,7 @@ defmodule Kotoba.MixProject do
           "guides/suggestions.md",
           "guides/custom_nodes.md",
           "guides/extensions.md",
+          "guides/embeds.md",
           "guides/theming.md"
         ],
         Reference: [
@@ -152,6 +154,7 @@ defmodule Kotoba.MixProject do
           Kotoba,
           Kotoba.Components,
           Kotoba.Live,
+          Kotoba.Embeds,
           Kotoba.MarkdownPaste,
           Kotoba.Prompts,
           Kotoba.Features,
