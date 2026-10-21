@@ -18,9 +18,9 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   pace: 25, travel: true` (`pace: 0, travel: false` for changes that
   appear at once).
 - Others' carets glide from place to place in the editor, longer the
-  farther they go (up to 400ms; `--kotoba-caret-glide` for a fixed time),
+  farther they go (up to 400ms; `--collab-caret-glide` for a fixed time),
   and a selection made from a caret sweeps from its start to its end
-  (`--kotoba-sweep`, 350ms). None of it with reduced motion.
+  (`--collab-sweep`, 350ms). None of it with reduced motion.
 - With Issho 0.2.1, an agent's page pointer (`Issho.Components.pointers/1`)
   goes to its caret, and follows it.
 

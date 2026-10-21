@@ -106,9 +106,9 @@ export class Presence {
             highlight.style.backgroundColor = this.color(person);
             if (sweep) {
               highlight.dataset.sweep = "";
-              highlight.style.setProperty("--kotoba-sweep-line", `${line / rects.length}`);
-              highlight.style.setProperty("--kotoba-sweep-lines", `${rects.length}`);
-              highlight.style.setProperty("--kotoba-sweep-elapsed", `${Math.round(elapsed)}ms`);
+              highlight.style.setProperty("--collab-sweep-line", `${line / rects.length}`);
+              highlight.style.setProperty("--collab-sweep-lines", `${rects.length}`);
+              highlight.style.setProperty("--collab-sweep-elapsed", `${Math.round(elapsed)}ms`);
             }
             // Under the carets.
             this.layer.prepend(highlight);
@@ -126,7 +126,7 @@ export class Presence {
           const left = parseFloat(caret.style.left);
           const top = parseFloat(caret.style.top);
           const distance = Number.isNaN(left) ? 0 : Math.hypot(rect.left - surface.left - left, rect.top - surface.top - top);
-          caret.style.setProperty("--kotoba-caret-travel", `${Math.round(Math.min(400, Math.max(80, distance * 0.8)))}ms`);
+          caret.style.setProperty("--collab-caret-travel", `${Math.round(Math.min(400, Math.max(80, distance * 0.8)))}ms`);
           this.position(caret, rect, surface);
           caret.style.setProperty("--collab-color", this.color(person));
           const label = caret.firstElementChild as HTMLSpanElement;
