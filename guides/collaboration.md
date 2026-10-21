@@ -302,6 +302,13 @@ pointers scroll the page to them; an editor alone in its room scrolls to
 their caret itself. A key, a click or a scroll in the editor stops
 following.
 
+An editor that lists its people says whom it follows: "Following Ada"
+with a Stop button, in their colour, and a ring of their colour around
+the editor. Style it with `.kotoba-collab-following` and
+`.kotoba[data-collab-following]` (the colour is `--collab-follow-color`).
+On an Issho page, where the editor leaves its people to Issho's list
+(`people: false`), Issho's list says it.
+
 Give them to your app's own model, through its API, with Issho's room
 tools:
 

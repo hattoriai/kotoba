@@ -40,6 +40,28 @@ test("two authors share edits, presence, undo, redo and accepted form revisions"
   expect(errors).toEqual([]);
 });
 
+test("following someone in the editor: a line in their colour, with Stop, and a ring", async ({ page, context }) => {
+  const other = await context.newPage();
+  const id = crypto.randomUUID();
+  await open(page, id, "Ada");
+  await open(other, id, "Grace");
+  const people = page.getByRole("list", { name: "People in this document" });
+  await expect(people).toContainText("Grace");
+  const line = page.locator("#shared_editor .kotoba-collab-following");
+  await expect(line).toBeHidden();
+
+  await people.getByRole("button", { name: "Grace" }).click();
+  await expect(people.getByRole("button", { name: "Grace" })).toHaveAttribute("aria-pressed", "true");
+  await expect(line).toBeVisible();
+  await expect(line).toContainText("Following Grace");
+  await expect(page.locator("#shared_editor")).toHaveAttribute("data-collab-following", "");
+
+  await line.getByRole("button", { name: "Stop" }).click();
+  await expect(line).toBeHidden();
+  await expect(page.locator("#shared_editor")).not.toHaveAttribute("data-collab-following", "");
+  await expect(people.getByRole("button", { name: "Grace" })).toHaveAttribute("aria-pressed", "false");
+});
+
 test("offline edits survive reload and merge with online edits", async ({ browser }) => {
   const first = await browser.newContext();
   const second = await browser.newContext();
