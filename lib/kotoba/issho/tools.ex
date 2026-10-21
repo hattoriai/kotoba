@@ -52,37 +52,40 @@ if Code.ensure_loaded?(Issho.Tool) do
     # How an agent moves in a document (`config :kotoba, Kotoba.Issho`):
     # `pace`, the milliseconds it takes to type a character (0: text appears
     # at once), and `travel`, whether it goes to where it works and selects
-    # as a person would (false: it is there at once). Only where it goes is
-    # sent: each browser draws the way there (its caret glides, a selection
-    # sweeps), and the agent waits as long as that takes.
+    # as a person would (false: it is there at once). It moves with Issho's
+    # motion (`Issho.Motion`): only where it goes is sent, each browser draws
+    # the way there (its caret glides, a selection sweeps), and it moves
+    # only for someone who sees it.
     def pace, do: Keyword.get(Application.get_env(:kotoba, Kotoba.Issho, []), :pace, 25)
     def travel?, do: Keyword.get(Application.get_env(:kotoba, Kotoba.Issho, []), :travel, true)
 
-    # As long as a browser takes to glide a caret, and to sweep a selection.
-    @glide 400
-    @sweep 350
     @hold 300
     # The longest an agent types one text for: a longer one, in larger pieces.
     @typing 8_000
 
     # Goes to a caret, or to a range: pressed at its start, then dragged to
-    # its end.
+    # its end. Nothing to do where it is already (it selected the text before).
     def reach(%__MODULE__{} = doc, %{from: _} = range) do
-      if travel?() and not there?(doc, range) do
-        step(doc, %{block: range.block, index: range.from}, @glide)
-        step(doc, range, @sweep)
-      else
-        point(doc, range)
-      end
+      if there?(doc, range),
+        do: :ok,
+        else:
+          Issho.Motion.drag(
+            doc.participant,
+            target(doc, %{block: range.block, index: range.from}),
+            target(doc, range),
+            travel: travel?()
+          )
     end
 
     def reach(%__MODULE__{} = doc, caret) do
-      if travel?() and not there?(doc, caret),
-        do: step(doc, caret, @glide),
-        else: point(doc, caret)
+      if there?(doc, caret),
+        do: :ok,
+        else: Issho.Motion.go(doc.participant, target(doc, caret), travel: travel?())
     end
 
-    # Whether the agent is there already (it selected the text before).
+    defp target(doc, range_or_caret),
+      do: %{"doc" => doc.document, "at" => Text.place(range_or_caret)}
+
     defp there?(doc, target) do
       case selection(doc) do
         {:ok, %{block: %{id: id}, from: from, to: to}} ->
@@ -96,17 +99,14 @@ if Code.ensure_loaded?(Issho.Tool) do
     end
 
     # A moment on what is selected before it changes, so that the people see what will.
-    def hold(%__MODULE__{}) do
-      if travel?(), do: Process.sleep(@hold)
-      :ok
-    end
+    def hold(%__MODULE__{} = doc),
+      do: Issho.Motion.pause(doc.participant, %{"doc" => doc.document}, @hold, travel: travel?())
 
-    defp step(doc, place, ms) do
-      with :ok <- point(doc, place) do
-        Process.sleep(ms)
-        :ok
-      end
-    end
+    # Whether someone sees the agent type, so that it types at a person's pace.
+    defp seen?(doc),
+      do:
+        travel?() and Issho.Motion.travel?() and
+          Issho.Motion.watched?(doc.participant, %{"doc" => doc.document})
 
     # The agent's selection in this document, as a range.
     def selection(%__MODULE__{} = doc) do
@@ -187,7 +187,11 @@ if Code.ensure_loaded?(Issho.Tool) do
     # the `pace`), so that the people see it written, the agent's caret
     # moving with it.
     def type(%__MODULE__{} = doc, caret, text, marks, typing?) do
-      per_char = if typing?, do: min(pace(), div(@typing, max(String.length(text), 1))), else: 0
+      per_char =
+        if typing? and seen?(doc),
+          do: min(pace(), div(@typing, max(String.length(text), 1))),
+          else: 0
+
       chunks = if per_char > 0, do: chunks(text), else: [text]
       type_chunks(doc, caret, chunks, marks, per_char)
     end

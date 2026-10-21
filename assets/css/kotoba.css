@@ -1184,6 +1184,12 @@ div.kotoba-unknown {
 .kotoba-collab-selection[data-sweep] { animation: kotoba-sweep calc(var(--collab-sweep, 350ms) / var(--collab-sweep-lines, 1)) linear calc(var(--collab-sweep, 350ms) * var(--collab-sweep-line, 0) - var(--collab-sweep-elapsed, 0ms)) both; }
 @keyframes kotoba-sweep { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
 @media (prefers-reduced-motion: reduce) { .kotoba-collab-caret { transition: none; } .kotoba-collab-selection[data-sweep] { animation: none; } }
+/* The person's motion, as the app said it (Issho's data-issho-motion). */
+:root[data-issho-motion="reduced"] .kotoba-collab-caret { transition: none; }
+:root[data-issho-motion="reduced"] .kotoba-collab-selection[data-sweep] { animation: none; }
+:root[data-issho-motion="full"] .kotoba-collab-caret { transition: left var(--collab-caret-glide, var(--collab-caret-travel, 120ms)) ease-out, top var(--collab-caret-glide, var(--collab-caret-travel, 120ms)) ease-out; }
+.kotoba-collab-people button { all: unset; cursor: pointer; }
+.kotoba-collab-people button[aria-pressed="true"] { text-decoration: underline; text-decoration-color: var(--collab-color); }
 
 /* A readable baseline for <.kotoba_content>. Each rule has the specificity
    of one class (.kotoba-content :where(a)), so it wins over an element reset

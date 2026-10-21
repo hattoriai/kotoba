@@ -277,7 +277,11 @@ it: its caret goes to where it works, it selects text as a drag does,
 holds a moment on what it is about to change, then changes it, and it
 types at a person's pace, a new block too. Only where it goes is sent
 (where it presses, where it lets go): each browser draws the way there,
-its caret gliding and the selection sweeping from its start to its end. With Issho 0.2.1 and its page pointers (`Issho.Components.pointers/1`),
+its caret gliding and the selection sweeping from its start to its end.
+It moves with Issho's motion (`Issho.Motion`): only when someone of the
+room sees the editor, and within a tool call's time budget; a person
+who wants no motion (the app says so, Issho's `data-issho-motion`) sees
+its changes land. With Issho 0.2.1 and its page pointers (`Issho.Components.pointers/1`),
 its pointer goes to its caret and glides with it across the page. An app
 that wants changes to appear at once says so:
 
@@ -287,6 +291,16 @@ that wants changes to appear at once says so:
 # it works and drags (false: it is there at once).
 config :kotoba, Kotoba.Issho, pace: 25, travel: true
 ```
+
+### Following someone
+
+Following is Issho's, and the room's: a click on someone in the editor's
+people list, or in the page's (`Issho.Components.people/1`), follows
+them, and the editor keeps their caret on the screen. On a page of
+several blocks in the room, every block follows them, and Issho's
+pointers scroll the page to them; an editor alone in its room scrolls to
+their caret itself. A key, a click or a scroll in the editor stops
+following.
 
 Give them to your app's own model, through its API, with Issho's room
 tools:

@@ -1,3 +1,4 @@
+import { follow, following, onFollow, stopOnOwnWay } from "issho";
 import type { CollaborationHost } from "../collaboration";
 import type { Binding, SharedSelection } from "./binding";
 
@@ -20,7 +21,13 @@ export class Presence {
   private readonly observer: ResizeObserver;
 
   // `list`: whether the editor lists the people, or the page does (Issho's people list).
-  constructor(private readonly host: CollaborationHost, private readonly binding: Binding, private readonly session: () => string, bar: HTMLElement, private readonly listed = true) {
+  private readonly stopFollowing: () => void;
+  // The caret last scrolled to, for the one followed: once for each place they go.
+  private scrolledTo = "";
+
+  // `room`: following is the room's (Issho's): someone followed in it, from
+  // this list or the page's, is followed to their caret.
+  constructor(private readonly host: CollaborationHost, private readonly binding: Binding, private readonly session: () => string, bar: HTMLElement, private readonly listed = true, private readonly room = "") {
     this.list = document.createElement("ul");
     this.list.className = "kotoba-collab-people";
     this.list.setAttribute("aria-label", "People in this document");
@@ -29,6 +36,12 @@ export class Presence {
     this.layer.className = "kotoba-collab-cursors";
     this.layer.setAttribute("aria-hidden", "true");
     host.surface.append(this.layer);
+    const offFollow = room ? onFollow(room, () => this.receive(this.people)) : () => {};
+    const offOwnWay = room ? stopOnOwnWay(room, host.element) : () => {};
+    this.stopFollowing = () => {
+      offFollow();
+      offOwnWay();
+    };
     this.observer = new ResizeObserver(() => this.draw());
     this.observer.observe(host.surface);
     window.addEventListener("scroll", this.onScroll, true);
@@ -48,8 +61,20 @@ export class Presence {
     this.known = next;
     this.list.replaceChildren(...[...unique.values()].map(person => {
       const item = document.createElement("li");
-      item.textContent = `${person.user.name}${person.role === "read" ? " (viewing)" : ""}`;
+      const text = `${person.user.name}${person.role === "read" ? " (viewing)" : ""}`;
       item.style.setProperty("--collab-color", this.color(person));
+      // Someone else: a button that follows them, in the room, to their caret.
+      if (!this.room || person.session === this.session() || person.user.id === this.host.credentials.user.id) {
+        item.textContent = text;
+        return item;
+      }
+      const button = document.createElement("button");
+      button.type = "button";
+      button.textContent = text;
+      button.dataset.isshoFollowControl = "";
+      button.setAttribute("aria-pressed", String(following(this.room) === person.user.id));
+      button.addEventListener("click", () => follow(this.room, following(this.room) === person.user.id ? null : person.user.id));
+      item.append(button);
       return item;
     }));
     this.draw();
@@ -135,6 +160,7 @@ export class Presence {
           // Over the selections; never moved in the page, or it would not glide.
           if (caret.parentNode !== this.layer) this.layer.append(caret);
           drawn.add(person.session);
+          if (this.room && following(this.room) === person.user.id) this.keepInView(person, rect);
         } catch { /* A DOM reconciliation can briefly detach an awareness anchor. */ }
       }
       for (const [session, caret] of this.carets) {
@@ -144,6 +170,22 @@ export class Presence {
       }
       for (const session of this.wasCaret.keys()) if (!drawn.has(session)) this.wasCaret.delete(session);
     });
+  }
+
+  // The caret of the one followed stays on the screen, when no page of
+  // Issho's (its pointers) keeps them there for the whole page.
+  private keepInView(person: Person, rect: DOMRect): void {
+    if (document.querySelector(".issho-pointers")) return;
+    const where = JSON.stringify(person.selection);
+    const height = document.documentElement.clientHeight;
+    if (rect.top >= 0 && rect.bottom <= height) {
+      this.scrolledTo = where;
+      return;
+    }
+    if (this.scrolledTo === where) return;
+    this.scrolledTo = where;
+    const reduced = document.documentElement.dataset.isshoMotion === "reduced" || matchMedia("(prefers-reduced-motion: reduce)").matches;
+    window.scrollBy({ top: rect.top + rect.height / 2 - height / 2, behavior: reduced ? "auto" : "smooth" });
   }
 
   /** Where a selection's end is in the viewport (its caret), or `null`: for Issho's pointers. */
@@ -168,6 +210,7 @@ export class Presence {
     this.observer.disconnect();
     this.lastSelections.clear();
     this.carets.clear();
+    this.stopFollowing();
     this.wasCaret.clear();
     this.sweeps.clear();
     window.removeEventListener("scroll", this.onScroll, true);
