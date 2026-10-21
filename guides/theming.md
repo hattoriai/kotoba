@@ -59,6 +59,9 @@ value that you set on `:root`, on an ancestor or on `.kotoba` wins:
 | `--kotoba-padding` | `0.75rem 1rem` | the padding of the editable area |
 | `--kotoba-min-height` | `8rem` | the height of an empty editor |
 | `--kotoba-icon-size` | `18px` | toolbar icons |
+| `--kotoba-embed-height` | `24rem` | an embed in the document (see [Embeds](embeds.md)) |
+| `--kotoba-embed-radius` | the radius and `4px` | the corners of an embed |
+| `--kotoba-embed-layer` | `60` | the `z-index` of an embed full screen and of the embeds picker |
 | `--kotoba-token-*` | a light palette | code highlighting: `comment`, `keyword`, `string`, `constant`, `function`, `attr`, `variable`, `operator`, `punctuation`, `inserted`, `deleted` |
 
 ## Dark mode without Sumi

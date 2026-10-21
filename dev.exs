@@ -356,7 +356,7 @@ defmodule KotobaDev.Layouts do
       <body class={@sumi && "sumi"}>
         <main>
           <nav>
-            <a href="/">Editor</a><a href="/two">Two editors</a><a href="/nodes">Nodes</a><a href="/collab">Collaboration</a><a href="/?theme=sumi">Sumi theme</a>
+            <a href="/">Editor</a><a href="/two">Two editors</a><a href="/nodes">Nodes</a><a href="/embeds">Embeds</a><a href="/collab">Collaboration</a><a href="/?theme=sumi">Sumi theme</a>
           </nav>
           {@inner_content}
         </main>
@@ -838,6 +838,216 @@ defmodule KotobaDev.NodesLive do
   end
 end
 
+defmodule KotobaDev.EmbedsLive do
+  @moduledoc """
+  An editor with embeds: live polls of the app's own in the document, a
+  picker to insert one (new, or one the app has), full screen, and the
+  page that reads the document (`?read=1`). Kotoba renders no poll: the
+  LiveView does, and its portals put each poll in its embed.
+  """
+  use Phoenix.LiveView
+
+  import Kotoba.Components
+
+  @start [
+    %{
+      id: "lunch",
+      title: "Where do we have lunch?",
+      options: [{"Ramen", 4}, {"Tacos", 2}, {"Salad", 1}]
+    },
+    %{id: "launch", title: "When do we launch?", options: [{"This week", 1}, {"Next week", 5}]}
+  ]
+
+  @impl true
+  def mount(params, _session, socket) do
+    doc = %{
+      "type" => "root",
+      "version" => 1,
+      "direction" => nil,
+      "format" => "",
+      "indent" => 0,
+      "children" => [
+        paragraph("The team decides, live, in the document:"),
+        %{
+          "type" => "embed",
+          "version" => 1,
+          "kind" => "poll",
+          "ref" => "lunch",
+          "title" => "Where do we have lunch?"
+        },
+        paragraph("Vote in the poll; open it full screen; insert another from the toolbar.")
+      ]
+    }
+
+    {:ok,
+     assign(socket,
+       form: to_form(%{"body" => JSON.encode!(doc)}, as: :doc),
+       polls: Map.new(@start, &{&1.id, &1}),
+       read: params["read"] == "1"
+     )}
+  end
+
+  defp paragraph(text) do
+    %{
+      "type" => "paragraph",
+      "version" => 1,
+      "direction" => nil,
+      "format" => "",
+      "indent" => 0,
+      "textFormat" => 0,
+      "textStyle" => "",
+      "children" => [
+        %{
+          "type" => "text",
+          "version" => 1,
+          "text" => text,
+          "format" => 0,
+          "detail" => 0,
+          "mode" => "normal",
+          "style" => ""
+        }
+      ]
+    }
+  end
+
+  @impl true
+  def handle_event("vote", %{"poll" => id, "option" => option}, socket) do
+    {:noreply,
+     update(socket, :polls, fn polls ->
+       Map.update!(polls, id, fn poll ->
+         %{
+           poll
+           | options:
+               Enum.map(poll.options, fn {o, n} ->
+                 if o == option, do: {o, n + 1}, else: {o, n}
+               end)
+         }
+       end)
+     end)}
+  end
+
+  def handle_event("insert_poll", %{"id" => id}, socket),
+    do:
+      {:noreply,
+       Kotoba.Live.insert_embed(socket, "embeds-body", "poll", id,
+         title: socket.assigns.polls[id].title
+       )}
+
+  def handle_event("new_poll", _params, socket) do
+    id = "poll-#{System.unique_integer([:positive])}"
+    poll = %{id: id, title: "A new question", options: [{"Yes", 0}, {"No", 0}]}
+
+    {:noreply,
+     socket
+     |> update(:polls, &Map.put(&1, id, poll))
+     |> Kotoba.Live.insert_embed("embeds-body", "poll", id, title: poll.title)}
+  end
+
+  def handle_event("change", _params, socket), do: {:noreply, socket}
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <style>
+      .poll { display: flex; flex-direction: column; height: 100%; border: 1px solid var(--kotoba-border); border-radius: 12px; background: var(--kotoba-background); font-family: var(--kotoba-font); }
+      .poll header { display: flex; align-items: center; gap: 8px; padding: 10px 10px 10px 16px; border-bottom: 1px solid var(--kotoba-border); }
+      .poll header strong { flex: 1; font-weight: 500; }
+      .poll header button { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 6px; background: none; color: var(--kotoba-muted); cursor: pointer; }
+      .poll header button:hover { background: var(--kotoba-surface); color: var(--kotoba-text); }
+      .poll ul { list-style: none; margin: 0; padding: 12px 16px; display: grid; gap: 8px; overflow: auto; }
+      .poll li button { position: relative; display: flex; justify-content: space-between; width: 100%; padding: 10px 12px; border: 1px solid var(--kotoba-border); border-radius: 8px; background: none; font: inherit; color: inherit; cursor: pointer; overflow: hidden; }
+      .poll li button:disabled { cursor: default; }
+      .poll li button i { position: absolute; inset: 0 auto 0 0; background: color-mix(in oklab, var(--kotoba-accent) 14%, transparent); }
+      .poll li button span { position: relative; }
+      .kotoba-embed-slot:has(.poll) { --kotoba-embed-height: 15rem; height: auto; min-height: 12rem; }
+    </style>
+    <h1>Embeds</h1>
+    <p>
+      <a href="/embeds">Write</a> · <a href="/embeds?read=1">Read</a>
+    </p>
+    <.form for={@form} id="embeds-form" phx-change="change">
+      <.kotoba
+        field={@form[:body]}
+        id="embeds-body"
+        label="Notes"
+        embeds
+        readonly={@read}
+        show_toolbar={!@read}
+      />
+    </.form>
+    <.kotoba_embeds for="embeds-body" label="Poll" icon="chart" picker_title="Insert a poll" readonly={@read}>
+      <:embed :let={embed}>
+        <.poll poll={@polls[embed.ref]} embed={embed} />
+      </:embed>
+      <:picker>
+        <h3>New</h3>
+        <.kotoba_embed_option id="new-poll" phx-click="new_poll" title="A new poll" about="Yes or no, to start with">
+          <:icon><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M5 12h14" /><path d="M12 5v14" /></svg></:icon>
+        </.kotoba_embed_option>
+        <h3>Polls</h3>
+        <.kotoba_embed_option
+          :for={{id, poll} <- @polls}
+          phx-click="insert_poll"
+          phx-value-id={id}
+          title={poll.title}
+          about={"#{length(poll.options)} options"}
+        >
+          <:icon><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v16a2 2 0 0 0 2 2h16" /><path d="M18 17V9" /><path d="M13 17V5" /><path d="M8 17v-3" /></svg></:icon>
+        </.kotoba_embed_option>
+      </:picker>
+    </.kotoba_embeds>
+    """
+  end
+
+  attr :poll, :map, default: nil
+  attr :embed, :map, required: true
+
+  defp poll(%{poll: nil} = assigns), do: ~H"<p class=\"poll\">This poll is gone.</p>"
+
+  defp poll(assigns) do
+    assigns =
+      assign(
+        assigns,
+        :total,
+        assigns.poll.options |> Enum.map(&elem(&1, 1)) |> Enum.sum() |> max(1)
+      )
+
+    ~H"""
+    <section class="poll" id={"poll-" <> @embed.id} data-full={to_string(@embed.full)}>
+      <header>
+        <strong>{@poll.title}</strong>
+        <button
+          type="button"
+          class="poll-full"
+          phx-click={@embed.toggle_full}
+          aria-label={if @embed.full, do: "Exit full screen", else: "Full screen"}
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+            <path :if={!@embed.full} d="M15 3h6v6M21 3l-7 7M3 21l7-7M9 21H3v-6" />
+            <path :if={@embed.full} d="m14 10 7-7M20 10h-6V4M3 21l7-7M4 14h6v6" />
+          </svg>
+        </button>
+      </header>
+      <ul>
+        <li :for={{option, votes} <- @poll.options}>
+          <button
+            type="button"
+            phx-click="vote"
+            phx-value-poll={@poll.id}
+            phx-value-option={option}
+            disabled={@embed.readonly}
+          >
+            <i style={"width: #{round(votes * 100 / @total)}%"}></i>
+            <span>{option}</span>
+            <span>{votes}</span>
+          </button>
+        </li>
+      </ul>
+    </section>
+    """
+  end
+end
+
 defmodule KotobaDev.ExtensionsLive do
   @moduledoc """
   Features and extensions. The comment editor has four features and the
@@ -1313,6 +1523,7 @@ defmodule KotobaDev.Router do
     live("/two", KotobaDev.TwoEditorsLive)
     live("/nodes", KotobaDev.NodesLive)
     live("/extensions", KotobaDev.ExtensionsLive)
+    live("/embeds", KotobaDev.EmbedsLive)
     live("/collab", KotobaDev.CollabLive)
     live("/collab/many", KotobaDev.ManyCollabLive)
     live("/collab/nested", KotobaDev.NestedCollabLive)

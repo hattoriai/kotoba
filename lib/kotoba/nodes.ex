@@ -45,7 +45,8 @@ defmodule Kotoba.Nodes do
     Nodes.Mention,
     Nodes.Image,
     Nodes.FootnoteReference,
-    Nodes.FootnoteDefinition
+    Nodes.FootnoteDefinition,
+    Nodes.Embed
   ]
 
   # The editor's own node types: a node for a type it does not know, and

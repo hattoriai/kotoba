@@ -19,6 +19,33 @@ On Issho 0.3: agents move with Issho's motion, and following is the room's.
 
 ### Added
 
+- Embeds: your app's live things in the document, a canvas or a grid,
+  which people use in place and take full screen (the `embeds` feature,
+  `Kotoba.Nodes.Embed`, see the [Embeds](guides/embeds.md) guide). The
+  document keeps an embed's `kind`, `ref` and `title`; the editor's
+  `kotoba_embeds/1` (`Kotoba.Embeds`) renders your `:embed` slot for each
+  one and puts it in its place with a LiveView portal, so that it is your
+  LiveView's own content (its events, its LiveComponents), and stays as
+  people type around it. An editor has embeds with `embeds`, and each
+  editor chooses what it embeds.
+- An embeds picker of your options (`kotoba_embed_option/1`), opened from
+  a toolbar button of your naming (`label="Canvas"`, `icon="canvas"`), and
+  `Kotoba.Live.insert_embed/4`.
+- An embed full screen and back (`embed.toggle_full`): the same content,
+  in a layer over the page; Escape comes back.
+- Keys in an embed are the embed's; Backspace after an embed deletes it,
+  as after a horizontal rule, and undo brings it back.
+- How an embed renders is the app's: the `:embed` option of
+  `Kotoba.Renderer` and of `kotoba_content/1`, or `config :kotoba, embed:`
+  (a canvas as its Mermaid diagram in Markdown, its picture in HTML). And
+  back: `Kotoba.Content.from_markdown/2`'s `:embed` reader, or
+  `config :kotoba, embed_from_markdown:` (for the Markdown paste too),
+  makes a fenced block an embed again.
+- `show_toolbar={false}`: an editor with no toolbar, with `readonly` a
+  page that reads the document, its embeds live in it.
+- `--kotoba-embed-height`, `--kotoba-embed-radius` and
+  `--kotoba-embed-layer`.
+
 - Following someone, from the editor's people list or the page's
   (`Issho.Components.pointers/1`, `Issho.Components.people/1`): the
   editor follows them to their caret. On an Issho page the page scrolls to

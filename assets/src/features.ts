@@ -59,6 +59,7 @@ import { UnknownNode, UploadMarkerNode } from "./nodes/internal";
 import { FootnoteDefinitionNode, FootnoteReferenceNode } from "./nodes/footnote";
 import { $isImageNode, ImageNode } from "./nodes/image";
 import { MentionNode } from "./nodes/mention";
+import { EmbedNode, registerEmbedKeys } from "./nodes/embed";
 
 /** The built-in features, in the order of `Kotoba.Features`. */
 export const FEATURES = [
@@ -82,6 +83,7 @@ export const FEATURES = [
   "mentions",
   "images",
   "footnotes",
+  "embeds",
 ] as const;
 
 export type Feature = (typeof FEATURES)[number];
@@ -114,6 +116,7 @@ export const FEATURE_NODES: Partial<Record<Feature, readonly Klass<LexicalNode>[
   mentions: [MentionNode],
   images: [ImageNode],
   footnotes: [FootnoteReferenceNode, FootnoteDefinitionNode],
+  embeds: [EmbedNode],
 };
 
 function isFeature(value: string): value is Feature {
@@ -303,6 +306,7 @@ export function builtInExtensions(features: ReadonlySet<Feature>, options: Featu
         }),
     },
     footnotes: { name: "footnotes", nodes: FEATURE_NODES.footnotes },
+    embeds: { name: "embeds", nodes: FEATURE_NODES.embeds, register: registerEmbedKeys },
   };
 
   return [core, ...FEATURES.filter((feature) => features.has(feature)).map((feature) => extensions[feature])];

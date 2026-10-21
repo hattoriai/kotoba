@@ -14,6 +14,8 @@ Kotoba (言葉, "words") is rich text for Phoenix. It gives your app:
 * the features of each editor (`features={~w(bold links lists)}`) and
   extensions, the app's own nodes, commands, toolbar buttons and Markdown
   shortcuts;
+* embeds: your app's live things in the document (a canvas, a grid), which
+  people use in place and take full screen, rendered by your LiveView;
 * safe rendering to HTML, text and Markdown, with no raw HTML anywhere.
 
 The editor is a prebuilt JavaScript bundle in the Hex package. Your app
@@ -170,6 +172,8 @@ HTML.
   the Assist menu, and a language model example.
 * [Custom nodes](guides/custom_nodes.md): your own nodes, with
   `mix kotoba.gen.node`.
+* [Embeds](guides/embeds.md): your app's live things in the document, a
+  canvas or a grid, and how they render and come back from Markdown.
 * [Extensions](guides/extensions.md): your own commands, toolbar buttons
   and Markdown shortcuts.
 * [Theming](guides/theming.md): the `--kotoba-*` properties and the Sumi

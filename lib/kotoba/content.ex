@@ -303,6 +303,14 @@ defmodule Kotoba.Content do
       text is the attachment's `caption` (its `alt` and `figcaption` in
       HTML), unless it is empty or the file name; a `caption` the node has
       already wins. A name that is not in the map raises `ArgumentError`.
+    * `:embed` - `fn %{language: language, code: code} -> embed | nil end`:
+      a fenced block of the document's root that is an embed of the app's
+      (`Kotoba.Nodes.Embed`), as the Mermaid diagram that the app's
+      rendering of a canvas wrote (see the [Embeds](embeds.md) guide).
+      It returns the embed (a struct, or a map of `kind`, `ref` and
+      `title`), or `nil` for a code block. The default is
+      `config :kotoba, embed_from_markdown: ...`, which the editor's
+      Markdown paste (`Kotoba.MarkdownPaste`) uses too.
     * `:nodes` and `:policy` - as in `rerender/2`.
 
   ## Examples
@@ -316,7 +324,15 @@ defmodule Kotoba.Content do
   def from_markdown(markdown, opts \\ []) when is_binary(markdown) do
     {features, opts} = Keyword.pop(opts, :features, Kotoba.Features.all())
     {attachments, opts} = Keyword.pop(opts, :attachments, %{})
-    envelope = wrap(MarkdownImport.root(markdown, features: features, attachments: attachments))
+
+    {embed, opts} =
+      Keyword.pop_lazy(opts, :embed, fn -> Application.get_env(:kotoba, :embed_from_markdown) end)
+
+    envelope =
+      wrap(
+        MarkdownImport.root(markdown, features: features, attachments: attachments, embed: embed)
+      )
+
     {nodes, render_opts} = Keyword.pop(opts, :nodes, [])
 
     case Document.parse(envelope, nodes: nodes) do

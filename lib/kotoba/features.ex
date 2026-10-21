@@ -30,6 +30,7 @@ defmodule Kotoba.Features do
   | `mentions` | prompts and mentions (with the `prompts` attribute) | `mention` |
   | `images` | images from a URL, as Markdown has them | `image` |
   | `footnotes` | footnotes and their references | `footnotedefinition`, `footnotereference` |
+  | `embeds` | live things of the app's own, as a canvas (with `Kotoba.Embeds`) | `embed` |
 
   Paragraphs, line breaks, tabs, undo and redo are always there. The case
   formats (`lowercase`, `uppercase`, `capitalize`) are not features: the
@@ -78,7 +79,8 @@ defmodule Kotoba.Features do
     :attachments,
     :mentions,
     :images,
-    :footnotes
+    :footnotes,
+    :embeds
   ]
 
   @requires %{check_lists: :lists}
@@ -111,7 +113,8 @@ defmodule Kotoba.Features do
     Nodes.Mention => :mentions,
     Nodes.Image => :images,
     Nodes.FootnoteReference => :footnotes,
-    Nodes.FootnoteDefinition => :footnotes
+    Nodes.FootnoteDefinition => :footnotes,
+    Nodes.Embed => :embeds
   }
 
   @typedoc "A built-in feature."
@@ -136,6 +139,7 @@ defmodule Kotoba.Features do
           | :mentions
           | :images
           | :footnotes
+          | :embeds
 
   @doc """
   Returns the features, in order.

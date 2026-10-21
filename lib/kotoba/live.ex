@@ -196,6 +196,34 @@ defmodule Kotoba.Live do
     push_event(socket, "insert_node", payload(id, extra))
   end
 
+  @doc """
+  Inserts an embed (`Kotoba.Nodes.Embed`) in the editor `id`, at the
+  person's selection, and closes the editor's embeds picker
+  (`Kotoba.Components.kotoba_embeds/1`).
+
+      def handle_event("insert_diagram", %{"id" => id}, socket) do
+        diagram = Diagrams.get!(id)
+        {:noreply, Kotoba.Live.insert_embed(socket, "post-body", "canvas", diagram.id, title: diagram.title)}
+      end
+
+  ## Options
+
+    * `:title` - the embed's title, for the text and the Markdown of the
+      document.
+  """
+  @spec insert_embed(Socket.t(), String.t(), String.t(), String.t(), keyword()) :: Socket.t()
+  def insert_embed(socket, id, kind, ref, opts \\ []) when is_binary(id) do
+    Phoenix.LiveView.send_update(Kotoba.Embeds, id: id <> "-embeds", picker: false)
+
+    socket
+    |> insert_node(id, %Kotoba.Nodes.Embed{
+      kind: to_string(kind),
+      ref: to_string(ref),
+      title: opts[:title] || ""
+    })
+    |> focus(id)
+  end
+
   defp json!(%module{} = node) do
     unless Kotoba.Node.node_module?(module) do
       raise ArgumentError, "not a Kotoba node: #{inspect(node)}"

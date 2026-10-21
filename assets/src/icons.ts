@@ -290,6 +290,47 @@ export const arrowRight: Icon = [
   ["path", { d: "m12 5 7 7-7 7" }],
 ];
 
+/** Lucide `layout-panel-top`: the Embed button, unless the app names another. */
+export const layoutPanelTop: Icon = [
+  ["rect", { width: "18", height: "7", x: "3", y: "3", rx: "1" }],
+  ["rect", { width: "7", height: "7", x: "3", y: "14", rx: "1" }],
+  ["rect", { width: "7", height: "7", x: "14", y: "14", rx: "1" }],
+];
+
+/** Lucide `workflow`: a canvas. */
+export const workflow: Icon = [
+  ["rect", { width: "8", height: "8", x: "3", y: "3", rx: "2" }],
+  ["path", { d: "M7 11v4a2 2 0 0 0 2 2h4" }],
+  ["rect", { width: "8", height: "8", x: "13", y: "13", rx: "2" }],
+];
+
+/** Lucide `sheet`: a grid. */
+export const sheet: Icon = [
+  ["rect", { width: "18", height: "18", x: "3", y: "3", rx: "2", ry: "2" }],
+  ["line", { x1: "3", x2: "21", y1: "9", y2: "9" }],
+  ["line", { x1: "3", x2: "21", y1: "15", y2: "15" }],
+  ["line", { x1: "9", x2: "9", y1: "9", y2: "21" }],
+  ["line", { x1: "15", x2: "15", y1: "9", y2: "21" }],
+];
+
+/** Lucide `chart-column`: a chart. */
+export const chartColumn: Icon = [
+  ["path", { d: "M3 3v16a2 2 0 0 0 2 2h16" }],
+  ["path", { d: "M18 17V9" }],
+  ["path", { d: "M13 17V5" }],
+  ["path", { d: "M8 17v-3" }],
+];
+
+/** The icons an app may give the Embed button (`Kotoba.Components.kotoba_embeds/1`). */
+export const EMBED_ICONS = {
+  embed: layoutPanelTop,
+  canvas: workflow,
+  grid: sheet,
+  chart: chartColumn,
+} as const satisfies Record<string, Icon>;
+
+export type EmbedIcon = keyof typeof EMBED_ICONS;
+
 /** The icon of each toolbar command that is a button (`code-language` is a select). */
 export const TOOLBAR_ICONS: Readonly<Record<Exclude<ToolbarCommand, "code-language">, Icon>> = {
   "bold": bold,
@@ -313,6 +354,7 @@ export const TOOLBAR_ICONS: Readonly<Record<Exclude<ToolbarCommand, "code-langua
   "rule": minus,
   "table": table,
   "upload": paperclip,
+  "embed": layoutPanelTop,
   "assist": sparkles,
   "gallery": images,
   "image-previous": arrowLeft,

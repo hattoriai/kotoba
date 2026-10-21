@@ -42,6 +42,7 @@ defmodule Kotoba.Components do
     {"rule", "Horizontal rule", "Insert"},
     {"table", "Table", "Insert"},
     {"upload", "Attach a file", "Insert"},
+    {"embed", "Embed", "Insert"},
     {"assist", "Assist", "Assist"},
     {"code-language", "Code language", "Code"},
     {"table-row-before", "Insert row above", "Table"},
@@ -172,6 +173,16 @@ defmodule Kotoba.Components do
     doc:
       "when `true`, the editor shows the document and cannot change it; a change in a later render reaches the editor"
 
+  attr :show_toolbar, :boolean,
+    default: true,
+    doc:
+      "when `false`, the editor shows no toolbar: with `readonly`, a page that reads the document (its embeds live in it)"
+
+  attr :embeds, :boolean,
+    default: false,
+    doc:
+      "when `true`, the editor has embeds: live things of the app's own (a canvas, a grid), rendered by the `kotoba_embeds/1` of this editor; see the [Embeds](embeds.md) guide"
+
   attr :blank_lines, :atom,
     default: :keep,
     values: [:keep, :collapse],
@@ -266,6 +277,8 @@ defmodule Kotoba.Components do
         data-link-schemes={@link_schemes}
         data-markdown={@paste_markdown && @id <> "-markdown"}
         data-blank-lines={if @blank_lines == :collapse, do: "collapse"}
+        data-embeds={@embeds && "#" <> @id <> "-embeds"}
+        data-toolbar={!@show_toolbar && "false"}
         data-aria-describedby={@described_by}
         data-aria-invalid={@invalid}
         aria-labelledby={@label_id}
@@ -580,6 +593,106 @@ defmodule Kotoba.Components do
   defp label(command), do: command
 
   @doc """
+  Renders the live content of the embeds of the editor `for`: the app's
+  canvases, grids and charts in the document, which people use in place
+  and take full screen. The editor has `embeds`:
+
+      <.kotoba field={@form[:body]} id="post-body" embeds />
+
+      <.kotoba_embeds for="post-body" label="Canvas" icon="canvas">
+        <:embed :let={embed}>
+          <MyAppWeb.Diagrams.embed id={embed.id} ref={embed.ref} full={embed.full} on_full={embed.toggle_full} />
+        </:embed>
+        <:picker :let={picker}>
+          <.kotoba_embed_option :for={d <- @diagrams} phx-click="insert_diagram" phx-value-id={d.id} title={d.title} />
+        </:picker>
+      </.kotoba_embeds>
+
+  The `:embed` slot renders one embed; `:let` gets a map with:
+
+    * `id` - the id of the embed's slot: unique in the page, for the ids of
+      what it renders (a canvas's `"canvas-" <> embed.id`).
+    * `kind`, `ref` and `title` - the embed's, as the document has them.
+    * `editor` - the editor's id.
+    * `full` - whether the embed is full screen now.
+    * `toggle_full` - a `Phoenix.LiveView.JS` command that takes it full
+      screen and back, for a button.
+    * `readonly` - this component's `readonly`.
+
+  Render it outside the editor's form, once for each editor with embeds.
+  With a `:picker`, the toolbar has a button (`label`, `icon`) that opens
+  it; the app's buttons in it insert an embed with
+  `Kotoba.Live.insert_embed/4`, which closes it. See the
+  [Embeds](embeds.md) guide.
+  """
+  attr :for, :string, required: true, doc: "the id of the editor"
+
+  attr :readonly, :boolean,
+    default: false,
+    doc: "given to the `:embed` slot, for read-only content"
+
+  attr :label, :string,
+    default: "Embed",
+    doc: "the words of the toolbar button and its tooltip, as \"Canvas\""
+
+  attr :icon, :string,
+    default: "embed",
+    values: ~w(embed canvas grid chart),
+    doc: "the icon of the toolbar button"
+
+  attr :picker_title, :string, default: "Insert", doc: "the title of the picker"
+  attr :class, :any, default: nil
+
+  slot :embed, required: true, doc: "renders an embed (`:let` gets the embed, see above)"
+
+  slot :picker,
+    doc:
+      "the picker's content: the app's buttons that insert an embed (`:let` gets `editor` and `close`, a JS command)"
+
+  def kotoba_embeds(assigns) do
+    ~H"""
+    <.live_component
+      module={Kotoba.Embeds}
+      id={@for <> "-embeds"}
+      for={@for}
+      readonly={@readonly}
+      label={@label}
+      icon={@icon}
+      picker_title={@picker_title}
+      class={@class}
+      embed={@embed}
+      picker_slot={@picker}
+    />
+    """
+  end
+
+  @doc """
+  Renders an option of an embeds picker (`kotoba_embeds/1`): a button
+  with an icon, a title and a line about it. Its `phx-click` is the app's.
+
+      <.kotoba_embed_option phx-click="new_canvas" phx-value-kit="schema" title="Database schema" about="Tables and foreign keys">
+        <:icon><.icon name="hero-circle-stack" /></:icon>
+      </.kotoba_embed_option>
+  """
+  attr :title, :string, required: true
+  attr :about, :string, default: nil
+  attr :class, :any, default: nil
+  attr :rest, :global, include: ~w(disabled)
+  slot :icon
+
+  def kotoba_embed_option(assigns) do
+    ~H"""
+    <button type="button" class={["kotoba-embed-option", @class]} {@rest}>
+      <span :if={@icon != []} class="kotoba-embed-option-icon">{render_slot(@icon)}</span>
+      <span class="kotoba-embed-option-text">
+        <span class="kotoba-embed-option-title">{@title}</span>
+        <span :if={@about} class="kotoba-embed-option-about">{@about}</span>
+      </span>
+    </button>
+    """
+  end
+
+  @doc """
   Renders a `Kotoba.Content` as safe HTML.
 
   The cached `:html` of the content is used when its cache version is the
@@ -600,6 +713,11 @@ defmodule Kotoba.Components do
     doc:
       "extra node modules, `{module, js_url}` tuples, or JavaScript module URLs (the same list as `kotoba/1`; a URL has no module to render)"
 
+  attr :embed, :any,
+    default: nil,
+    doc:
+      "`fn embed, :html -> html | nil end`: the HTML of an embed (`Kotoba.Nodes.Embed`), as an image of a canvas; `nil` gives the default; see the [Embeds](embeds.md) guide"
+
   attr :class, :any, default: nil, doc: "classes for the wrapper, for example `\"prose\"`"
   attr :rest, :global, doc: "attributes for the wrapper"
 
@@ -608,7 +726,7 @@ defmodule Kotoba.Components do
       assign(
         assigns,
         :html,
-        content_html(assigns.content, assigns.policy, modules(assigns.nodes))
+        content_html(assigns.content, assigns.policy, modules(assigns.nodes), assigns.embed)
       )
 
     ~H"""
@@ -616,15 +734,15 @@ defmodule Kotoba.Components do
     """
   end
 
-  defp content_html(nil, _policy, _nodes), do: ""
+  defp content_html(nil, _policy, _nodes, _embed), do: ""
 
-  defp content_html(%Content{} = content, policy, nodes) do
-    if cached?(content, policy, nodes),
+  defp content_html(%Content{} = content, policy, nodes, embed) do
+    if cached?(content, policy, nodes) and is_nil(embed),
       do: {:safe, content.html},
-      else: render_doc(content.doc, policy, nodes)
+      else: render_doc(content.doc, policy, nodes, embed)
   end
 
-  defp content_html(other, _policy, _nodes) do
+  defp content_html(other, _policy, _nodes, _embed) do
     raise ArgumentError, "kotoba_content needs a Kotoba.Content or nil, got: #{inspect(other)}"
   end
 
@@ -633,9 +751,11 @@ defmodule Kotoba.Components do
       Sanitizer.policy(policy) == Sanitizer.policy(:default)
   end
 
-  defp render_doc(doc, policy, nodes) do
+  defp render_doc(doc, policy, nodes, embed) do
+    opts = if embed, do: [policy: policy, embed: embed], else: [policy: policy]
+
     case Document.parse(doc, nodes: nodes) do
-      {:ok, parsed} -> Renderer.to_html(parsed, policy: policy)
+      {:ok, parsed} -> Renderer.to_html(parsed, opts)
       {:error, _messages} -> ""
     end
   end

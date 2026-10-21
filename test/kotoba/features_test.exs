@@ -62,7 +62,8 @@ defmodule Kotoba.FeaturesTest do
         table([table_row([table_cell([paragraph([mention("people", "1", "Ada")])])])]),
         attachment(),
         paragraph([image("https://a.b/c.png", "c"), footnote_reference("1")]),
-        footnote_definition("1", [paragraph([text("Note")])])
+        footnote_definition("1", [paragraph([text("Note")])]),
+        %{"type" => "embed", "version" => 1, "kind" => "canvas", "ref" => "1", "title" => "Model"}
       ]
 
       assert Features.used(doc(input)) == Features.all()

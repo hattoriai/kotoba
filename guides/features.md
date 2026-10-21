@@ -33,6 +33,7 @@ not (`Kotoba.Features`):
 | `mentions` | prompts and mentions (with `prompts`) | | the trigger | |
 | `images` | images from a URL, in the text | | | `![alt](url)` (pasted) |
 | `footnotes` | footnotes and their references | | | `[^1]` and `[^1]: text` (pasted) |
+| `embeds` | live things of the app's own: a canvas, a grid (with `embeds`, see [Embeds](embeds.md)) | the app's button ("Canvas") | Backspace after one deletes it | a fenced block the app reads (pasted) |
 
 Pasted Markdown is not a feature: plain text that reads as Markdown (a
 README, a note from a Markdown app) comes in as rich text, read on the

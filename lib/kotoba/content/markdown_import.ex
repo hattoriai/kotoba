@@ -48,9 +48,50 @@ defmodule Kotoba.Content.MarkdownImport do
   def root(markdown, opts \\ []) do
     features = opts |> Keyword.get(:features, Features.all()) |> Features.names!() |> MapSet.new()
     attachments = Keyword.get(opts, :attachments, %{})
+    embed = if on?(features, :embeds), do: Keyword.get(opts, :embed)
     document = MDEx.parse_document!(markdown, @parse_options)
-    element("root", Enum.flat_map(document.nodes, &root_block(&1, features, attachments)))
+    element("root", Enum.flat_map(document.nodes, &root_block(&1, features, attachments, embed)))
   end
+
+  # -- embeds ------------------------------------------------------------------
+
+  # A fenced block of the root that the app reads as an embed (a Mermaid
+  # diagram of a canvas): `embed` gets its language and code and returns
+  # the embed, or nil for a code block.
+  defp root_block(
+         %MDEx.CodeBlock{info: info, literal: literal} = block,
+         features,
+         attachments,
+         embed
+       )
+       when embed != nil do
+    language = info |> to_string() |> String.split() |> List.first()
+
+    case call(embed, %{language: language, code: literal}) do
+      nil -> root_block(block, features, attachments, nil)
+      found -> [embed_json(found)]
+    end
+  end
+
+  defp root_block(node, features, attachments, _embed),
+    do: root_block(node, features, attachments)
+
+  defp call(fun, block) when is_function(fun, 1), do: fun.(block)
+  defp call({module, function}, block), do: apply(module, function, [block])
+
+  defp embed_json(%Kotoba.Nodes.Embed{} = node), do: embed_json(Map.from_struct(node))
+
+  defp embed_json(%{} = embed) do
+    %{
+      "type" => "embed",
+      "version" => 1,
+      "kind" => to_string(embed_field(embed, :kind)),
+      "ref" => to_string(embed_field(embed, :ref)),
+      "title" => to_string(embed_field(embed, :title) || "")
+    }
+  end
+
+  defp embed_field(embed, key), do: Map.get(embed, key, Map.get(embed, to_string(key)))
 
   # -- attachments -----------------------------------------------------------
 

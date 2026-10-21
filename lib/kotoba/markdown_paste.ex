@@ -49,7 +49,12 @@ defmodule Kotoba.MarkdownPaste do
   """
   @spec nodes(String.t(), %{features: [atom()], nodes: [module()]}) :: [map()] | nil
   def nodes(markdown, %{features: features, nodes: nodes}) do
-    root = MarkdownImport.root(markdown, features: features)
+    root =
+      MarkdownImport.root(markdown,
+        features: features,
+        embed: Application.get_env(:kotoba, :embed_from_markdown)
+      )
+
     envelope = %{"kotoba" => 1, "lexical" => "0.51", "root" => root}
 
     case Document.parse(envelope, nodes: nodes) do

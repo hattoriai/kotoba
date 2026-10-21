@@ -114,7 +114,9 @@ import {
   type JSONNode,
 } from "./protocol";
 import { createSuggestions, type AssistAction, type Suggestions } from "./suggestions";
-import { buildCommandBar, createToolbar, type Toolbar } from "./toolbar";
+import { buildCommandBar, createToolbar, type EmbedButton, type Toolbar } from "./toolbar";
+import { registerEmbeds } from "./nodes/embed";
+import { EMBED_ICONS, type EmbedIcon } from "./icons";
 import { SELECTION_MENU_COMMANDS, attachLinkCard, attachSelectionMenu, type Floating } from "./selection_menu";
 import { createUploads, type Uploads } from "./uploads";
 import { attachCollaboration, readCollabCredentials, type Collaboration, type CollabCredentials } from "./collaboration";
@@ -159,6 +161,8 @@ export interface Config {
   markdown: string | null;
   /** `"collapse"` leaves the blank lines a person typed out of the saved document. */
   blankLines: "keep" | "collapse";
+  /** The selector of the editor's `Kotoba.Embeds` component, or `null` for an editor without embeds. */
+  embeds: string | null;
 }
 
 /** Reads the hook's configuration from the data attributes of its element. */
@@ -186,6 +190,7 @@ export function readConfig(el: HTMLElement): Config {
     collab: readCollabCredentials(data.collab),
     markdown: data.markdown ?? null,
     blankLines: data.blankLines === "collapse" ? "collapse" : "keep",
+    embeds: data.embeds ? data.embeds : null,
   };
 }
 
@@ -280,6 +285,8 @@ class Instance {
   private suggestions: Suggestions | null = null;
   private collaboration: Collaboration | null = null;
   private appReadonly = false;
+  /** Says every embed's slot to the server again (after a reconnection). */
+  private resendEmbeds: (() => void) | null = null;
 
   private json = "";
   private pushed = "";
@@ -409,6 +416,35 @@ class Instance {
       }),
     );
 
+    // Embeds: their slots, which the editor's Kotoba.Embeds component fills.
+    // The slots of deleted embeds wait in an element LiveView leaves alone.
+    const embedsTarget = this.config.embeds;
+    let embedButton: EmbedButton | undefined;
+    if (embedsTarget !== null && features.has("embeds")) {
+      const limbo = document.createElement("div");
+      limbo.className = "kotoba-embed-limbo";
+      limbo.hidden = true;
+      this.el.append(limbo);
+      const embeds = registerEmbeds(editor, {
+        id: this.id,
+        limbo,
+        mount: (slot, embed) => this.pushEmbeds({ action: "mount", slot, ...embed }),
+        unmount: (slot) => this.pushEmbeds({ action: "unmount", slot }),
+      });
+      this.cleanups.push(embeds.cleanup);
+      this.resendEmbeds = embeds.resend;
+
+      const component = document.querySelector<HTMLElement>(embedsTarget);
+      if (component?.dataset.picker === "true") {
+        const icon = component.dataset.icon;
+        embedButton = {
+          label: component.dataset.label || "Embed",
+          icon: icon !== undefined && icon in EMBED_ICONS ? (icon as EmbedIcon) : "embed",
+          open: () => this.pushEmbeds({ action: "picker" }),
+        };
+      }
+    }
+
     const markdown = this.config.markdown;
     if (markdown !== null && !this.config.readonly) {
       this.cleanups.push(
@@ -463,6 +499,7 @@ class Instance {
       onUpload: () => this.uploads?.open(),
       onColors: this.colors === null ? undefined : (button) => this.colors?.open(button),
       onAssist: assist !== null && assist.length > 0 ? (button) => this.suggestions?.openMenu(button) : undefined,
+      embed: embedButton,
       announce: this.announce,
       codeLanguages: this.config.codeLanguages,
       features,
@@ -482,6 +519,7 @@ class Instance {
           assist: assist !== null && assist.length > 0,
           features,
           controls,
+          embed: embedButton ?? null,
         });
       this.selectionToolbar = createToolbar(editor, {
         existing: menu,
@@ -492,6 +530,7 @@ class Instance {
         onUpload: () => this.uploads?.open(),
         onColors: this.colors === null ? undefined : (button) => this.colors?.open(button),
         onAssist: assist !== null && assist.length > 0 ? (button) => this.suggestions?.openMenu(button) : undefined,
+        embed: embedButton,
         announce: this.announce,
         codeLanguages: this.config.codeLanguages,
         features,
@@ -794,6 +833,18 @@ class Instance {
     }, 50);
   };
 
+  /** Sends `kotoba:embeds` to the editor's Kotoba.Embeds component. */
+  private pushEmbeds(payload: Record<string, unknown>): void {
+    const target = this.config.embeds;
+    if (target === null || this.destroyed || document.querySelector(target) === null) return;
+    this.hook.pushEventTo(target, "kotoba:embeds", { ...payload, v: PROTOCOL_VERSION, id: this.id });
+  }
+
+  /** After a reconnection: a new LiveView process knows no embeds yet. */
+  reconnected(): void {
+    this.resendEmbeds?.();
+  }
+
   destroy(): void {
     this.destroyed = true;
     this.collaboration?.dispose();
@@ -848,6 +899,9 @@ export const Kotoba = {
   },
   updated(this: KotobaHook): void {
     this.kotoba?.syncAttributes();
+  },
+  reconnected(this: KotobaHook): void {
+    this.kotoba?.reconnected();
   },
   destroyed(this: KotobaHook): void {
     this.kotoba?.destroy();

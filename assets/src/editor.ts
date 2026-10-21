@@ -65,6 +65,7 @@ import { AttachmentNode } from "./nodes/attachment";
 import { GalleryNode } from "./nodes/gallery";
 import { UnknownNode, UploadMarkerNode } from "./nodes/internal";
 import { FootnoteDefinitionNode, FootnoteReferenceNode } from "./nodes/footnote";
+import { EmbedNode } from "./nodes/embed";
 import { ImageNode } from "./nodes/image";
 import { MentionNode } from "./nodes/mention";
 import { UNKNOWN_TYPE, UPLOAD_MARKER_TYPE } from "./protocol";
@@ -125,6 +126,7 @@ export const BUILT_IN_NODES: readonly Klass<LexicalNode>[] = [
   ImageNode,
   FootnoteReferenceNode,
   FootnoteDefinitionNode,
+  EmbedNode,
   UploadMarkerNode,
   UnknownNode,
 ];
