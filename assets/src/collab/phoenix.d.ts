@@ -1,10 +1,13 @@
+// The part of Phoenix's client that Issho's transport uses (Kotoba does not
+// bundle Phoenix: the application has it).
 declare module "phoenix" {
-  export interface Push { receive(status: "ok" | "error" | "timeout", callback: (payload: unknown) => void): Push }
+  type Payload = any;
+  export interface Push { receive(status: "ok" | "error" | "timeout", callback: (payload: Payload) => void): Push }
   export interface Channel {
-    join(): Push;
+    join(timeout?: number): Push;
     leave(): Push;
-    push(event: string, payload: unknown, timeout?: number): Push;
-    on(event: string, callback: (payload: unknown) => void): number;
+    push(event: string, payload: object, timeout?: number): Push;
+    on(event: string, callback: (payload: Payload) => void): number;
     onError(callback: () => void): void;
     onClose(callback: () => void): void;
   }

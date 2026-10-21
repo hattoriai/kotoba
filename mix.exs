@@ -1,7 +1,7 @@
 defmodule Kotoba.MixProject do
   use Mix.Project
 
-  @version "0.5.0"
+  @version "0.6.0"
   @source_url "https://github.com/hattoriai/kotoba"
 
   # KOTOBA_OLDEST=1 resolves the oldest Phoenix and LiveView that Kotoba
@@ -56,6 +56,10 @@ defmodule Kotoba.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
       {:ecto, "~> 3.13"},
       {:esbuild, "~> 0.10", only: :dev, runtime: false},
+      # Shared editors (`collab`): Issho is the room, its people and the document's authority.
+      {:issho, "~> 0.2", optional: true},
+      # MCP for the development app's agents, and their tests.
+      {:sake, "~> 0.4", only: [:dev, :test]},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:lazy_html, "~> 0.1", only: :test},
       {:mdex, "~> 0.13"},
@@ -108,6 +112,7 @@ defmodule Kotoba.MixProject do
         "guides/quickstart.md",
         "guides/forms.md",
         "guides/collaboration.md",
+        "guides/upgrading.md",
         "guides/features.md",
         "guides/rendering.md",
         "guides/uploads.md",
@@ -126,6 +131,7 @@ defmodule Kotoba.MixProject do
           "guides/quickstart.md",
           "guides/forms.md",
           "guides/collaboration.md",
+          "guides/upgrading.md",
           "guides/features.md",
           "guides/rendering.md",
           "guides/uploads.md",

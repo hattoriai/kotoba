@@ -5,7 +5,78 @@ All notable changes to Kotoba are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.6.0] - 2026-10-21
+
+Collaboration runs on [Issho](https://hex.pm/packages/issho): the same
+editor, document model, merge rules, offline drafts and form flow, with
+Issho as the document's authority, the room's people and their cursors.
+A page of Kotoba and other Issho components shares one connection. Why,
+what it gives a page, and the steps: the
+[Upgrading to 0.6](guides/upgrading.md) guide.
+
+### Added
+
+- Agents in shared documents: `Kotoba.Issho.tools/0`, tools an agent
+  uses as a person uses the editor, however it reaches the app (its own
+  model through an API with Issho's `Issho.Tools`, or MCP with
+  `Issho.MCP`): read the blocks, select text (the
+  people see its selection, in its colour), type (they see it written, a
+  few characters at a time), replace, delete, format, link, add blocks,
+  copy and paste, between the documents of a room too. Its changes are
+  the editor's operations, and merge with everyone's.
+
+### Changed
+
+- **Breaking:** collaboration needs `{:issho, "~> 0.2"}`. To upgrade:
+  - replace `{Kotoba.Collab.Supervisor, name:, store:, policy:}` with an
+    `{Issho, name: MyApp.Issho, pubsub:, endpoint:, policy: MyApp.Collaboration}`
+    child, whose policy's `document/2` returns
+    `Kotoba.Collab.document(store: ..., policy: ...)`;
+  - move your channel's `authorize/3` into the policy's
+    `authorize(identity, document_id, action)` (`identity.key` is the
+    user's id; actions are `:join`, `:read`, `:write` and `:lock`);
+  - replace `use Kotoba.Collab.Channel` with `use Issho.Channel` and the
+    socket's `channel "kotoba:*"` with `channel "issho:*"`, at
+    `/issho/socket` (or pass `:socket` to `token/3`);
+  - call `Kotoba.Collab.token/3`, `content/2,3` and `transact/4` with the
+    Issho instance (`MyApp.Issho`) in place of the LiveView socket or the
+    supervisor;
+  - add `on_mount Issho.Live` to the LiveViews of shared editors, and
+    remove your `handle_event("kotoba:collab_token", ...)`: Issho renews
+    the credentials it granted, asking your policy again;
+  - map `issho` in an import map, next to `kotoba/collab`.
+
+  `Kotoba.Collab.Store` is unchanged, and documents it saved before open
+  as they are, with their history, and are saved in Issho's form with
+  their next change.
+- `Kotoba.Collab.content/2` gives `{:ok, %{"epoch", "revision", "content"}}`
+  with the content as a `Kotoba.Content`.
+- Two editors of one document on a page share its channel.
+- The editors of a page whose documents share an Issho room
+  (`"notebook:7/cell-1"`, `"notebook:7/cell-2"`: the part before the
+  `"/"`) share one connection and the room's people, and a person's
+  cursor goes from one editor to the other. `Kotoba.Collab.token/3`
+  signs for the room and says it in the credentials' `"room"`; the
+  policy's `authorize/3` is asked about the room.
+- Undo in shared editors is the app's choice (`Kotoba.Collab.token/3`'s
+  `:undo`): the editor's own steps (`:editor`, as before), the page's
+  (`:page`, Issho's `pageHistory`: the person's last change in whichever
+  editor or component they made it, which takes the focus), or none
+  (`false`).
+- `Kotoba.Collab.token/3` takes `people: false` for a page that lists the
+  room's people once, with Issho's `Issho.Components.people/1`: the
+  editors then list and announce no one.
+
+### Fixed
+
+- A collaborator's caret on an empty line shows, at the line's start.
+
+### Removed
+
+- `Kotoba.Collab.Supervisor`, `Kotoba.Collab.Channel`,
+  `Kotoba.Collab.DocServer`, and the transaction functions of
+  `Kotoba.Collab.Document` (`commit/4`, `at_revision/4`, `snapshot/1`):
+  Issho orders transactions and keeps their receipts and journal.
 
 ## [0.5.0] - 2026-10-20
 

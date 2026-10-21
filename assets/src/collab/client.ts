@@ -1,54 +1,73 @@
-import type { Channel } from "phoenix";
+import { defaultDraftStore, holdForm, joinRoom, pageHistory, registerEngine, releaseRoom, type HistoryOwner, type Peer, type Person as IsshoPerson, type Room, type SharedDocument, type State as IsshoState, type StaleDraft } from "issho";
 import type { Collaboration, CollaborationHost, CollabCredentials } from "../collaboration";
-import { Binding, COLLAB_TAG, redo, type Change } from "./binding";
-import { apply, clone, equal, envelope, uuid, type Operation, type State, type Transaction } from "./model";
-import { Persistence } from "./persistence";
+import { Binding, COLLAB_TAG, redo, type Change, type SharedSelection } from "./binding";
+import { kotobaEngine } from "./engine";
+import { apply, clone, envelope, equal, type Operation, type State } from "./model";
 import { Presence, type Person } from "./presence";
-import { lease, type Lease } from "./sockets";
 
-interface FormBarrier { clients: Set<Client>; resubmit: boolean; busy: boolean; handler: (event: SubmitEvent) => void }
-const forms = new WeakMap<HTMLFormElement, FormBarrier>();
+registerEngine(kotobaEngine);
 
-interface Join { state: State; role: "read" | "write"; people: Person[]; accepted: string[] }
+// The editors of a page share the room of their documents ("notebook:7" for
+// "notebook:7/cell-1"), and with it its people and their cursors: a person's
+// cursor goes from one editor to another. Each editor holds the room (Issho's
+// joinRoom and releaseRoom), as the page's other components do.
+// The editors of each room: its grant is renewed through any of them still on the page.
+const editors = new Map<string, Set<Client>>();
+
+async function renew(room: string): Promise<string> {
+  for (const client of editors.get(room) ?? []) {
+    try { return await client.renewGrant(); } catch { /* The next editor of the room may. */ }
+  }
+  throw new Error("No editor of the room could renew its grant");
+}
+const roomOf = (credentials: CollabCredentials): string => credentials.room ?? credentials.document_id.split("/")[0];
 
 class Client implements Collaboration {
   private readRole: boolean;
-  get readonly(): boolean { return this.readRole || this.failure !== null || this.accepted === null; }
+  get readonly(): boolean { return this.readRole || this.failure !== null || this.doc === null; }
   private credentials: CollabCredentials;
-  private readonly persistence: Persistence;
   private readonly binding: Binding;
-  private lease: Lease | null = null;
-  private channel!: Channel;
+  private room: Room | null = null;
+  private doc: SharedDocument | null = null;
   private readonly presence: Presence;
   private readonly bar: HTMLDivElement;
   private readonly status: HTMLOutputElement;
   private readonly recover: HTMLButtonElement;
   private readonly revisionInput: HTMLInputElement;
   private readonly cleanups: (() => void)[] = [];
-  private accepted: State | null = null;
+  // The document as Lexical shows it: the binding's changes are measured against it.
   private view: State | null = null;
-  private pending: Transaction[] = [];
-  private sent = new Set<string>();
+  // This editor's own steps; the page orders them with every component's (Issho's pageHistory),
+  // so undo takes back the person's last change wherever on the page they made it.
   private undoStack: Change[] = [];
   private redoStack: Change[] = [];
+  private readonly undo: "page" | "editor" | false;
+  private readonly steps: HistoryOwner = {
+    undo: () => this.step(false),
+    redo: () => this.step(true),
+    clearRedo: () => { this.redoStack = []; },
+  };
   private lastEdit = 0;
   private connected = false;
   private disposed = false;
-  private inFlight: string | null = null;
+  private changing = false;
+  private behind = false;
   private failure: string | null = null;
   private recoveryDraft: unknown;
-  private localBackup = true;
-  private persistenceChain = Promise.resolve();
-  private waiters: { resolve: () => void; reject: (reason: Error) => void }[] = [];
+  private readonly localBackup: boolean;
+  private readonly drafts: ReturnType<typeof defaultDraftStore>["store"];
+  // A form waiting for this editor: given up when it goes offline, fails or closes.
+  private waiters: { reject: (reason: Error) => void }[] = [];
   private awarenessTimer: ReturnType<typeof setTimeout> | undefined;
   private lastAwareness = "";
-  private sendTimer: ReturnType<typeof setTimeout> | undefined;
-  private refreshTimer: ReturnType<typeof setInterval> | undefined;
 
   constructor(private readonly host: CollaborationHost) {
     this.credentials = host.credentials;
+    this.undo = host.credentials.undo ?? "editor";
     this.readRole = host.credentials.role === "read";
-    this.persistence = new Persistence(this.credentials.socket, this.credentials.document_id, this.credentials.user.id);
+    const drafts = defaultDraftStore();
+    this.drafts = drafts.store;
+    this.localBackup = drafts.durable;
     this.binding = new Binding(host);
     this.bar = document.createElement("div");
     this.bar.className = "kotoba-collab-bar";
@@ -63,7 +82,7 @@ class Client implements Collaboration {
     this.recover.addEventListener("click", () => this.download());
     this.bar.append(this.status, this.recover);
     host.element.prepend(this.bar);
-    this.presence = new Presence(host, this.binding, () => this.persistence.session, this.bar);
+    this.presence = new Presence(host, this.binding, () => this.room?.session ?? "", this.bar, host.credentials.people !== false);
     this.revisionInput = document.createElement("input");
     this.revisionInput.type = "hidden";
     this.revisionInput.name = `kotoba_collab[${host.element.id}]`;
@@ -72,282 +91,258 @@ class Client implements Collaboration {
 
   async start(): Promise<void> {
     this.host.setReadonly(true);
-    try {
-      const backup = await this.persistence.open();
-      if (backup?.state.v === 1 && backup.state.schema === 1) {
-        this.accepted = backup.state;
-        this.pending = backup.pending;
-        this.sent = new Set(backup.sent ?? backup.pending.map(transaction => transaction.id));
-        this.render(false);
-        this.host.setReadonly(this.readonly || this.host.initialReadonly);
-      }
-    } catch { this.localBackup = false; }
-    if (this.disposed) return;
     const api = this.host.api.lexical;
     this.cleanups.push(this.host.editor.registerUpdateListener(({ tags, dirtyElements, dirtyLeaves }) => {
-      if (tags.has(COLLAB_TAG) || !this.view || this.readonly || this.failure || (dirtyElements.size === 0 && dirtyLeaves.size === 0)) return;
+      if (tags.has(COLLAB_TAG) || !this.view || this.readonly || (dirtyElements.size === 0 && dirtyLeaves.size === 0)) return;
       const change = this.binding.capture(this.view);
       if (!change) { this.awareness(); return; }
       const isTyping = (op: Operation): boolean => op.op === "insert_text" || op.op === "text_visibility" || (op.op === "insert_node" && op.data.type === "text") || op.op === "set_attrs";
       const typing = change.forward.some(op => op.op === "insert_text") && change.forward.every(isTyping);
       const last = this.undoStack[this.undoStack.length - 1];
-      if (typing && last && Date.now() - this.lastEdit < 300 && last.forward.every(isTyping)) {
+      if (this.undo === false) {
+        // No undo: no steps to keep.
+      } else if (typing && last && Date.now() - this.lastEdit < 300 && last.forward.every(isTyping)) {
         (last.forward as Operation[]).push(...change.forward);
         last.inverse.unshift(...change.inverse);
-      } else this.undoStack.push(change);
+      } else {
+        this.undoStack.push(change);
+        if (this.undo === "page") pageHistory.record(this.steps);
+      }
       this.lastEdit = Date.now();
       this.redoStack = [];
       this.enqueue(change.forward, false);
       this.historyState();
     }));
-    this.cleanups.push(this.host.editor.registerCommand(api.UNDO_COMMAND, () => this.history(false), api.COMMAND_PRIORITY_CRITICAL));
-    this.cleanups.push(this.host.editor.registerCommand(api.REDO_COMMAND, () => this.history(true), api.COMMAND_PRIORITY_CRITICAL));
+    // Undo is the app's choice: this editor's own steps, the page's (Issho's pageHistory), or none.
+    this.cleanups.push(this.host.editor.registerCommand(api.UNDO_COMMAND, () => { this.history(false); return true; }, api.COMMAND_PRIORITY_CRITICAL));
+    this.cleanups.push(this.host.editor.registerCommand(api.REDO_COMMAND, () => { this.history(true); return true; }, api.COMMAND_PRIORITY_CRITICAL));
+    if (this.undo === "page") {
+      this.cleanups.push(pageHistory.on(() => this.historyState()));
+      this.cleanups.push(() => pageHistory.forget(this.steps));
+    }
     this.cleanups.push(this.host.editor.registerCommand(api.SELECTION_CHANGE_COMMAND, () => { this.awareness(); return false; }, api.COMMAND_PRIORITY_LOW));
-    // The lease's socket goes down and up with the browser; the channel joins again by itself.
-    const offline = (): void => this.offline();
-    window.addEventListener("offline", offline);
-    this.cleanups.push(() => window.removeEventListener("offline", offline));
-    this.lease = lease(this.credentials.socket, `kotoba:${this.credentials.document_id}`, this.credentials.max_channels ?? 100, () => this.rejoin());
-    this.join();
-    if (!navigator.onLine) this.offline();
-    this.refreshTimer = setInterval(() => { if (this.connected) void this.refreshCredentials(); }, 180_000);
-    const compositionEnd = (): void => { setTimeout(() => { if (!this.disposed && !this.failure) { this.render(); this.send(); this.awareness(); } }, 0); };
+    // Transactions wait while a person composes text with an input method; the document renders after.
+    // The place is the focused editor's: leaving an editor clears it, unless another editor of the room took it.
+    const focus = (): void => this.awareness();
+    this.host.editable.addEventListener("focusin", focus);
+    this.host.editable.addEventListener("focusout", focus);
+    this.cleanups.push(() => {
+      this.host.editable.removeEventListener("focusin", focus);
+      this.host.editable.removeEventListener("focusout", focus);
+    });
+    const compositionStart = (): void => this.doc?.hold();
+    const compositionEnd = (): void => {
+      setTimeout(() => {
+        if (this.disposed || this.failure) return;
+        if (this.behind) this.render();
+        this.doc?.release();
+        this.awareness();
+      }, 0);
+    };
+    this.host.editable.addEventListener("compositionstart", compositionStart);
     this.host.editable.addEventListener("compositionend", compositionEnd);
-    this.cleanups.push(() => this.host.editable.removeEventListener("compositionend", compositionEnd));
+    this.cleanups.push(() => {
+      this.host.editable.removeEventListener("compositionstart", compositionStart);
+      this.host.editable.removeEventListener("compositionend", compositionEnd);
+    });
     this.watchForm();
     (this.host.element as HTMLElement & { kotobaCollab?: Collaboration }).kotobaCollab = this;
-  }
 
-  // A channel of its own on the leased socket. Handlers of a channel this client has replaced do nothing.
-  private join(): void {
-    const channel = this.lease!.socket.channel(`kotoba:${this.credentials.document_id}`, () => ({ token: this.credentials.token, session: this.persistence.session, pending: this.pending.map(transaction => transaction.id) }));
-    this.channel = channel;
-    const current = (): boolean => this.channel === channel && !this.disposed;
-    channel.on("transaction", payload => { if (current()) this.receive(payload as Transaction); });
-    channel.on("presence", payload => { if (current()) this.presence.receive((payload as { people: Person[] }).people); });
-    channel.onError(() => { if (current()) this.offline(); });
-    channel.onClose(() => { if (current()) this.offline(); });
-    channel.join()
-      .receive("ok", payload => { if (current()) this.joined(payload as Join); })
-      .receive("error", payload => {
-        if (!current()) return;
-        const reason = (payload as { reason?: string }).reason;
-        if (reason === "expired") void this.refreshCredentials();
-        // The server still counts a channel that just left this socket; Phoenix joins again shortly.
-        else if (reason === "too many channels joined") this.offline();
-        else this.fail("Access to this shared document is unavailable. Your local draft is preserved.");
-      })
-      .receive("timeout", () => { if (current()) this.offline(); });
-  }
-
-  // Recovers this editor alone: other editors keep the socket and their channels.
-  private rejoin(): void {
-    if (this.disposed || !this.lease) return;
-    this.offline();
-    this.channel.leave();
-    this.join();
-  }
-
-  private joined(payload: Join): void {
-    if (this.disposed || this.failure) return;
-    if (this.pending.length > 0 && this.accepted?.epoch !== payload.state.epoch) { this.fail("The shared document changed. Your local draft is preserved."); return; }
-    this.connected = true;
-    this.lastAwareness = "";
-    this.inFlight = null;
-    this.accepted = payload.state;
-    this.readRole = payload.role === "read";
-    const accepted = new Set(payload.accepted ?? []);
-    this.pending = this.pending.filter(transaction => !accepted.has(transaction.id));
-    if (this.readonly && this.pending.length > 0) { this.fail("Write access changed. Your local draft is preserved."); return; }
-    this.presence.receive(payload.people);
+    const id = this.credentials.document_id;
+    const roomName = roomOf(this.credentials);
+    editors.set(roomName, (editors.get(roomName) ?? new Set()).add(this));
+    this.cleanups.push(() => editors.get(roomName)?.delete(this));
     try {
-      this.render(this.view !== null);
-      this.host.setReadonly(this.readonly || this.host.initialReadonly);
-      this.persist();
-      this.send();
-      this.updateStatus();
-      this.awareness();
-    } catch { this.fail("Your local edits need review. Your local draft is preserved."); }
+      this.room = await joinRoom(roomName, {
+        socket: this.credentials.socket,
+        token: this.credentials.token,
+        maxChannels: this.credentials.max_channels ?? 100,
+        self: this.credentials.user.id,
+        drafts: this.drafts,
+        renew: () => renew(roomName),
+      });
+      if (this.disposed) { this.release(); return; }
+      this.readRole ||= this.room.can === "read";
+      this.cleanups.push(this.room.onStaleDraft(stale => this.stale(stale)));
+      this.cleanups.push(this.room.onStatus((status, reason) => this.roomStatus(status, reason)));
+      this.cleanups.push(this.room.presence.on(() => this.people()));
+      this.cleanups.push(this.room.awareness.on(() => this.people()));
+      this.doc = await this.room.open(id, { batch: { delay: 80, maxOps: 900 } });
+      if (this.disposed) return;
+      this.cleanups.push(this.doc.on(event => {
+        if (event.type === "change" && !(this.changing && event.origin === "local")) this.render();
+        else if (event.type === "refused") this.refused(event.reason);
+        if (event.type === "change") this.updateStatus();
+      }));
+    } catch {
+      this.fail("Access to this shared document is unavailable. Your local draft is preserved.");
+      return;
+    }
+    if (this.readonly && this.doc.pending.length > 0) { this.fail("Write access changed. Your local draft is preserved."); return; }
+    this.connected = this.room.status === "live";
+    this.render(false);
+    this.host.setReadonly(this.readonly || this.host.initialReadonly);
+    this.people();
+    this.updateStatus();
+    this.awareness();
   }
 
-  private receive(event: Transaction): void {
-    if (!this.accepted || this.failure || this.disposed || event.epoch !== this.accepted.epoch) return;
-    const revision = event.revision ?? 0;
-    if (revision <= this.accepted.revision && !this.pending.some(transaction => transaction.id === event.id)) return;
-    if (revision > this.accepted.revision + 1) { this.rejoin(); return; }
-    if (revision > this.accepted.revision) {
-      this.accepted = apply(this.accepted, event.ops);
-      this.accepted.revision = revision;
-    }
-    this.pending = this.pending.filter(transaction => transaction.id !== event.id);
-    if (this.inFlight === event.id) this.inFlight = null;
-    try { this.render(); } catch { this.fail("A concurrent change needs review. Your local draft is preserved."); return; }
-    this.persist();
+  private roomStatus(status: string, reason?: string): void {
+    if (this.disposed || this.failure) return;
+    if (status === "live") {
+      this.connected = true;
+      this.lastAwareness = "";
+      this.awareness();
+    } else if (status === "offline") this.offline();
+    else if (status === "ended" && reason !== "left") this.fail("Access to this shared document is unavailable. Your local draft is preserved.");
     this.updateStatus();
-    this.presence.draw();
-    this.send();
-    if (this.pending.length === 0) this.waiters.splice(0).forEach(waiter => waiter.resolve());
   }
 
   private enqueue(operations: Operation[], render = true): void {
-    if (!this.accepted || !this.view || operations.length === 0) return;
+    if (!this.doc || !this.view || operations.length === 0) return;
     operations = operations.map(op => {
       if (op.op !== "insert_text") return op;
       const attrs = op.atoms[0]?.attrs ?? {};
       return { ...op, attrs, atoms: op.atoms.map(atom => ({ id: atom.id, text: atom.text, ...(equal(attrs, atom.attrs) ? {} : { attrs: atom.attrs }) })) };
     });
-    const tail = this.pending[this.pending.length - 1];
-    if (tail && !this.sent.has(tail.id) && tail.ops.length + operations.length <= 900) {
-      // Replace an unsent transaction; once sent, its payload never changes.
-      this.pending[this.pending.length - 1] = { ...tail, ops: [...tail.ops, ...clone(operations)] };
-    } else {
-      const transaction: Transaction = { v: 1, schema: 1, epoch: this.accepted.epoch, id: uuid(), base_revision: this.accepted.revision, ops: clone(operations) };
-      this.pending.push(transaction);
-    }
+    this.changing = true;
+    const made = this.doc.change(clone(operations) as never);
+    this.changing = false;
+    if (!made.ok) { this.fail("Your local edits need review. Your local draft is preserved."); return; }
     this.view = apply(this.view, operations);
     if (render) this.binding.render(this.view);
     this.revisionInput.value = "";
-    this.persist();
     this.updateStatus();
-    clearTimeout(this.sendTimer);
-    this.sendTimer = setTimeout(() => this.send(), 80);
     this.awareness();
   }
 
+  // The document as it is now, into Lexical; while someone composes text, after they finish.
   private render(preserve = true): void {
-    if (!this.accepted || this.host.editor.isComposing()) return;
-    let state = clone(this.accepted);
-    for (const transaction of this.pending) state = apply(state, transaction.ops);
-    this.binding.render(state, preserve);
+    if (!this.doc || this.failure) return;
+    if (this.host.editor.isComposing()) { this.behind = true; return; }
+    this.behind = false;
+    const state = this.doc.state as unknown as State;
+    try { this.binding.render(state, preserve); } catch { this.fail("A concurrent change needs review. Your local draft is preserved."); return; }
     this.view = state;
+    this.presence.draw();
   }
 
-  private persist(): void {
-    if (!this.accepted || !this.localBackup) return;
-    const backup = clone({ state: this.accepted, pending: this.pending, sent: this.pending.filter(transaction => this.sent.has(transaction.id)).map(transaction => transaction.id) });
-    this.persistenceChain = this.persistenceChain.then(() => this.persistence.save(backup)).catch(() => { this.localBackup = false; this.updateStatus(); });
+  private refused(reason: string): void {
+    console.error("Kotoba collaboration rejected transaction:", reason);
+    this.fail(reason === "epoch_mismatch" ? "The shared document changed. Your local draft is preserved." : "The server could not save your edits. Your local draft is preserved.");
   }
 
-  private send(): void {
-    if (!this.connected || this.inFlight || this.failure || this.pending.length === 0 || this.disposed || this.host.editor.isComposing()) return;
-    const transaction = this.pending[0];
-    this.inFlight = transaction.id;
-    this.sent.add(transaction.id);
-    this.persist();
-    void this.persistenceChain.then(() => {
-      if (!this.connected || this.disposed || this.inFlight !== transaction.id) return;
-      const channel = this.channel;
-      channel.push("transaction", transaction, 15_000)
-        .receive("ok", payload => {
-          const event = payload as Transaction & { duplicate?: boolean };
-          if (!event.duplicate) this.receive(event);
-          else {
-            this.pending = this.pending.filter(value => value.id !== transaction.id);
-            if (this.inFlight === transaction.id) this.inFlight = null;
-            this.channel.push("flush", {}).receive("ok", value => {
-              const payload = value as Join;
-              if (this.accepted && payload.state.revision >= this.accepted.revision) this.accepted = payload.state;
-              this.render(); this.persist(); this.updateStatus(); this.send();
-              if (this.pending.length === 0) this.waiters.splice(0).forEach(waiter => waiter.resolve());
-            }).receive("error", () => this.fail("Access changed. Your local draft is preserved."));
-          }
-        })
-        .receive("error", payload => { console.error("Kotoba collaboration rejected transaction:", (payload as { reason?: string }).reason); this.fail("The server could not save your edits. Your local draft is preserved."); })
-        // The lease pings the socket: this editor joins again alone, or every editor on a dead socket does.
-        .receive("timeout", () => { if (this.channel === channel && this.inFlight === transaction.id) { this.offline(); this.lease!.check(); } });
-    });
+  // A draft from before a reload that the document can no longer take.
+  private stale(stale: StaleDraft): void {
+    if (stale.document !== this.credentials.document_id || !this.view) return;
+    let state = clone(this.view);
+    for (const transaction of stale.draft.pending) {
+      try { state = apply(state, transaction.ops as unknown as Operation[]); } catch { /* It no longer applies. */ }
+    }
+    this.fail("The shared document changed. Your local draft is preserved.");
+    this.recoveryDraft = envelope(state);
   }
 
-  private history(isRedo: boolean): boolean {
-    if (this.readonly || this.failure) return true;
+  private history(isRedo: boolean): void {
+    if (this.undo === "page") void (isRedo ? pageHistory.redo() : pageHistory.undo());
+    else if (this.undo === "editor") this.step(isRedo);
+    this.historyState();
+  }
+
+  // Takes back (or puts back) this editor's last step; false when it cannot.
+  private step(isRedo: boolean): boolean {
+    if (this.readonly || this.failure || this.disposed) return false;
     const source = isRedo ? this.redoStack : this.undoStack;
     const target = isRedo ? this.undoStack : this.redoStack;
     const change = source.pop();
-    if (!change) return true;
-    // An explicit history command returns focus from its toolbar before rendering.
+    if (!change) return false;
+    // The editor of the step takes the focus, from its toolbar or from another editor of the page.
     this.host.editable.focus({ preventScroll: true });
     this.enqueue(isRedo ? redo(change) : change.inverse);
     target.push(change);
     this.lastEdit = 0;
-    this.historyState();
     return true;
   }
 
   private historyState(): void {
     const api = this.host.api.lexical;
-    this.host.editor.dispatchCommand(api.CAN_UNDO_COMMAND, this.undoStack.length > 0);
-    this.host.editor.dispatchCommand(api.CAN_REDO_COMMAND, this.redoStack.length > 0);
+    const [canUndo, canRedo] = this.undo === "page" ? [pageHistory.canUndo, pageHistory.canRedo] : this.undo === "editor" ? [this.undoStack.length > 0, this.redoStack.length > 0] : [false, false];
+    this.host.editor.dispatchCommand(api.CAN_UNDO_COMMAND, canUndo);
+    this.host.editor.dispatchCommand(api.CAN_REDO_COMMAND, canRedo);
   }
 
+  // The revision with every change of this editor, once the server has accepted them all.
   async flush(): Promise<{ epoch: string; revision: number }> {
-    if (!this.connected || this.failure || !this.accepted) throw new Error(this.failure ?? "Reconnect before saving this form");
-    this.send();
-    if (this.pending.length > 0) await new Promise<void>((resolve, reject) => this.waiters.push({ resolve, reject }));
-    const payload = await new Promise<Join>((resolve, reject) => this.channel.push("flush", {}).receive("ok", value => resolve(value as Join)).receive("error", () => reject(new Error("Access changed"))).receive("timeout", () => reject(new Error("The server did not confirm this revision"))));
-    if (this.pending.length > 0) return this.flush();
-    if (payload.state.revision >= this.accepted.revision) this.accepted = payload.state;
-    this.render();
-    this.persist();
-    const revision = { epoch: payload.state.epoch, revision: payload.state.revision };
+    const doc = this.doc;
+    if (!this.connected || this.failure || !doc) throw new Error(this.failure ?? "Reconnect before saving this form");
+    doc.flush();
+    const waiter = { reject: (_reason: Error): void => {} };
+    const given = new Promise<never>((_resolve, reject) => { waiter.reject = reject; });
+    this.waiters.push(waiter);
+    try { await Promise.race([doc.settled(), given]); } finally { this.waiters = this.waiters.filter(other => other !== waiter); }
+    const revision = { epoch: doc.epoch, revision: doc.revision };
     this.revisionInput.value = JSON.stringify(revision);
     return revision;
   }
 
+  // A form publishes the revision the server accepted (Issho's holdForm): on submit, this editor
+  // locks, sends what it has, and notes the accepted revision in its field.
   private watchForm(): void {
     const form = this.host.element.closest("form");
     if (!form) return;
-    let barrier = forms.get(form);
-    if (!barrier) {
-      barrier = { clients: new Set(), resubmit: false, busy: false, handler: () => {} };
-      const shared = barrier;
-      shared.handler = (event): void => {
-        if (shared.resubmit) { shared.resubmit = false; return; }
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        if (shared.busy) return;
-        shared.busy = true;
-        const editing = [...shared.clients].map(client => ({ client, editable: client.host.editor.isEditable() }));
-        editing.forEach(({ client }) => client.host.editor.setEditable(false));
-        void Promise.all(editing.map(({ client }) => client.flush())).then(() => {
-          shared.resubmit = true;
-          form.requestSubmit((event.submitter as HTMLButtonElement | HTMLInputElement | null) ?? undefined);
-        }).catch(error => this.host.announce(error instanceof Error ? error.message : "The form could not be saved")).finally(() => {
-          shared.busy = false;
-          editing.forEach(({ client, editable }) => { if (!client.disposed && !client.failure) client.host.editor.setEditable(editable && !client.readonly); });
-        });
-      };
-      forms.set(form, shared);
-      form.addEventListener("submit", shared.handler, true);
-    }
-    barrier.clients.add(this);
-    const shared = barrier;
-    this.cleanups.push(() => {
-      shared.clients.delete(this);
-      if (shared.clients.size === 0) { form.removeEventListener("submit", shared.handler, true); forms.delete(form); }
-    });
+    let editable = true;
+    const lock = (locked: boolean): void => {
+      if (locked) {
+        editable = this.host.editor.isEditable();
+        this.host.editor.setEditable(false);
+      } else if (!this.disposed && !this.failure) this.host.editor.setEditable(editable && !this.readonly);
+    };
+    this.cleanups.push(holdForm(form, { flush: () => this.flush(), lock }, reason => this.host.announce(reason)));
   }
 
   private awareness(): void {
     clearTimeout(this.awarenessTimer);
     this.awarenessTimer = setTimeout(() => {
-      if (!this.connected || this.failure || this.disposed) return;
-      const selection = this.readonly ? null : this.binding.selection();
+      if (!this.connected || this.failure || this.disposed || !this.room) return;
+      const id = this.credentials.document_id;
+      const focused = this.host.editable.contains(document.activeElement);
+      const selection = this.readonly || !focused ? null : this.binding.selection();
       const signature = JSON.stringify(selection);
       if (signature === this.lastAwareness) return;
       this.lastAwareness = signature;
-      this.channel.push("awareness", { selection });
+      const current = this.room.awareness.state?.place as { doc?: string } | null | undefined;
+      if (selection) this.room.aware({ place: { doc: id, at: selection as never } });
+      else if (!current || current.doc === id) this.room.aware({ place: null });
     }, 40);
+  }
+
+  // The people of the room, and the selections of the others in this document.
+  private people(): void {
+    if (!this.room) return;
+    const byKey = new Map<string, IsshoPerson>(this.room.presence.everyone.map(person => [person.key, person]));
+    const user = (key: string): Person["user"] => {
+      const person = byKey.get(key);
+      return { id: key, name: person?.name ?? "Anonymous", color: person?.color ?? `var(--issho-person-${person?.palette ?? 1}, #2563eb)` };
+    };
+    const role = (key: string): Person["role"] => byKey.get(key)?.can ?? "write";
+    const selections = this.room.awareness.peers.flatMap((peer: Peer): Person[] => {
+      const place = (peer.state as IsshoState).place as { doc?: string; at?: SharedSelection } | null | undefined;
+      if (!place || place.doc !== this.credentials.document_id || !place.at) return [];
+      return [{ session: peer.session, role: role(peer.key), user: user(peer.key), selection: place.at }];
+    });
+    const everyone = [...byKey.keys()].map(key => ({ session: `person:${key}`, role: role(key), user: user(key), selection: null }));
+    this.presence.receive([...selections, ...everyone]);
   }
 
   private offline(): void {
     this.connected = false;
-    this.inFlight = null;
     this.presence.offline();
     this.waiters.splice(0).forEach(waiter => waiter.reject(new Error("Reconnect before saving this form")));
     this.updateStatus();
   }
 
   private fail(message: string): void {
+    if (this.failure) return;
     this.recoveryDraft = this.host.readDocument();
     this.failure = message;
     this.host.setReadonly(true);
@@ -358,8 +353,9 @@ class Client implements Collaboration {
   }
 
   private updateStatus(): void {
-    this.status.textContent = this.failure ?? (!this.connected ? (this.localBackup ? "Offline — edits are kept on this device" : "Offline — edits are kept in this tab") : this.pending.length > 0 ? "Saving…" : this.readonly ? "Live view" : "Saved");
-    this.host.element.dataset.collabState = this.failure ? "error" : !this.connected ? "offline" : this.pending.length > 0 ? "saving" : "saved";
+    const pending = (this.doc?.pending.length ?? 0) > 0;
+    this.status.textContent = this.failure ?? (!this.connected ? (this.localBackup ? "Offline — edits are kept on this device" : "Offline — edits are kept in this tab") : pending ? "Saving…" : this.readonly ? "Live view" : "Saved");
+    this.host.element.dataset.collabState = this.failure ? "error" : !this.connected ? "offline" : pending ? "saving" : "saved";
   }
 
   private download(): void {
@@ -376,24 +372,33 @@ class Client implements Collaboration {
     if (credentials.document_id !== this.credentials.document_id || credentials.user.id !== this.credentials.user.id || credentials.socket !== this.credentials.socket) throw new Error("Collaboration identity cannot change while mounted");
     this.credentials = credentials;
   }
-  private async refreshCredentials(): Promise<void> {
-    try { this.updateCredentials(await this.host.refreshCredentials()); } catch { if (!this.connected) this.offline(); }
+
+  /** A new token for the room, from the LiveView that granted it. */
+  async renewGrant(): Promise<string> {
+    if (this.disposed) throw new Error("The editor closed");
+    this.updateCredentials(await this.host.refreshCredentials());
+    return this.credentials.token;
+  }
+
+  // The page leaves the room when no editor or other component holds it.
+  private release(): void {
+    void releaseRoom(roomOf(this.credentials));
   }
 
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    clearTimeout(this.sendTimer);
     clearTimeout(this.awarenessTimer);
-    clearInterval(this.refreshTimer);
-    this.persist();
     this.waiters.splice(0).forEach(waiter => waiter.reject(new Error("The editor closed")));
     this.cleanups.reverse().forEach(cleanup => cleanup());
-    if (this.lease) { this.channel.leave(); this.lease.release(); }
+    if (this.room) {
+      const place = this.room.awareness.state?.place as { doc?: string } | null | undefined;
+      if (place?.doc === this.credentials.document_id) this.room.aware({ place: null });
+      void this.room.flushDrafts().finally(() => this.release());
+    }
     this.presence.dispose();
     this.bar.remove();
     this.revisionInput.remove();
-    void this.persistenceChain.finally(() => this.persistence.close());
     delete (this.host.element as HTMLElement & { kotobaCollab?: Collaboration }).kotobaCollab;
   }
 }

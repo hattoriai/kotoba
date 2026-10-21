@@ -4,11 +4,12 @@ defmodule Kotoba.Collab.Document do
 
   Nodes and Unicode scalar values have persistent identities. Deleted
   values remain as anchors, so an offline insertion does not depend on a
-  current array index. Phoenix orders accepted transactions.
+  current array index.
 
-  The wire format uses string keys. Transactions contain `v`, `schema`,
-  `epoch`, `id`, `base_revision` and `ops`. A transaction is atomic: its
-  resulting tree must pass the node, nesting, URL and feature checks.
+  The wire format uses string keys. Issho orders the transactions, keeps
+  their receipts and journal (`Kotoba.Issho`); this module is the state
+  and its operations. A transaction is atomic: its resulting tree must
+  pass the node, nesting, URL and feature checks.
   """
 
   import Bitwise
@@ -41,18 +42,13 @@ defmodule Kotoba.Collab.Document do
         state = %{
           "v" => 1,
           "schema" => 1,
-          "epoch" => random_id(),
-          "revision" => 0,
           "root" => "root",
           "nodes" => %{},
           "orders" => %{},
-          "texts" => %{},
-          "receipts" => %{},
-          "transactions" => []
+          "texts" => %{}
         }
 
         {state, _next} = import_node(state, root, "root", nil, 1)
-        state = Map.put(state, "initial", snapshot(state))
         with {:ok, _content} <- validate(state, opts), do: {:ok, state}
 
       _ ->
@@ -60,63 +56,51 @@ defmodule Kotoba.Collab.Document do
     end
   end
 
-  @doc "The editing snapshot; receipts and the transaction journal stay on the server."
-  def snapshot(state), do: Map.drop(state, ["receipts", "transactions", "initial"])
-
   @doc "Exports the editing state as the existing Kotoba document envelope."
   def to_envelope(state) do
     %{"kotoba" => 1, "lexical" => "0.51", "root" => export_node(state, state["root"])}
   end
 
-  @doc "Checks and applies one transaction, returning its content and accepted event."
-  def commit(state, transaction, author, opts \\ []) do
-    with :ok <- check_transaction(state, transaction),
-         digest = fingerprint(transaction, author),
-         :new <- receipt(state, transaction["id"], digest),
-         :ok <- check_operations(transaction["ops"]),
-         {:ok, candidate} <- apply_ops(state, transaction["ops"]),
-         {:ok, content} <- validate(candidate, opts) do
-      revision = state["revision"] + 1
-      event = Map.merge(transaction, %{"revision" => revision, "author" => author})
-      receipt = %{"digest" => digest, "revision" => revision, "author" => author}
-
-      candidate =
-        candidate
-        |> Map.put("revision", revision)
-        |> put_in(["receipts", transaction["id"]], receipt)
-        |> Map.update!("transactions", &(&1 ++ [event]))
-
-      {:ok, candidate, content, event}
-    else
-      {:duplicate, revision} -> {:duplicate, revision}
-      {:error, _reason} = error -> error
-      _ -> {:error, :invalid_transaction}
-    end
+  @doc """
+  The state after a transaction's operations, all or none. The resulting
+  tree is checked by `validate/2`.
+  """
+  def apply_ops(state, ops) do
+    with :ok <- check_count(ops),
+         :ok <- check_operations(ops),
+         do: run_ops(state, ops)
   rescue
-    _error -> {:error, :invalid_transaction}
+    _error -> {:error, :invalid_operation}
   end
 
-  @doc "Applies operations without advancing a revision; used for transaction previews."
-  def apply_ops(state, ops) when is_list(ops) do
+  @doc """
+  A document saved by Kotoba before Issho (its own authority, protocol 1)
+  as an Issho document: the same epoch, revision, journal and receipts.
+  """
+  def upgrade(%{"v" => 1, "schema" => 1, "epoch" => epoch, "revision" => revision} = stored)
+      when is_binary(epoch) and is_integer(revision) do
+    {:ok,
+     %{
+       "state" => editing(stored),
+       "epoch" => epoch,
+       "revision" => revision,
+       "initial" => editing(stored["initial"]),
+       "journal" => Map.get(stored, "transactions", []),
+       "receipts" => Map.get(stored, "receipts", %{})
+     }}
+  end
+
+  def upgrade(_stored), do: {:error, :unsupported_version}
+
+  defp editing(state), do: Map.take(state, ~w(v schema root nodes orders texts))
+
+  defp run_ops(state, ops) do
     Enum.reduce_while(ops, {:ok, state}, fn op, {:ok, current} ->
       case apply_op(current, op) do
         {:ok, next} -> {:cont, {:ok, next}}
         error -> {:halt, error}
       end
     end)
-  end
-
-  def apply_ops(_state, _ops), do: {:error, :invalid_operations}
-
-  @doc "Reads an immutable accepted revision, including its epoch."
-  def at_revision(state, epoch, revision, opts \\ []) do
-    if epoch == state["epoch"] and is_integer(revision) and revision >= 0 and
-         revision <= state["revision"] do
-      ops = state["transactions"] |> Enum.take(revision) |> Enum.flat_map(& &1["ops"])
-      with {:ok, document} <- apply_ops(state["initial"], ops), do: validate(document, opts)
-    else
-      {:error, :unknown_revision}
-    end
   end
 
   @doc "Validates and renders a snapshot on the server."
@@ -191,52 +175,8 @@ defmodule Kotoba.Collab.Document do
   defp json_value?(value, _depth),
     do: is_binary(value) or is_number(value) or is_boolean(value) or is_nil(value)
 
-  defp check_transaction(state, tx) when is_map(tx) do
-    cond do
-      tx["v"] != 1 or tx["schema"] != state["schema"] ->
-        {:error, :unsupported_version}
-
-      tx["epoch"] != state["epoch"] ->
-        {:error, :epoch_mismatch}
-
-      not valid_id?(tx["id"]) ->
-        {:error, :invalid_id}
-
-      not valid_revision?(tx["base_revision"], state["revision"]) ->
-        {:error, :invalid_revision}
-
-      not valid_operations_count?(tx["ops"]) ->
-        {:error, :invalid_operations}
-
-      true ->
-        :ok
-    end
-  end
-
-  defp check_transaction(_state, _tx), do: {:error, :invalid_transaction}
-
-  defp valid_revision?(revision, current),
-    do: is_integer(revision) and revision >= 0 and revision <= current
-
-  defp valid_operations_count?(ops), do: is_list(ops) and ops != [] and length(ops) <= @max_ops
-
-  defp fingerprint(tx, author),
-    do:
-      :crypto.hash(
-        :sha256,
-        :erlang.term_to_binary({Map.take(tx, ~w(v schema epoch id base_revision ops)), author}, [
-          :deterministic
-        ])
-      )
-      |> Base.encode16(case: :lower)
-
-  defp receipt(state, id, digest) do
-    case state["receipts"][id] do
-      nil -> :new
-      %{"digest" => ^digest, "revision" => revision} -> {:duplicate, revision}
-      _ -> {:error, :id_reused}
-    end
-  end
+  defp check_count(ops) when is_list(ops) and ops != [] and length(ops) <= @max_ops, do: :ok
+  defp check_count(_ops), do: {:error, :invalid_operations}
 
   defp apply_op(state, %{
          "op" => "insert_node",

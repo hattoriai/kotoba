@@ -5,7 +5,13 @@ defmodule Kotoba.Collab.Store do
   `save/5` must compare the stored `{epoch, revision}` with `expected`
   and commit state and content together. `nil` means the document has no
   collaboration state yet. A stale owner must receive `{:error, :conflict}`.
-  A document process acknowledges edits only after this callback succeeds.
+  The document's authority (Issho's) acknowledges edits only after this
+  callback succeeds.
+
+  The state is a map of JSON values with `"epoch"` and `"revision"` keys:
+  keep it as it is, in a map or JSON column. A state saved by Kotoba
+  before Issho loads as it is too, and is saved in Issho's form with its
+  next change.
 
   The context is supplied by the application, for example a repository
   module or an options map. The guide includes an Ecto implementation.

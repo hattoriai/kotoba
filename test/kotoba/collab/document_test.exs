@@ -4,15 +4,15 @@ defmodule Kotoba.Collab.DocumentTest do
   alias Kotoba.Collab.Document
   alias Kotoba.Content
 
-  defp transaction(state, operations, opts \\ []) do
-    %{
-      "v" => 1,
-      "schema" => 1,
-      "epoch" => state["epoch"],
-      "id" => Keyword.get(opts, :id, Document.random_id()),
-      "base_revision" => state["revision"],
-      "ops" => operations
-    }
+  # The order, receipts and journal are Issho's (Kotoba.CollabTest): here,
+  # a transaction is its operations, applied and validated as the
+  # authority does.
+  defp transaction(_state, operations), do: %{"ops" => operations}
+
+  defp commit(state, transaction, _author, opts \\ []) do
+    with {:ok, next} <- Document.apply_ops(state, transaction["ops"]),
+         {:ok, content} <- Document.validate(next, opts),
+         do: {:ok, next, content, transaction}
   end
 
   defp state(text \\ "abc"), do: Document.new(Content.from_markdown(text)) |> elem(1)
@@ -43,20 +43,16 @@ defmodule Kotoba.Collab.DocumentTest do
 
     {:ok, state} = Document.new(content)
     assert text(state) == "Hello 😀 world"
-    assert state["revision"] == 0
     assert state["texts"]["seed:2"] |> length() == 13
-    refute Map.has_key?(Document.snapshot(state), "transactions")
   end
 
   test "concurrent offline insertions merge at persistent character anchors" do
     original = state()
     a = transaction(original, [insert("a:1", "seed:2:0", "X")])
     b = transaction(original, [insert("b:1", "seed:2:0", "Y")])
-    assert {:ok, accepted, _content, _event} = Document.commit(original, a, "alice")
-    assert {:ok, accepted, _content, _event} = Document.commit(accepted, b, "bob")
+    assert {:ok, accepted, _content, _event} = commit(original, a, "alice")
+    assert {:ok, accepted, _content, _event} = commit(accepted, b, "bob")
     assert text(accepted) == "aYXbc"
-    assert accepted["revision"] == 2
-    assert length(accepted["transactions"]) == 2
   end
 
   test "deletion preserves unseen concurrent insertions and remains an insertion anchor" do
@@ -72,8 +68,8 @@ defmodule Kotoba.Collab.DocumentTest do
 
     a = transaction(original, [deletion])
     b = transaction(original, [insert("b:1", "seed:2:1", "😀")])
-    {:ok, accepted, _, _} = Document.commit(original, a, "alice")
-    {:ok, accepted, _, _} = Document.commit(accepted, b, "bob")
+    {:ok, accepted, _, _} = commit(original, a, "alice")
+    {:ok, accepted, _, _} = commit(accepted, b, "bob")
     assert text(accepted) == "a😀c"
   end
 
@@ -88,8 +84,8 @@ defmodule Kotoba.Collab.DocumentTest do
 
     a = transaction(original, [Map.put(op, "values", %{"bold" => true})])
     b = transaction(original, [Map.put(op, "values", %{"italic" => true})])
-    {:ok, accepted, _, _} = Document.commit(original, a, "alice")
-    {:ok, _accepted, content, _} = Document.commit(accepted, b, "bob")
+    {:ok, accepted, _, _} = commit(original, a, "alice")
+    {:ok, _accepted, content, _} = commit(accepted, b, "bob")
     assert content.html == "<p><strong><em>abc</em></strong></p>"
   end
 
@@ -104,13 +100,13 @@ defmodule Kotoba.Collab.DocumentTest do
       "tag" => "alice:delete"
     }
 
-    {:ok, a, _, _} = Document.commit(original, transaction(original, [delete]), "alice")
+    {:ok, a, _, _} = commit(original, transaction(original, [delete]), "alice")
 
     {:ok, b, _, _} =
-      Document.commit(a, transaction(a, [Map.put(delete, "tag", "bob:delete")]), "bob")
+      commit(a, transaction(a, [Map.put(delete, "tag", "bob:delete")]), "bob")
 
     {:ok, undone, _, _} =
-      Document.commit(b, transaction(b, [Map.put(delete, "deleted", false)]), "alice")
+      commit(b, transaction(b, [Map.put(delete, "deleted", false)]), "alice")
 
     assert text(undone) == "bc"
 
@@ -122,10 +118,10 @@ defmodule Kotoba.Collab.DocumentTest do
       "stamp" => "alice:bold"
     }
 
-    {:ok, a, _, _} = Document.commit(undone, transaction(undone, [format]), "alice")
+    {:ok, a, _, _} = commit(undone, transaction(undone, [format]), "alice")
 
     {:ok, b, _, _} =
-      Document.commit(a, transaction(a, [Map.put(format, "stamp", "bob:bold")]), "bob")
+      commit(a, transaction(a, [Map.put(format, "stamp", "bob:bold")]), "bob")
 
     undo =
       Map.merge(format, %{
@@ -134,7 +130,7 @@ defmodule Kotoba.Collab.DocumentTest do
         "stamp" => "alice:undo"
       })
 
-    {:ok, _state, content, _} = Document.commit(b, transaction(b, [undo]), "alice")
+    {:ok, _state, content, _} = commit(b, transaction(b, [undo]), "alice")
     assert content.html == "<p><strong>b</strong>c</p>"
   end
 
@@ -142,8 +138,8 @@ defmodule Kotoba.Collab.DocumentTest do
     original = state("abc\n\ndef")
     move = %{"op" => "move_node", "id" => "seed:1", "parent" => "root", "after" => "seed:3"}
     offline = transaction(original, [insert("bob:1", "seed:2:0", "X")])
-    {:ok, moved, _, _} = Document.commit(original, transaction(original, [move]), "alice")
-    {:ok, merged, _, _} = Document.commit(moved, offline, "bob")
+    {:ok, moved, _, _} = commit(original, transaction(original, [move]), "alice")
+    {:ok, merged, _, _} = commit(moved, offline, "bob")
     assert text(merged) == "def\naXbc"
   end
 
@@ -159,7 +155,7 @@ defmodule Kotoba.Collab.DocumentTest do
     }
 
     assert {:error, {:invalid_content, _}} =
-             Document.commit(
+             commit(
                original,
                transaction(original, [insert("valid", nil, "X"), invalid]),
                "alice"
@@ -176,7 +172,7 @@ defmodule Kotoba.Collab.DocumentTest do
     }
 
     assert {:error, {:invalid_content, _}} =
-             Document.commit(original, transaction(original, [link]), "alice")
+             commit(original, transaction(original, [link]), "alice")
   end
 
   test "features are enforced on accepted content" do
@@ -190,23 +186,10 @@ defmodule Kotoba.Collab.DocumentTest do
     }
 
     assert {:error, {:invalid_content, [:bold]}} =
-             Document.commit(original, transaction(original, [bold]), "alice", features: [])
+             commit(original, transaction(original, [bold]), "alice", features: [])
   end
 
-  test "retries are idempotent and operation IDs cannot be reused" do
-    original = state()
-    tx = transaction(original, [insert("a:1", nil, "X")])
-    {:ok, accepted, _, event} = Document.commit(original, tx, "alice")
-    assert {:duplicate, 1} = Document.commit(accepted, tx, "alice")
-    assert {:duplicate, 1} = Document.commit(accepted, event, "alice")
-
-    assert {:error, :id_reused} =
-             Document.commit(accepted, Map.put(tx, "ops", [insert("a:2", nil, "Y")]), "alice")
-
-    assert {:error, :id_reused} = Document.commit(accepted, tx, "bob")
-  end
-
-  test "deleted nodes and changed document generations refuse stale operations" do
+  test "deleted nodes refuse stale operations" do
     original = state()
 
     delete = %{
@@ -216,17 +199,10 @@ defmodule Kotoba.Collab.DocumentTest do
       "tag" => "alice:delete"
     }
 
-    {:ok, deleted, _, _} = Document.commit(original, transaction(original, [delete]), "alice")
+    {:ok, deleted, _, _} = commit(original, transaction(original, [delete]), "alice")
 
     assert {:error, :deleted_target} =
-             Document.commit(deleted, transaction(original, [insert("a:1", nil, "X")]), "bob")
-
-    assert {:error, :epoch_mismatch} =
-             Document.commit(
-               original,
-               Map.put(transaction(original, [delete]), "epoch", "different"),
-               "alice"
-             )
+             commit(deleted, transaction(original, [insert("a:1", nil, "X")]), "bob")
   end
 
   test "moves cannot form cycles" do
@@ -234,7 +210,7 @@ defmodule Kotoba.Collab.DocumentTest do
     move = %{"op" => "move_node", "id" => "seed:1", "parent" => "seed:1", "after" => nil}
 
     assert {:error, :invalid_move} =
-             Document.commit(original, transaction(original, [move]), "alice")
+             commit(original, transaction(original, [move]), "alice")
   end
 
   test "offline insertions and formatting follow characters through a paragraph split" do
@@ -264,10 +240,10 @@ defmodule Kotoba.Collab.DocumentTest do
       }
     ]
 
-    {:ok, moved, _, _} = Document.commit(original, transaction(original, split), "alice")
+    {:ok, moved, _, _} = commit(original, transaction(original, split), "alice")
 
     {:ok, merged, _, _} =
-      Document.commit(moved, transaction(original, [insert("bob:1", "seed:2:1", "X")]), "bob")
+      commit(moved, transaction(original, [insert("bob:1", "seed:2:1", "X")]), "bob")
 
     assert text(merged) == "a\nbXc"
 
@@ -279,11 +255,8 @@ defmodule Kotoba.Collab.DocumentTest do
       "stamp" => "bob:mark"
     }
 
-    {:ok, merged, content, _} = Document.commit(merged, transaction(original, [mark]), "bob")
+    {:ok, _merged, content, _} = commit(merged, transaction(original, [mark]), "bob")
     assert content.html == "<p>a</p><p>bX<strong>c</strong></p>"
-    assert {:ok, %{text: "abc"}} = Document.at_revision(merged, original["epoch"], 0)
-    assert {:ok, %{text: "a\nbc"}} = Document.at_revision(merged, original["epoch"], 1)
-    assert {:error, :unknown_revision} = Document.at_revision(merged, "other", 1)
   end
 
   test "malformed attributes and deep JSON fail without changing the accepted state" do
@@ -297,7 +270,7 @@ defmodule Kotoba.Collab.DocumentTest do
           %{"__proto__" => %{}}
         ] do
       assert {:error, _} =
-               Document.commit(
+               commit(
                  original,
                  transaction(original, [Map.put(base, "values", values)]),
                  "alice"
@@ -307,7 +280,7 @@ defmodule Kotoba.Collab.DocumentTest do
     nested = Enum.reduce(1..50, nil, fn _, value -> %{"nested" => value} end)
 
     assert {:error, _} =
-             Document.commit(
+             commit(
                original,
                transaction(original, [Map.put(base, "values", %{"style" => nested})]),
                "alice"
@@ -327,7 +300,7 @@ defmodule Kotoba.Collab.DocumentTest do
       "if_empty" => true
     }
 
-    {:ok, unchanged, _, _} = Document.commit(original, transaction(original, [inverse]), "alice")
+    {:ok, unchanged, _, _} = commit(original, transaction(original, [inverse]), "alice")
     assert text(unchanged) == "abc"
 
     delete = %{
@@ -339,7 +312,7 @@ defmodule Kotoba.Collab.DocumentTest do
     }
 
     {:ok, empty, _, _} =
-      Document.commit(unchanged, transaction(unchanged, [delete, inverse]), "alice")
+      commit(unchanged, transaction(unchanged, [delete, inverse]), "alice")
 
     assert empty["nodes"]["seed:2"]["deleted"]
   end
@@ -352,7 +325,7 @@ defmodule Kotoba.Collab.DocumentTest do
           %{},
           %{"op" => "insert_text", "id" => "seed:2", "after" => nil, "atoms" => [nil]}
         ] do
-      assert {:error, _} = Document.commit(original, transaction(original, [op]), "alice")
+      assert {:error, _} = commit(original, transaction(original, [op]), "alice")
     end
   end
 
@@ -368,7 +341,7 @@ defmodule Kotoba.Collab.DocumentTest do
         "data" => %{"type" => "paragraph"}
       }
 
-      assert {:error, _} = Document.commit(original, transaction(original, [operation]), "alice")
+      assert {:error, _} = commit(original, transaction(original, [operation]), "alice")
     end
 
     move = %{
@@ -379,6 +352,6 @@ defmodule Kotoba.Collab.DocumentTest do
       "stamp" => "move"
     }
 
-    assert {:error, _} = Document.commit(original, transaction(original, [move]), "alice")
+    assert {:error, _} = commit(original, transaction(original, [move]), "alice")
   end
 end

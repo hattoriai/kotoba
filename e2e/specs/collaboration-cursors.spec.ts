@@ -15,16 +15,16 @@ for (const sameAuthor of [true, false]) {
       const otherContext = sameAuthor ? context : await browser.newContext();
       const other = await otherContext.newPage();
       let hold = false;
-      let presence = 0;
+      let awareness = 0;
       const queued: (() => void)[] = [];
-      await other.routeWebSocket(/\/kotoba\/socket/, socket => {
+      await other.routeWebSocket(/\/issho\/socket/, socket => {
         const server = socket.connectToServer();
         server.onMessage(message => {
           const [, , , event] = typeof message === "string" ? JSON.parse(message) as unknown[] : [];
-          if (hold && event === "transaction") queued.push(() => socket.send(message));
+          if (hold && event === "tx") queued.push(() => socket.send(message));
           else {
             socket.send(message);
-            if (event === "presence") presence++;
+            if (event === "aware") awareness++;
           }
         });
       });
@@ -45,12 +45,12 @@ for (const sameAuthor of [true, false]) {
       await expect.poll(async () => (await caret(other).boundingBox())?.x ?? -1).toBeCloseTo(end, 0);
       const before = await caret(other).boundingBox();
       expect(before).not.toBeNull();
-      const previousPresence = presence;
+      const previousAwareness = awareness;
       hold = true;
       if (split) await page.keyboard.press("Enter");
       await page.keyboard.type("X");
       await expect.poll(() => queued.length).toBeGreaterThan(0);
-      await expect.poll(() => presence).toBeGreaterThan(previousPresence);
+      await expect.poll(() => awareness).toBeGreaterThan(previousAwareness);
       // Let the received awareness paint while the corresponding text is still withheld.
       await other.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
       await expect(caret(other)).toHaveCount(1);

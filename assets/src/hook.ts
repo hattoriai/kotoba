@@ -582,17 +582,16 @@ class Instance {
         setReadonly: (value) => this.applyReadonly(value || this.appReadonly),
         refreshCredentials: () => new Promise((resolve, reject) => {
           const timer = setTimeout(() => reject(new Error("Collaboration credentials could not be renewed")), 10_000);
+          // Issho's grant of the room, renewed by the LiveView that signed it (Issho.Live.grant/4).
+          const credentials = this.config.collab!;
+          const room = credentials.room ?? credentials.document_id.split("/")[0];
           const reply = (payload: unknown): void => {
             clearTimeout(timer);
-            try {
-              const credentials = readCollabCredentials(JSON.stringify(payload));
-              if (credentials) resolve(credentials); else reject(new Error("Access changed"));
-            } catch { reject(new Error("Access changed")); }
+            const grant = payload as { room?: string; token?: unknown; can?: unknown } | null;
+            if (grant?.room === room && typeof grant.token === "string" && (grant.can === "read" || grant.can === "write")) resolve({ ...credentials, token: grant.token, role: grant.can });
+            else reject(new Error("Access changed"));
           };
-          const target = this.el.getAttribute("phx-target");
-          const payload = { v: 1, id: this.id, document_id: this.config.collab!.document_id };
-          if (target) this.hook.pushEventTo(target, "kotoba:collab_token", payload, reply);
-          else this.hook.pushEvent("kotoba:collab_token", payload, reply);
+          this.hook.pushEvent("issho:grant", { room }, reply);
         }),
       });
       if (this.destroyed) this.collaboration.dispose();

@@ -12,6 +12,7 @@ if config_env() == :dev do
     --define:process.env.NODE_ENV="production"
     --external:phoenix
     --external:phoenix_live_view
+    --external:issho
   )
 
   config :esbuild,

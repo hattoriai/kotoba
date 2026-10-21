@@ -13,11 +13,12 @@ export class Presence {
   private initialized = false;
   private readonly observer: ResizeObserver;
 
-  constructor(private readonly host: CollaborationHost, private readonly binding: Binding, private readonly session: () => string, bar: HTMLElement) {
+  // `list`: whether the editor lists the people, or the page does (Issho's people list).
+  constructor(private readonly host: CollaborationHost, private readonly binding: Binding, private readonly session: () => string, bar: HTMLElement, private readonly listed = true) {
     this.list = document.createElement("ul");
     this.list.className = "kotoba-collab-people";
     this.list.setAttribute("aria-label", "People in this document");
-    bar.append(this.list);
+    if (listed) bar.append(this.list);
     this.layer = document.createElement("div");
     this.layer.className = "kotoba-collab-cursors";
     this.layer.setAttribute("aria-hidden", "true");
@@ -33,7 +34,7 @@ export class Presence {
     for (const session of this.lastSelections.keys()) if (!sessions.has(session)) this.lastSelections.delete(session);
     const unique = new Map(people.map(person => [person.user.id, person]));
     const next = new Set(unique.keys());
-    if (this.initialized) {
+    if (this.initialized && this.listed) {
       for (const [id, person] of unique) if (!this.known.has(id)) this.host.announce(`${person.user.name} joined`);
       for (const id of this.known) if (!next.has(id)) this.host.announce("A participant left");
     }
@@ -49,7 +50,8 @@ export class Presence {
   }
 
   offline(): void { this.receive(this.people.filter(person => person.session === this.session())); }
-  private color(person: Person): string { return /^#[0-9a-f]{6}$/i.test(person.user.color) ? person.user.color : "#2563eb"; }
+  // A person's own colour, or their colour of Issho's palette (the same as in Issho's people list).
+  private color(person: Person): string { return /^#[0-9a-f]{6}$/i.test(person.user.color) || /^var\(--issho-person-[1-8], #[0-9a-f]{6}\)$/i.test(person.user.color) ? person.user.color : "#2563eb"; }
   private readonly onScroll = (): void => this.draw();
 
   draw(): void {
@@ -91,7 +93,8 @@ export class Presence {
           const caretRange = document.createRange();
           caretRange.setStart(focus.node, focus.offset);
           caretRange.collapse(true);
-          const rect = caretRange.getClientRects()[0];
+          // An empty line has no rectangle for a collapsed range: the caret goes at the line's start.
+          const rect = caretRange.getClientRects()[0] ?? lineStart(focus.node);
           if (!rect) continue;
           const caret = document.createElement("span");
           caret.className = "kotoba-collab-caret";
@@ -122,4 +125,11 @@ export class Presence {
     this.list.remove();
     this.layer.remove();
   }
+}
+
+function lineStart(node: Node): DOMRect | null {
+  const element = node instanceof Element ? node : node.parentElement;
+  if (!element) return null;
+  const box = element.getBoundingClientRect();
+  return new DOMRect(box.left, box.top, 0, box.height);
 }
