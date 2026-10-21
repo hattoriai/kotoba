@@ -198,11 +198,16 @@ live_session :default, on_mount: [Issho.Live] do
 Authorize the authenticated user before signing credentials:
 
 ```elixir
-collab = Kotoba.Collab.token(MyApp.Issho, document.id,
-  user: %{id: user.id, name: user.name, color: "#2563eb"}, role: :write)
+collab = Kotoba.Collab.token(MyApp.Issho, document.id, user: current_user, role: :write)
 
 socket = assign(socket, collab: collab)
 ```
+
+`user` is your user, as your `Issho.Actor` implementation says them: its
+key (`"user:4"`), name and colour, the same person in every block of the
+page (a Hakushi canvas, Issho's people list). A map works too:
+`%{id: user.id, name: user.name, color: "#2563eb"}`. A person with no
+colour gets one of Issho's palette, the same as in Issho's lists.
 
 ```heex
 <.kotoba field={@form[:body]} id="body_editor" collab={@collab} />

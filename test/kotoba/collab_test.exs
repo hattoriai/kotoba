@@ -33,8 +33,15 @@ defmodule Kotoba.CollabTest do
     on_mount(Issho.Live)
 
     @impl true
-    def mount(_params, %{"instance" => instance, "document" => document, "role" => role}, socket) do
-      user = %{id: 7, name: "Ada", color: "#e84a1c"}
+    def mount(
+          _params,
+          %{"instance" => instance, "document" => document, "role" => role} = session,
+          socket
+        ) do
+      user =
+        if session["user"] == "member",
+          do: %KotobaTest.Member{id: 7, name: "Ada"},
+          else: %{id: 7, name: "Ada", color: "#e84a1c"}
 
       credentials =
         Collab.token(instance, document, user: user, role: String.to_existing_atom(role))
@@ -167,10 +174,10 @@ defmodule Kotoba.CollabTest do
              stored("post:4")
   end
 
-  defp credentials(instance, document, role \\ "write") do
+  defp credentials(instance, document, role \\ "write", user \\ nil) do
     {:ok, view, _html} =
       live_isolated(Phoenix.ConnTest.build_conn(), CredentialsLive,
-        session: %{"instance" => instance, "document" => document, "role" => role}
+        session: %{"instance" => instance, "document" => document, "role" => role, "user" => user}
       )
 
     credentials =
@@ -216,6 +223,17 @@ defmodule Kotoba.CollabTest do
     assert_raise ArgumentError, fn ->
       Collab.token(instance, "post:5", user: %{id: 7}, undo: :always)
     end
+  end
+
+  test "the person is the app's actor: its key and name, and Issho's colour when it has none",
+       %{instance: instance} do
+    {_view, credentials} = credentials(instance, "post:6", "write", "member")
+
+    assert %{"id" => "member:7", "name" => "Ada", "color" => color} = credentials["user"]
+    assert color =~ ~r/^var\(--issho-person-[1-8], #2563eb\)$/
+
+    assert {:ok, %Issho.Identity{key: "member:7", name: "Ada"}, :write} =
+             Issho.Token.verify(instance, credentials["token"], "post:6")
   end
 
   test "the LiveView renews an editor's grant of its room, without code of the app's",
