@@ -211,9 +211,9 @@ export class Presence {
   }
 
   // The caret of the one followed stays on the screen, when no page of
-  // Issho's (its pointers) keeps them there for the whole page.
+  // Issho's (its pointers, of this room) keeps them there for the whole page.
   private keepInView(person: Person, rect: DOMRect): void {
-    if (document.querySelector(".issho-pointers")) return;
+    if (this.room && document.querySelector(`.issho-pointers[data-room="${CSS.escape(this.room)}"]`)) return;
     const where = JSON.stringify(person.selection);
     const height = document.documentElement.clientHeight;
     if (rect.top >= 0 && rect.bottom <= height) {

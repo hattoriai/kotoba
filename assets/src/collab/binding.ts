@@ -374,6 +374,9 @@ export class Binding {
     const range = caretRange(clientX, clientY);
     const root = this.host.editor.getRootElement();
     if (!range || !root?.contains(range.startContainer)) return null;
+    // An embed's content is the app's, not the text: no caret in it.
+    const node = range.startContainer;
+    if ((node instanceof Element ? node : node.parentElement)?.closest(".kotoba-embed-slot")) return null;
     let anchor: Anchor | null = null;
     this.host.editor.getEditorState().read(() => {
       const selection = this.host.api.lexical.$createRangeSelection();

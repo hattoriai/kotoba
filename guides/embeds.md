@@ -235,7 +235,21 @@ document's root becomes an embed (not one in a list or a quote).
 In a shared document (see [Collaboration](collaboration.md)), an embed
 someone inserts reaches everyone's editor, and each person's LiveView
 renders it for them. What is in it is your app's: a Hakushi canvas with
-`live` is shared on its own, in its own room.
+`live` is shared on its own, in its own room, and its people are that
+room's wherever they are. Someone reading the document sees the cursor of
+someone on the canvas's own page, and the other way round.
+
+* Give the canvas the same user as the editor (`Kotoba.Collab.token/3`'s
+  `user`): the person is one person in both rooms.
+* Issho's pointers of the document's room (`Issho.Components.pointers/1`)
+  leave the canvas to its room, which draws its people there; following
+  someone who goes into the canvas follows them on it too.
+* A pointer over an embed is no caret of the text.
+* An embed deleted from the document lets the canvas's room go (Hakushi
+  releases it); full screen keeps the canvas in its room.
+* A reader of the document (`readonly`) is a viewer of the canvas's room.
+
+See Hakushi's [In a page](https://hexdocs.pm/hakushi/embedding.html) guide.
 
 ## Test an embed
 

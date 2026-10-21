@@ -19,6 +19,13 @@ On Issho 0.3: agents move with Issho's motion, and following is the room's.
 
 ### Added
 
+- `Kotoba.Collab.token/3` takes the app's user as its `Issho.Actor`
+  says them (its key, name and colour), so a person is one person in the
+  editor, a Hakushi canvas and Issho's lists. A person with no colour gets
+  Issho's palette colour rather than one blue for everyone.
+- A pointer over an embed is no caret of the text, and the editor keeps
+  the one followed on the screen unless Issho's pointers of its own room
+  do (a page's pointers of another room do not).
 - Embeds: your app's live things in the document, a canvas or a grid,
   which people use in place and take full screen (the `embeds` feature,
   `Kotoba.Nodes.Embed`, see the [Embeds](guides/embeds.md) guide). The

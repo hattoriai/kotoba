@@ -47,7 +47,13 @@ if Code.ensure_loaded?(Issho) do
     (`"notes:7"`, `"drafts:9"`) are independent of each other, on one page
     too: each joins its own room, with its own people.
 
-    Options: `:user` (required), `:role` (`:write` or `:read`), `:undo`
+    `:user` (required) is your user: a struct of yours for which you
+    implement `Issho.Actor` (its key, `"user:4"`, its name and colour), the
+    same person as in the page's other blocks (a canvas, Issho's lists), or
+    a map with an `:id`, a `:name` and a `:color`. A person with no colour
+    gets one of Issho's palette (`--issho-person-1` to `-8`).
+
+    Options: `:role` (`:write` or `:read`), `:undo`
     (`:editor`, the editor's own steps; `:page`, the person's last change
     in any editor or component of the page, with Issho's undo; `false`,
     none), `:people`
@@ -74,13 +80,7 @@ if Code.ensure_loaded?(Issho) do
       unless is_integer(max_channels) and max_channels > 0,
         do: raise(ArgumentError, "collaboration :max_channels must be a positive integer")
 
-      user = %{
-        "id" => to_string(Map.fetch!(user, :id)),
-        "name" => to_string(Map.get(user, :name, "Anonymous")),
-        "color" => Map.get(user, :color, "#2563eb")
-      }
-
-      actor = %{id: user["id"], name: user["name"], color: user["color"]}
+      {actor, user} = person(user)
       room = Issho.Policy.room(document_id)
 
       grant =
@@ -102,6 +102,28 @@ if Code.ensure_loaded?(Issho) do
         "follow" => Keyword.get(opts, :follow, true) != false,
         "undo" => undo(Keyword.get(opts, :undo, :editor))
       }
+    end
+
+    # The person as the app's Issho.Actor says them (their key, name and
+    # colour), the same in every room of the page: an editor, a canvas,
+    # Issho's lists. A map with an `:id` and no implementation is the
+    # actor `"7"`, as Issho takes it.
+    defp person(user) do
+      key = Issho.Actor.key(user)
+      shown = Issho.Actor.display(user)
+      name = to_string(shown[:name] || Map.get(user, :name) || "Anonymous")
+      color = Issho.Color.sanitize(shown[:color] || Map.get(user, :color))
+
+      actor =
+        %{id: key, name: name, color: color, avatar: shown[:avatar], kind: shown[:kind]}
+        |> Map.reject(fn {_field, value} -> is_nil(value) end)
+
+      {actor,
+       %{
+         "id" => key,
+         "name" => name,
+         "color" => color || "var(--issho-person-#{Issho.Color.index(key)}, #2563eb)"
+       }}
     end
 
     defp undo(mode) when mode in [:editor, :page], do: Atom.to_string(mode)
