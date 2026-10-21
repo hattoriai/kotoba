@@ -56,7 +56,7 @@ defmodule Kotoba.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
       {:ecto, "~> 3.13"},
       {:esbuild, "~> 0.10", only: :dev, runtime: false},
-      # Until Issho 0.2 is on Hex.
+      # Shared editors (`collab`): Issho is the room, its people and the document's authority.
       {:issho, "~> 0.2", optional: true},
       # MCP for the development app's agents, and their tests.
       {:sake, "~> 0.4", only: [:dev, :test]},
