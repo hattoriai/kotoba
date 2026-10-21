@@ -106,7 +106,10 @@ defmodule Kotoba.Embeds do
   defp embed_json(%{} = embed) do
     kind = embed |> field(:kind) |> to_string()
     ref = embed |> field(:ref) |> to_string()
-    if kind == "" or ref == "", do: nil, else: %{kind: kind, ref: ref, title: to_string(field(embed, :title) || "")}
+
+    if kind == "" or ref == "",
+      do: nil,
+      else: %{kind: kind, ref: ref, title: to_string(field(embed, :title) || "")}
   end
 
   defp field(map, key), do: Map.get(map, key, Map.get(map, to_string(key)))

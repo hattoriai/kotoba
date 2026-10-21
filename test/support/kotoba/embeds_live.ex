@@ -21,7 +21,9 @@ defmodule KotobaTest.EmbedsLive do
        Kotoba.Live.insert_embed(socket, "body", "counter", ref, title: "Counter #{ref}")}
 
   # Links to this app's counters.
-  def resolve("https://app.test/counters/" <> id), do: %{kind: "counter", ref: id, title: "Counter #{id}"}
+  def resolve("https://app.test/counters/" <> id),
+    do: %{kind: "counter", ref: id, title: "Counter #{id}"}
+
   def resolve(_url), do: nil
 
   @impl true

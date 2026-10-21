@@ -650,6 +650,7 @@ defmodule Kotoba.Components do
     default: nil,
     doc:
       "`fn url -> embed | nil end`: what a URL pasted alone on a line, or dropped, is (a map of `kind`, `ref` and `title`, or a `Kotoba.Nodes.Embed`), or `nil` for a link; for links to the app's own pages"
+
   attr :class, :any, default: nil
 
   slot :embed, required: true, doc: "renders an embed (`:let` gets the embed, see above)"
