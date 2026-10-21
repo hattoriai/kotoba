@@ -945,6 +945,16 @@ defmodule KotobaDev.EmbedsLive do
 
   def handle_event("change", _params, socket), do: {:noreply, socket}
 
+  # A link to a poll of this app (…/polls/lunch) is the poll.
+  defp resolve(url, polls) do
+    with %URI{path: "/polls/" <> id} <- URI.parse(url),
+         %{title: title} <- polls[id] do
+      %{kind: "poll", ref: id, title: title}
+    else
+      _other -> nil
+    end
+  end
+
   @impl true
   def render(assigns) do
     ~H"""
@@ -975,7 +985,14 @@ defmodule KotobaDev.EmbedsLive do
         show_toolbar={!@read}
       />
     </.form>
-    <.kotoba_embeds for="embeds-body" label="Poll" icon="chart" picker_title="Insert a poll" readonly={@read}>
+    <.kotoba_embeds
+      for="embeds-body"
+      label="Poll"
+      icon="chart"
+      picker_title="Insert a poll"
+      readonly={@read}
+      resolve={&resolve(&1, @polls)}
+    >
       <:embed :let={embed}>
         <.poll poll={@polls[embed.ref]} embed={embed} />
       </:embed>

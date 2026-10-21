@@ -20,13 +20,17 @@ defmodule KotobaTest.EmbedsLive do
       {:noreply,
        Kotoba.Live.insert_embed(socket, "body", "counter", ref, title: "Counter #{ref}")}
 
+  # Links to this app's counters.
+  def resolve("https://app.test/counters/" <> id), do: %{kind: "counter", ref: id, title: "Counter #{id}"}
+  def resolve(_url), do: nil
+
   @impl true
   def render(assigns) do
     ~H"""
     <.form for={@form} id="post">
       <.kotoba field={@form[:body]} id="body" embeds readonly={@readonly} />
     </.form>
-    <.kotoba_embeds :if={@picker} for="body" label="Counter" icon="chart" readonly={@readonly}>
+    <.kotoba_embeds :if={@picker} for="body" label="Counter" icon="chart" readonly={@readonly} resolve={&resolve/1}>
       <:embed :let={embed}>
         <div class="counter" id={"counter-" <> embed.id} data-full={to_string(embed.full)}>
           {embed.kind}:{embed.ref} {embed.title}

@@ -619,6 +619,10 @@ defmodule Kotoba.Components do
       screen and back, for a button.
     * `readonly` - this component's `readonly`.
 
+  With `resolve`, a link to something your app embeds becomes the embed:
+  a URL pasted alone on a line, or dropped on the editor (from another
+  tab), goes to `resolve`, which returns the embed or `nil` (a link).
+
   Render it outside the editor's form, once for each editor with embeds.
   With a `:picker`, the toolbar has a button (`label`, `icon`) that opens
   it; the app's buttons in it insert an embed with
@@ -641,6 +645,11 @@ defmodule Kotoba.Components do
     doc: "the icon of the toolbar button"
 
   attr :picker_title, :string, default: "Insert", doc: "the title of the picker"
+
+  attr :resolve, :any,
+    default: nil,
+    doc:
+      "`fn url -> embed | nil end`: what a URL pasted alone on a line, or dropped, is (a map of `kind`, `ref` and `title`, or a `Kotoba.Nodes.Embed`), or `nil` for a link; for links to the app's own pages"
   attr :class, :any, default: nil
 
   slot :embed, required: true, doc: "renders an embed (`:let` gets the embed, see above)"
@@ -659,6 +668,7 @@ defmodule Kotoba.Components do
       label={@label}
       icon={@icon}
       picker_title={@picker_title}
+      resolve={@resolve}
       class={@class}
       embed={@embed}
       picker_slot={@picker}
