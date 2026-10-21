@@ -1197,9 +1197,12 @@ defmodule KotobaDev.NotebookLive do
     ~H"""
     <h1>Notebook</h1>
     <Issho.Components.people id="notebook-people" grant={@grant} />
+    <Issho.Components.pointers id="notebook-pointers" grant={@grant} />
     <.form for={@form} id="notebook-form">
       <.kotoba :for={block <- @blocks} field={@form[block]} id={"notebook_#{block}"} label={"Block #{block}"} collab={@collab[block]} />
     </.form>
+    <p id="notebook-note">A note beside the editors, in plain HEEx.</p>
+    <p id="notebook-secret" data-issho-private>Only for you.</p>
     """
   end
 end
