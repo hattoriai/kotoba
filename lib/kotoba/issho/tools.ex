@@ -60,13 +60,40 @@ if Code.ensure_loaded?(Issho.Tool) do
       end
     end
 
-    # The range a call names: quoted text, or the agent's selection.
+    # The range a call names: quoted text, a person's selection (`of`), or
+    # the agent's own.
     def range(%__MODULE__{} = doc, args) do
-      case args[:text] do
-        nil -> selection(doc)
-        quote -> Text.find(doc.state, quote, occurrence: args[:occurrence], block: args[:block])
+      cond do
+        args[:text] ->
+          Text.find(doc.state, args.text, occurrence: args[:occurrence], block: args[:block])
+
+        args[:of] ->
+          selection_of(doc, args.of)
+
+        true ->
+          selection(doc)
       end
     end
+
+    # What a person of the room has selected in this document.
+    def selection_of(%__MODULE__{} = doc, who) do
+      with {:ok, at, name} <- Issho.Tools.place_of(doc.participant, doc.document, who) do
+        case Text.from_place(doc.state, at) do
+          {:ok, %{from: same, to: same}} ->
+            {:error, "#{name} has no text selected, only a caret."}
+
+          {:ok, range} ->
+            {:ok, range}
+
+          {:error, _reason} ->
+            {:error, "#{name}'s selection is not in one block of the text."}
+        end
+      end
+    end
+
+    # The text of a range.
+    def text_of(%{block: block, from: from, to: to}),
+      do: block.chars |> Enum.slice(from, to - from) |> Enum.map_join(& &1.text)
 
     # The caret a call names: after or before quoted text, the start or end
     # of a block or of the document, else the end of the agent's selection.
@@ -147,23 +174,35 @@ if Code.ensure_loaded?(Issho.Tool) do
       description: """
       Reads a shared rich text document: its blocks (paragraphs, headings,
       list items, quotes, code), numbered from 1, each with its text and
-      links. Quote this text to select or change it.
+      links. Quote this text to select or change it. With `of`, a person
+      in the room, also what they have selected: act on it with the other
+      tools' `of`.
       """,
       annotations: [read_only: true, idempotent: true]
 
     arg :document, :string, required: true, description: "The document's id: \"notebook:7/intro\""
+    arg :of, :string, description: "A person in the room, by name: what they have selected"
 
     alias Kotoba.Issho.{Text, Tools.Doc}
 
     @impl true
-    def call(%{document: document}, ctx) do
-      case Doc.open(ctx, document) do
-        {:ok, doc} ->
-          {:ok, %{"document" => document, "blocks" => Text.read(doc.state)}}
-
-        error ->
-          Doc.error(error)
+    def call(%{document: document} = args, ctx) do
+      with {:ok, doc} <- Doc.open(ctx, document),
+           read = %{"document" => document, "blocks" => Text.read(doc.state)},
+           {:ok, read} <- selected(read, doc, args[:of]) do
+        {:ok, read}
+      else
+        error -> Doc.error(error)
       end
+    end
+
+    defp selected(read, _doc, nil), do: {:ok, read}
+
+    defp selected(read, doc, who) do
+      with {:ok, range} <- Doc.selection_of(doc, who),
+           do:
+             {:ok,
+              Map.put(read, "selected", %{"block" => range.block.n, "text" => Doc.text_of(range)})}
     end
   end
 
@@ -256,6 +295,7 @@ if Code.ensure_loaded?(Issho.Tool) do
 
     arg :document, :string, required: true
     arg :text, :string, description: "The text to replace, quoted; your selection unless given"
+    arg :of, :string, description: "A person in the room, by name: the text they have selected"
     arg :with, :string, required: true
     arg :occurrence, :integer, min: 1
     arg :block, :integer, min: 1
@@ -304,6 +344,7 @@ if Code.ensure_loaded?(Issho.Tool) do
 
     arg :document, :string, required: true
     arg :text, :string, description: "The text to delete, quoted; your selection unless given"
+    arg :of, :string, description: "A person in the room, by name: the text they have selected"
     arg :occurrence, :integer, min: 1
     arg :block, :integer, min: 1
 
@@ -338,6 +379,7 @@ if Code.ensure_loaded?(Issho.Tool) do
 
     arg :document, :string, required: true
     arg :text, :string, description: "The text to format, quoted; your selection unless given"
+    arg :of, :string, description: "A person in the room, by name: the text they have selected"
     arg :occurrence, :integer, min: 1
     arg :block, :integer, min: 1
 
@@ -380,6 +422,7 @@ if Code.ensure_loaded?(Issho.Tool) do
     arg :document, :string, required: true
     arg :url, :string, required: true, max_length: 2_048
     arg :text, :string, description: "The text to link, quoted; your selection unless given"
+    arg :of, :string, description: "A person in the room, by name: the text they have selected"
     arg :occurrence, :integer, min: 1
     arg :block, :integer, min: 1
 
@@ -440,6 +483,7 @@ if Code.ensure_loaded?(Issho.Tool) do
 
     arg :document, :string, required: true
     arg :text, :string, description: "The text to copy, quoted; your selection unless given"
+    arg :of, :string, description: "A person in the room, by name: the text they have selected"
     arg :occurrence, :integer, min: 1
     arg :block, :integer, min: 1
 

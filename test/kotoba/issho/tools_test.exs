@@ -210,4 +210,30 @@ defmodule Kotoba.Issho.ToolsTest do
     assert html(ada, document) =~
              ~s(<a href="https://kotoba.dev" rel="noopener nofollow">the docs</a>)
   end
+
+  test "acts on what a person of the room has selected", %{
+    client: client,
+    document: document,
+    ada: ada
+  } do
+    # Ada selects "the docs" in her editor.
+    {:ok, %{"state" => state}} = Participant.read(ada, document)
+    {:ok, range} = Kotoba.Issho.Text.find(state, "the docs")
+    :ok = Participant.place(ada, %{"doc" => document, "at" => Kotoba.Issho.Text.place(range)})
+
+    assert {:ok, %{"selected" => %{"block" => 1, "text" => "the docs"}}} =
+             call(client, "read_text", %{"document" => document, "of" => "ada"})
+
+    assert {:ok, _} =
+             call(client, "format_text", %{
+               "document" => document,
+               "of" => "ada",
+               "marks" => %{"bold" => true}
+             })
+
+    assert html(ada, document) =~ "Read <strong>the docs</strong> today"
+
+    assert {:error, "No one called \"Zed\" is in the room."} =
+             call(client, "read_text", %{"document" => document, "of" => "Zed"})
+  end
 end
