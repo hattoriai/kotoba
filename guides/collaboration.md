@@ -248,6 +248,44 @@ publishing transactions and permissions. An offline form cannot submit an
 accepted revision until it reconnects. Custom JavaScript save flows can call
 `document.getElementById("body_editor").kotobaCollab.flush()`.
 
+## Agents
+
+An agent edits a shared document as a person does, and the people see it:
+its name in the list, its selection in its colour, its text written a
+few characters at a time, merged with their own edits. `Kotoba.Issho.MCP`
+gives it the editor's verbs over MCP:
+
+| Tool | What it does |
+|---|---|
+| `read_text` | the document's blocks, numbered, with their text and links |
+| `select_text` | selects quoted text; the people see the selection |
+| `type_text` | types after or before quoted text, at the start or end of a block, or at the selection |
+| `replace_text`, `delete_text` | replace or delete quoted text, or the selection |
+| `format_text` | bold, italic, underline, strikethrough, code, highlight, subscript, superscript |
+| `link_text` | makes quoted text, or the selection, a link |
+| `add_block` | a paragraph, a heading or a quote, after a block |
+| `copy_text`, `paste_text` | copies with its formatting, pastes in any document of the room |
+
+Text is quoted, not counted, so the agent says what it means. Its
+changes are the operations an editor sends, through the same authority,
+checks and store.
+
+Serve it with Issho's room tools, as your app serves MCP (see Issho's
+agents guide for authorization, and for whom an agent acts):
+
+```elixir
+defmodule MyApp.MCP do
+  use Sake.Server, name: "my-app", version: "1.0.0"
+  mount Issho.MCP
+  mount Kotoba.Issho.MCP
+end
+```
+
+The repository's development app serves them at `/mcp`: with `mix dev`
+running and `/collab/notebook` open, connect Claude Code with
+`claude mcp add --transport http kotoba-dev http://localhost:4099/mcp`
+and ask it to edit the notebook (`notebook/one`, `notebook/two`).
+
 ## Merge and history behavior
 
 Transactions carry protocol/schema versions, a document epoch, a unique
