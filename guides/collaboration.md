@@ -270,6 +270,24 @@ Text is quoted, not counted, so the agent says what it means. Its
 changes are the operations an editor sends, through the same authority,
 checks and store.
 
+### How an agent moves
+
+By default an agent moves as a person does, so that the people can follow
+it: its caret goes to where it works, it selects text as a drag does,
+holds a moment on what it is about to change, then changes it, and it
+types at a person's pace, a new block too. Only where it goes is sent
+(where it presses, where it lets go): each browser draws the way there,
+its caret gliding and the selection sweeping from its start to its end. With Issho 0.2.1 and its page pointers (`Issho.Components.pointers/1`),
+its pointer goes to its caret and glides with it across the page. An app
+that wants changes to appear at once says so:
+
+```elixir
+# The milliseconds it takes to type a character (0: text appears at once;
+# a long text is typed in at most 8 seconds), and whether it goes to where
+# it works and drags (false: it is there at once).
+config :kotoba, Kotoba.Issho, pace: 25, travel: true
+```
+
 Give them to your app's own model, through its API, with Issho's room
 tools:
 

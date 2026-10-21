@@ -49,6 +49,65 @@ if Code.ensure_loaded?(Issho.Tool) do
       Participant.place(doc.participant, place)
     end
 
+    # How an agent moves in a document (`config :kotoba, Kotoba.Issho`):
+    # `pace`, the milliseconds it takes to type a character (0: text appears
+    # at once), and `travel`, whether it goes to where it works and selects
+    # as a person would (false: it is there at once). Only where it goes is
+    # sent: each browser draws the way there (its caret glides, a selection
+    # sweeps), and the agent waits as long as that takes.
+    def pace, do: Keyword.get(Application.get_env(:kotoba, Kotoba.Issho, []), :pace, 25)
+    def travel?, do: Keyword.get(Application.get_env(:kotoba, Kotoba.Issho, []), :travel, true)
+
+    # As long as a browser takes to glide a caret, and to sweep a selection.
+    @glide 400
+    @sweep 350
+    @hold 300
+    # The longest an agent types one text for: a longer one, in larger pieces.
+    @typing 8_000
+
+    # Goes to a caret, or to a range: pressed at its start, then dragged to
+    # its end.
+    def reach(%__MODULE__{} = doc, %{from: _} = range) do
+      if travel?() and not there?(doc, range) do
+        step(doc, %{block: range.block, index: range.from}, @glide)
+        step(doc, range, @sweep)
+      else
+        point(doc, range)
+      end
+    end
+
+    def reach(%__MODULE__{} = doc, caret) do
+      if travel?() and not there?(doc, caret),
+        do: step(doc, caret, @glide),
+        else: point(doc, caret)
+    end
+
+    # Whether the agent is there already (it selected the text before).
+    defp there?(doc, target) do
+      case selection(doc) do
+        {:ok, %{block: %{id: id}, from: from, to: to}} ->
+          {id, from, to} ==
+            {target.block.id, Map.get(target, :from, target[:index]),
+             Map.get(target, :to, target[:index])}
+
+        _ ->
+          false
+      end
+    end
+
+    # A moment on what is selected before it changes, so that the people see what will.
+    def hold(%__MODULE__{}) do
+      if travel?(), do: Process.sleep(@hold)
+      :ok
+    end
+
+    defp step(doc, place, ms) do
+      with :ok <- point(doc, place) do
+        Process.sleep(ms)
+        :ok
+      end
+    end
+
     # The agent's selection in this document, as a range.
     def selection(%__MODULE__{} = doc) do
       case Participant.awareness(doc.participant) do
@@ -124,23 +183,24 @@ if Code.ensure_loaded?(Issho.Tool) do
     defp find(doc, quote, args),
       do: Text.find(doc.state, quote, occurrence: args[:occurrence], block: args[:block])
 
-    # Types text at a caret, a few characters at a time when `typing`, so
-    # that the people see it written, the agent's caret moving with it.
+    # Types text at a caret, a few characters at a time when `typing` (at
+    # the `pace`), so that the people see it written, the agent's caret
+    # moving with it.
     def type(%__MODULE__{} = doc, caret, text, marks, typing?) do
-      chunks = if typing?, do: chunks(text), else: [text]
-      type_chunks(doc, caret, chunks, marks, typing?)
+      per_char = if typing?, do: min(pace(), div(@typing, max(String.length(text), 1))), else: 0
+      chunks = if per_char > 0, do: chunks(text), else: [text]
+      type_chunks(doc, caret, chunks, marks, per_char)
     end
 
-    defp type_chunks(doc, caret, [], _marks, _typing?), do: {:ok, doc, caret}
+    defp type_chunks(doc, caret, [], _marks, _per_char), do: {:ok, doc, caret}
 
-    defp type_chunks(doc, caret, [chunk | chunks], marks, typing?) do
+    defp type_chunks(doc, caret, [chunk | chunks], marks, per_char) do
       with {:ok, ops, _state, after_caret} <- Text.insert(doc.state, caret, chunk, marks),
            {:ok, doc} <- commit(doc, ops),
            caret = Text.caret_in(doc.state, after_caret),
            :ok <- point(doc, caret) do
-        # A person's pace, so that the others see it written.
-        if typing? and chunks != [], do: Process.sleep(35)
-        type_chunks(doc, caret, chunks, marks, typing?)
+        if chunks != [], do: Process.sleep(per_char * String.length(chunk))
+        type_chunks(doc, caret, chunks, marks, per_char)
       end
     end
 
@@ -228,7 +288,7 @@ if Code.ensure_loaded?(Issho.Tool) do
     def call(args, ctx) do
       with {:ok, doc} <- Doc.open(ctx, args.document),
            {:ok, range} <- Doc.range(doc, args),
-           :ok <- Doc.point(doc, range) do
+           :ok <- Doc.reach(doc, range) do
         {:ok, %{"selected" => args.text, "block" => range.block.n}}
       else
         error -> Doc.error(error)
@@ -275,6 +335,7 @@ if Code.ensure_loaded?(Issho.Tool) do
 
       with {:ok, doc} <- Doc.open(ctx, args.document),
            {:ok, caret} <- Doc.caret(doc, args),
+           :ok <- Doc.reach(doc, caret),
            {:ok, _doc, caret} <- Doc.type(doc, caret, args.text, marks, typing?) do
         {:ok, %{"typed" => String.length(args.text), "block" => caret.block.n}}
       else
@@ -308,7 +369,8 @@ if Code.ensure_loaded?(Issho.Tool) do
       with {:ok, doc} <- Doc.open(ctx, args.document),
            {:ok, range} <- Doc.range(doc, args),
            marks = range |> Text.selected() |> List.first() |> marks_of(),
-           :ok <- Doc.point(doc, range),
+           :ok <- Doc.reach(doc, range),
+           :ok <- Doc.hold(doc),
            {:ok, ops, _state} <- Text.delete(doc.state, range),
            {:ok, doc} <- Doc.commit(doc, ops),
            {:ok, caret} <- caret_at(doc, range) do
@@ -354,7 +416,8 @@ if Code.ensure_loaded?(Issho.Tool) do
     def call(args, ctx) do
       with {:ok, doc} <- Doc.open(ctx, args.document),
            {:ok, range} <- Doc.range(doc, args),
-           :ok <- Doc.point(doc, range),
+           :ok <- Doc.reach(doc, range),
+           :ok <- Doc.hold(doc),
            {:ok, ops, _state} <- Text.delete(doc.state, range),
            {:ok, _doc} <- Doc.commit(doc, ops) do
         {:ok, %{"deleted" => range.to - range.from}}
@@ -400,7 +463,8 @@ if Code.ensure_loaded?(Issho.Tool) do
       with true <- marks != %{} || {:error, "Say which marks: bold, italic..."},
            {:ok, doc} <- Doc.open(ctx, args.document),
            {:ok, range} <- Doc.range(doc, args),
-           :ok <- Doc.point(doc, range),
+           :ok <- Doc.reach(doc, range),
+           :ok <- Doc.hold(doc),
            {:ok, ops, _state} <- Text.format(doc.state, range, marks),
            {:ok, _doc} <- Doc.commit(doc, ops) do
         {:ok,
@@ -432,7 +496,8 @@ if Code.ensure_loaded?(Issho.Tool) do
     def call(args, ctx) do
       with {:ok, doc} <- Doc.open(ctx, args.document),
            {:ok, range} <- Doc.range(doc, args),
-           :ok <- Doc.point(doc, range),
+           :ok <- Doc.reach(doc, range),
+           :ok <- Doc.hold(doc),
            {:ok, ops, _state} <- Text.link(doc.state, range, args.url),
            {:ok, _doc} <- Doc.commit(doc, ops) do
         {:ok, %{"linked" => Text.selected(range) |> Enum.map_join(& &1.text), "url" => args.url}}
@@ -461,15 +526,26 @@ if Code.ensure_loaded?(Issho.Tool) do
 
     @impl true
     def call(args, ctx) do
+      typing? = String.length(args.text) <= 2_000
+
+      # To the end of the block it follows, a new block, and its text typed in it.
       with {:ok, doc} <- Doc.open(ctx, args.document),
-           {:ok, ops, _state, caret} <-
-             Text.insert_block(doc.state, args.after, args.type, args.text),
+           :ok <- go_after(doc, args.after),
+           {:ok, ops, _state, caret} <- Text.insert_block(doc.state, args.after, args.type, ""),
            {:ok, doc} <- Doc.commit(doc, ops),
-           :ok <- Doc.point(doc, Text.caret_in(doc.state, caret)) do
+           caret = Text.caret_in(doc.state, caret),
+           :ok <- Doc.point(doc, caret),
+           {:ok, _doc, _caret} <- Doc.type(doc, caret, args.text, %{}, typing?) do
         {:ok, %{"added" => args.type}}
       else
         error -> Doc.error(error)
       end
+    end
+
+    defp go_after(_doc, 0), do: :ok
+
+    defp go_after(doc, n) do
+      with {:ok, caret} <- Text.caret(doc.state, {:end, n}), do: Doc.reach(doc, caret)
     end
   end
 
@@ -493,7 +569,7 @@ if Code.ensure_loaded?(Issho.Tool) do
     def call(args, ctx) do
       with {:ok, doc} <- Doc.open(ctx, args.document),
            {:ok, range} <- Doc.range(doc, args),
-           :ok <- Doc.point(doc, range) do
+           :ok <- Doc.reach(doc, range) do
         # Runs of the same formatting, to paste as they were.
         runs =
           range
@@ -539,6 +615,7 @@ if Code.ensure_loaded?(Issho.Tool) do
            runs when is_list(runs) <-
              Doc.recall(doc, :clipboard) || {:error, "Copy some text first."},
            {:ok, caret} <- Doc.caret(doc, args),
+           :ok <- Doc.reach(doc, caret),
            {:ok, _doc, _caret} <- Doc.type_runs(doc, caret, runs) do
         {:ok, %{"pasted" => Enum.map_join(runs, &elem(&1, 0))}}
       else

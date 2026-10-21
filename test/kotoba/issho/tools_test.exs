@@ -137,6 +137,95 @@ defmodule Kotoba.Issho.ToolsTest do
     assert length(transactions) == 3
   end
 
+  # The places the agent showed Ada, in order, each once: the call returns
+  # when the agent is done, so they have all been sent.
+  defp places(ada, document, acc \\ []) do
+    receive do
+      {Participant, ^ada, "aware", %{"states" => states}} ->
+        place =
+          Enum.find_value(Map.values(states), fn
+            %{"state" => %{"place" => %{"doc" => ^document, "at" => at}}} -> at
+            _ -> nil
+          end)
+
+        places(ada, document, if(place && place != List.first(acc), do: [place | acc], else: acc))
+    after
+      100 -> Enum.reverse(acc)
+    end
+  end
+
+  defp indexes(ada, document, places) do
+    {:ok, %{"state" => state}} = Participant.read(ada, document)
+
+    for place <- places do
+      {:ok, range} = Text.from_place(state, place)
+      {range.from, range.to}
+    end
+  end
+
+  test "it goes to the text, and selects it as a drag does: only where it goes is sent", %{
+    client: client,
+    document: document,
+    ada: ada
+  } do
+    {:ok, _} = call(client, "select_text", %{"document" => document, "text" => "the docs today"})
+
+    # "Read the docs today": pressed at the start of "the", then dragged to
+    # the end; Ada's browser draws the way.
+    assert indexes(ada, document, places(ada, document)) == [{5, 5}, {5, 19}]
+
+    {:ok, _} =
+      call(client, "type_text", %{
+        "document" => document,
+        "at" => "start",
+        "block" => 2,
+        "text" => "A"
+      })
+
+    # To block 2, then what it typed there.
+    assert [_start, _typed] = places(ada, document)
+  end
+
+  test "pace and travel: 0 and false, and the agent is there at once", %{
+    client: client,
+    document: document,
+    ada: ada
+  } do
+    Application.put_env(:kotoba, Kotoba.Issho, pace: 0, travel: false)
+    on_exit(fn -> Application.delete_env(:kotoba, Kotoba.Issho) end)
+
+    {:ok, _} = call(client, "select_text", %{"document" => document, "text" => "today"})
+    assert indexes(ada, document, places(ada, document)) == [{14, 19}]
+
+    {:ok, _} =
+      call(client, "type_text", %{"document" => document, "after" => "today", "text" => ", and"})
+
+    # One transaction for the whole text.
+    assert_receive {Participant, ^ada, "tx", _}, 1_000
+    refute_receive {Participant, ^ada, "tx", _}, 200
+    assert html(ada, document) =~ "<p>Read the docs today, and</p>"
+  end
+
+  test "a block is added as a person adds one: an empty block, then its text typed", %{
+    client: client,
+    document: document,
+    ada: ada
+  } do
+    {:ok, _} =
+      call(client, "add_block", %{
+        "document" => document,
+        "after" => 1,
+        "type" => "quote",
+        "text" => "From one thing, know ten thousand things."
+      })
+
+    assert html(ada, document) =~
+             "<p>Read the docs today</p><blockquote>From one thing, know ten thousand things.</blockquote>"
+
+    transactions = for _ <- 1..4, do: assert_receive({Participant, ^ada, "tx", _}, 1_000)
+    assert length(transactions) == 4
+  end
+
   test "replaces and deletes, copies and pastes", %{client: client, document: document, ada: ada} do
     {:ok, _} =
       call(client, "replace_text", %{

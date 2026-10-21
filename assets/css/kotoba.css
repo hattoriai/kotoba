@@ -1177,9 +1177,13 @@ div.kotoba-unknown {
 .kotoba-collab-people { display: flex; flex-wrap: wrap; gap: .75rem; list-style: none; margin: 0; padding: 0; }
 .kotoba-collab-people li { border-inline-start: 3px solid var(--collab-color); padding-inline-start: .4rem; }
 .kotoba-collab-cursors { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
-.kotoba-collab-caret { position: absolute; border-inline-start: 2px solid var(--collab-color); }
+.kotoba-collab-caret { position: absolute; border-inline-start: 2px solid var(--collab-color); transition: left var(--kotoba-caret-glide, var(--kotoba-caret-travel, 120ms)) ease-out, top var(--kotoba-caret-glide, var(--kotoba-caret-travel, 120ms)) ease-out; }
 .kotoba-collab-caret span { position: absolute; left: -2px; bottom: 100%; background: var(--collab-color); color: #fff; font: 11px/1.4 system-ui; white-space: nowrap; padding: 1px 4px; border-radius: 3px; }
 .kotoba-collab-selection { position: absolute; background: var(--collab-color); opacity: .15; }
+/* A new selection is drawn as a drag makes it: each line in turn, from its start. */
+.kotoba-collab-selection[data-sweep] { animation: kotoba-sweep calc(var(--kotoba-sweep, 350ms) / var(--kotoba-sweep-lines, 1)) linear calc(var(--kotoba-sweep, 350ms) * var(--kotoba-sweep-line, 0) - var(--kotoba-sweep-elapsed, 0ms)) both; }
+@keyframes kotoba-sweep { from { clip-path: inset(0 100% 0 0); } to { clip-path: inset(0 0 0 0); } }
+@media (prefers-reduced-motion: reduce) { .kotoba-collab-caret { transition: none; } .kotoba-collab-selection[data-sweep] { animation: none; } }
 
 /* A readable baseline for <.kotoba_content>. Each rule has the specificity
    of one class (.kotoba-content :where(a)), so it wins over an element reset
