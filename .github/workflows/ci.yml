@@ -126,6 +126,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # The collaboration bundle imports Issho, whose TypeScript is in deps/.
+      - uses: erlef/setup-beam@v1
+        with:
+          version-file: .tool-versions
+          version-type: strict
+
+      - run: mix deps.get
+
       - uses: actions/setup-node@v4
         with:
           node-version-file: .tool-versions

@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { MOD, focusEnd, openEditor, selectBack, settle } from "./support";
-import type { State, Operation, Transaction } from "../../assets/src/collab/model";
+import type { State, Operation } from "../../assets/src/collab/model";
 
 const editor = (page: Page) => page.locator("#shared_editor .kotoba-editable");
 const status = (page: Page) => page.locator("#shared_editor [data-collab-status]");
@@ -169,16 +169,21 @@ test("browser and authority replay the same transactions and character moves", a
     const phoenix = await load("/vendor/phoenix/phoenix.mjs") as unknown as { Socket: new (path: string) => { connect(): void; disconnect(): void; channel(topic: string, params: object): { join(): { receive(status: string, callback: (payload: unknown) => void): unknown }; push(event: string, payload: unknown): { receive(status: string, callback: (payload: unknown) => void): unknown }; leave(): void } } };
     const credentials = JSON.parse(document.getElementById("shared_editor")!.dataset.collab!);
     const socket = new phoenix.Socket(credentials.socket);
-    const channel = socket.channel(`kotoba:${credentials.document_id}`, { token: credentials.token, session: crypto.randomUUID(), pending: [] });
+    const channel = socket.channel(`issho:${credentials.document_id}`, { token: credentials.token });
     socket.connect();
-    let state = await new Promise<State>(resolve => channel.join().receive("ok", payload => resolve((payload as { state: State }).state)));
+    const doc = credentials.document_id;
+    const push = (event: string, payload: unknown): Promise<unknown> =>
+      new Promise((resolve, reject) => { const sent = channel.push(event, payload); sent.receive("ok", resolve); sent.receive("error", reject); });
+    interface Snapshot { epoch: string; revision: number; state: State }
+    await new Promise(resolve => channel.join().receive("ok", resolve));
+    let snapshot = await push("open", { doc, pending: [] }) as Snapshot;
+    let state = snapshot.state;
     const canonical = (value: unknown): string => JSON.stringify(value, (_key, object: unknown) => object && typeof object === "object" && !Array.isArray(object) ? Object.fromEntries(Object.entries(object).sort(([a], [b]) => a.localeCompare(b))) : object);
     const transact = async (ops: Operation[]): Promise<{ expected: State; actual: State } | null> => {
-      const transaction: Transaction = { v: 1, schema: 1, epoch: state.epoch, base_revision: state.revision, id: crypto.randomUUID(), ops };
-      await new Promise<void>((resolve, reject) => { const push = channel.push("transaction", transaction); push.receive("ok", () => resolve()); push.receive("error", reject); });
+      await push("tx", { doc, tx: { epoch: snapshot.epoch, base_revision: snapshot.revision, id: crypto.randomUUID(), ops } });
       const expected = model.apply(state, ops);
-      expected.revision++;
-      state = await new Promise<State>(resolve => channel.push("flush", {}).receive("ok", payload => resolve((payload as { state: State }).state)));
+      snapshot = await push("open", { doc, pending: [] }) as Snapshot;
+      state = snapshot.state;
       return canonical(expected) === canonical(state) ? null : { expected, actual: state };
     };
     try {

@@ -49,7 +49,8 @@ Application.put_env(:kotoba, KotobaDev.Endpoint,
     if(watch?,
       do: [
         kotoba_esm: {Esbuild, :install_and_run, [:kotoba_esm, ~w(--watch)]},
-        kotoba_dev_nodes: {Esbuild, :install_and_run, [:kotoba_dev_nodes, ~w(--watch)]}
+        kotoba_dev_nodes: {Esbuild, :install_and_run, [:kotoba_dev_nodes, ~w(--watch)]},
+        kotoba_dev_issho: {Esbuild, :install_and_run, [:kotoba_dev_issho, ~w(--watch)]}
       ],
       else: []
     ),
@@ -329,7 +330,8 @@ defmodule KotobaDev.Layouts do
               "phoenix": "/vendor/phoenix/phoenix.mjs",
               "phoenix_live_view": "/vendor/phoenix_live_view/phoenix_live_view.esm.js",
               "kotoba": "/assets/kotoba.esm.js",
-              "kotoba/collab": "/assets/kotoba-collab.esm.js"
+              "kotoba/collab": "/assets/kotoba-collab.esm.js",
+              "issho": "/vendor/issho/issho.esm.js"
             }
           }
         </script>
@@ -941,16 +943,27 @@ defmodule KotobaDev.ExtensionsLive do
       {:noreply, Kotoba.Live.push_content(socket, "comment_editor", KotobaDev.Sample.document())}
 end
 
-defmodule KotobaDev.CollabChannel do
-  use Kotoba.Collab.Channel, supervisor: KotobaDev.CollabSupervisor
-  # Demo only. Production authorization must consult the application's ACL
-  # using the verified token identity assigned during channel join.
-  def authorize(_socket, _document, _action), do: :ok
+defmodule KotobaDev.Collaboration do
+  @moduledoc false
+  # The Issho policy. Demo only: production authorization consults the
+  # application's own permissions for the identity (`key` is the user's id).
+  @behaviour Issho.Policy
+
+  @impl true
+  def authorize(_identity, _document_id, _action), do: :ok
+
+  @impl true
+  def document(_identity, _document_id),
+    do: Kotoba.Collab.document(store: {Kotoba.Collab.Store.Memory, KotobaDev.CollabStore})
+end
+
+defmodule KotobaDev.IsshoChannel do
+  use Issho.Channel, instance: KotobaDev.Issho
 end
 
 defmodule KotobaDev.CollabSocket do
   use Phoenix.Socket
-  channel("kotoba:*", KotobaDev.CollabChannel)
+  channel("issho:*", KotobaDev.IsshoChannel)
   def connect(_params, socket, _connect_info), do: {:ok, socket}
   def id(_socket), do: nil
 end
@@ -958,7 +971,7 @@ end
 # A collaboration socket with a small channel limit, for the e2e tests of socket sharing.
 defmodule KotobaDev.SmallCollabSocket do
   use Phoenix.Socket, max_channels_per_transport: 5
-  channel("kotoba:*", KotobaDev.CollabChannel)
+  channel("issho:*", KotobaDev.IsshoChannel)
   def connect(_params, socket, _connect_info), do: {:ok, socket}
   def id(_socket), do: nil
 end
@@ -972,7 +985,7 @@ defmodule KotobaDev.CollabLive do
     name = Map.get(params, "name", "Ada")
     user = %{id: name, name: name, color: if(name == "Ada", do: "#2563eb", else: "#be185d")}
     role = if params["role"] == "read", do: :read, else: :write
-    collab = Kotoba.Collab.token(socket, id, user: user, role: role)
+    collab = Kotoba.Collab.token(KotobaDev.Issho, id, user: user, role: role)
 
     {:ok,
      assign(socket,
@@ -1003,7 +1016,10 @@ defmodule KotobaDev.CollabLive do
   def handle_event("kotoba:collab_token", %{"document_id" => id}, socket) do
     if id == socket.assigns.document_id do
       credentials =
-        Kotoba.Collab.token(socket, id, user: socket.assigns.user, role: socket.assigns.role)
+        Kotoba.Collab.token(KotobaDev.Issho, id,
+          user: socket.assigns.user,
+          role: socket.assigns.role
+        )
 
       {:reply, credentials, socket}
     else
@@ -1014,7 +1030,7 @@ defmodule KotobaDev.CollabLive do
   def handle_event("save", %{"kotoba_collab" => %{"shared_editor" => json}}, socket) do
     with {:ok, revision} <- JSON.decode(json),
          {:ok, content} <-
-           Kotoba.Collab.content(KotobaDev.CollabSupervisor, socket.assigns.document_id, revision) do
+           Kotoba.Collab.content(KotobaDev.Issho, socket.assigns.document_id, revision) do
       {:noreply, assign(socket, saved: content)}
     else
       _ -> {:noreply, put_flash(socket, :error, "The revision is unavailable")}
@@ -1064,7 +1080,7 @@ defmodule KotobaDev.ManyCollabLive do
 
     signing =
       if params["socket"] == "small",
-        do: [user: user, socket: "/kotoba/small-socket", max_channels: 5],
+        do: [user: user, socket: "/issho/small-socket", max_channels: 5],
         else: [user: user]
 
     {:ok,
@@ -1073,7 +1089,7 @@ defmodule KotobaDev.ManyCollabLive do
        editors: editors,
        next: length(editors) + 1,
        signing: signing,
-       collab: Map.new(ids, &{&1, Kotoba.Collab.token(socket, &1, signing)}),
+       collab: Map.new(ids, &{&1, Kotoba.Collab.token(KotobaDev.Issho, &1, signing)}),
        form: to_form(%{}, as: :many)
      )}
   end
@@ -1093,7 +1109,7 @@ defmodule KotobaDev.ManyCollabLive do
 
   def handle_event("kotoba:collab_token", %{"document_id" => id}, socket) do
     if Map.has_key?(socket.assigns.collab, id) do
-      {:reply, Kotoba.Collab.token(socket, id, socket.assigns.signing), socket}
+      {:reply, Kotoba.Collab.token(KotobaDev.Issho, id, socket.assigns.signing), socket}
     else
       {:reply, %{}, socket}
     end
@@ -1115,7 +1131,7 @@ defmodule KotobaDev.ManyCollabLive do
          Map.put(
            socket.assigns.collab,
            id,
-           Kotoba.Collab.token(socket, id, socket.assigns.signing)
+           Kotoba.Collab.token(KotobaDev.Issho, id, socket.assigns.signing)
          )
      )}
   end
@@ -1139,7 +1155,7 @@ defmodule KotobaDev.NestedCollabLive do
        params: params,
        document_id: id,
        user: user,
-       collab: Kotoba.Collab.token(socket, id, user: user),
+       collab: Kotoba.Collab.token(KotobaDev.Issho, id, user: user),
        form: to_form(%{}, as: :parent)
      )}
   end
@@ -1154,7 +1170,7 @@ defmodule KotobaDev.NestedCollabLive do
 
   def handle_event("kotoba:collab_token", %{"document_id" => id}, socket) do
     if id == socket.assigns.document_id,
-      do: {:reply, Kotoba.Collab.token(socket, id, user: socket.assigns.user), socket},
+      do: {:reply, Kotoba.Collab.token(KotobaDev.Issho, id, user: socket.assigns.user), socket},
       else: {:reply, %{}, socket}
   end
 end
@@ -1194,9 +1210,9 @@ defmodule KotobaDev.Endpoint do
   @session [store: :cookie, key: "_kotoba_dev", signing_salt: "kotoba-dev"]
 
   socket("/live", Phoenix.LiveView.Socket, websocket: [connect_info: [session: @session]])
-  socket("/kotoba/socket", KotobaDev.CollabSocket, websocket: [max_frame_size: 1_000_000])
+  socket("/issho/socket", KotobaDev.CollabSocket, websocket: [max_frame_size: 1_000_000])
 
-  socket("/kotoba/small-socket", KotobaDev.SmallCollabSocket,
+  socket("/issho/small-socket", KotobaDev.SmallCollabSocket,
     websocket: [max_frame_size: 1_000_000]
   )
 
@@ -1208,6 +1224,7 @@ defmodule KotobaDev.Endpoint do
 
   # The node modules, then the editor bundle and its style sheets.
   plug(Plug.Static, at: "/assets/nodes", from: Path.expand("tmp/dev/nodes", __DIR__))
+  plug(Plug.Static, at: "/vendor/issho", from: Path.expand("tmp/dev/issho", __DIR__))
   plug(Plug.Static, at: "/assets", from: Path.expand("priv/static", __DIR__))
   plug(Plug.Static, at: "/vendor/phoenix", from: {:phoenix, "priv/static"})
   plug(Plug.Static, at: "/vendor/phoenix_live_view", from: {:phoenix_live_view, "priv/static"})
@@ -1231,9 +1248,11 @@ Task.async(fn ->
       [
         {Phoenix.PubSub, name: KotobaDev.PubSub},
         {Kotoba.Collab.Store.Memory, name: KotobaDev.CollabStore},
-        {Kotoba.Collab.Supervisor,
-         name: KotobaDev.CollabSupervisor,
-         store: {Kotoba.Collab.Store.Memory, KotobaDev.CollabStore}},
+        {Issho,
+         name: KotobaDev.Issho,
+         pubsub: KotobaDev.PubSub,
+         endpoint: KotobaDev.Endpoint,
+         policy: KotobaDev.Collaboration},
         KotobaDev.Endpoint
       ],
       strategy: :one_for_one

@@ -10,14 +10,14 @@ async function open(page: Page, query: string, first = 1): Promise<void> {
   await expect(status(page, first)).toHaveText("Saved");
 }
 
-// The page's collaboration sockets: the default one and the dev app's socket with a limit of 5 channels.
-const collabSocket = /\/kotoba\/(small-)?socket/;
+// The page's collaboration sockets (Issho's): the default one and the dev app's socket with a limit of 5 channels.
+const collabSocket = /\/issho\/(small-)?socket/;
 
-interface Traffic { sockets: string[]; closed: number; joins: string[]; leaves: string[]; transactions: string[] }
+interface Traffic { sockets: string[]; closed: number; joins: string[]; leaves: string[]; transactions: string[]; opens: string[] }
 
-// The collaboration sockets the page opens and closes, and the channel joins, leaves and transactions it sends on them.
+// The collaboration sockets the page opens and closes, and the channel joins, leaves, transactions and document opens it sends on them.
 function watch(page: Page): Traffic {
-  const traffic: Traffic = { sockets: [], closed: 0, joins: [], leaves: [], transactions: [] };
+  const traffic: Traffic = { sockets: [], closed: 0, joins: [], leaves: [], transactions: [], opens: [] };
   page.on("websocket", socket => {
     if (!collabSocket.test(socket.url())) return;
     traffic.sockets.push(socket.url());
@@ -27,7 +27,8 @@ function watch(page: Page): Traffic {
       const [, , topic, event] = JSON.parse(frame.payload) as [string, string, string, string];
       if (event === "phx_join") traffic.joins.push(topic);
       if (event === "phx_leave") traffic.leaves.push(topic);
-      if (event === "transaction") traffic.transactions.push(topic);
+      if (event === "tx") traffic.transactions.push(topic);
+      if (event === "open") traffic.opens.push(topic);
     });
   });
   return traffic;
@@ -71,7 +72,7 @@ async function route(page: Page): Promise<Control> {
       if (event === "phx_reply" && payload?.response?.reason === "too many channels joined") control.refused.push(topic!);
       if (event === "phx_close") control.closed.push(topic!);
       if (topic === control.hold) return;
-      if (topic === control.skip && event === "transaction") { control.skip = null; return; }
+      if (topic === control.skip && event === "tx") { control.skip = null; return; }
       socket.send(message);
     });
   });
@@ -97,11 +98,13 @@ test("the editors of a page share one socket, each with its own channel", async 
   await context.close();
 });
 
-test("a second editor of the same document gets its own socket", async ({ page }) => {
+test("a second editor of the same document shares its room", async ({ page }) => {
+  const id = crypto.randomUUID();
   const traffic = watch(page);
-  await open(page, `document=${crypto.randomUUID()}&count=3&name=Ada&repeat=1`);
+  await open(page, `document=${id}&count=3&name=Ada&repeat=1`);
   await expect(status(page, 4)).toHaveText("Saved");
-  expect(traffic.sockets).toHaveLength(2);
+  expect(traffic.sockets).toHaveLength(1);
+  expect(count(traffic.joins, `issho:${id}-1`)).toBe(1);
   await focusEnd(page, editor(page, 1));
   await page.keyboard.type("twice");
   await expect(editor(page, 4)).toHaveText("twice");
@@ -114,7 +117,7 @@ test("removing an editor leaves its channel only, a new editor joins on the same
   await expect(status(page, 3)).toHaveText("Saved");
   await page.locator("#many-remove").click();
   await expect(page.locator("#editor_3")).toHaveCount(0);
-  await expect.poll(() => traffic.leaves).toEqual([`kotoba:${id}-3`]);
+  await expect.poll(() => traffic.leaves).toEqual([`issho:${id}-3`]);
 
   const context = await browser.newContext();
   const other = await context.newPage();
@@ -128,7 +131,7 @@ test("removing an editor leaves its channel only, a new editor joins on the same
   await focusEnd(page, editor(page, 4));
   await page.keyboard.type("new");
   await expect(status(page, 4)).toHaveText("Saved");
-  expect(traffic.joins).toContain(`kotoba:${id}-4`);
+  expect(traffic.joins).toContain(`issho:${id}-4`);
   expect(traffic.sockets).toHaveLength(1);
   expect(traffic.closed).toBe(0);
 
@@ -162,13 +165,13 @@ test("an editor that replaces another on a full socket joins once the server has
   await page.locator("#many-remove").click();
   await page.locator("#many-add").click();
   // The server still counts the removed editor's channel, so it refuses the new editor's join.
-  await expect.poll(() => control.refused).toEqual([`kotoba:${id}-6`]);
+  await expect.poll(() => control.refused).toEqual([`issho:${id}-6`]);
   control.releaseLeaves();
-  await expect.poll(() => control.closed).toContain(`kotoba:${id}-5`);
+  await expect.poll(() => control.closed).toContain(`issho:${id}-5`);
   // Phoenix's rejoin timer: 1s after the first refusal.
   await page.clock.fastForward(1_000);
   await expect(status(page, 6)).toHaveText("Saved");
-  expect(count(traffic.joins, `kotoba:${id}-6`)).toBe(2);
+  expect(count(traffic.joins, `issho:${id}-6`)).toBe(2);
   expect(traffic.sockets).toHaveLength(1);
 });
 
@@ -178,7 +181,7 @@ test("the editors of a nested LiveView share the socket with the parent's editor
   await openEditor(page, `/collab/nested?document=${id}&count=2&name=Ada`, "parent_editor");
   for (const element of ["parent_editor", "editor_1", "editor_2"]) await expect(page.locator(`#${element}`)).toHaveAttribute("data-collab-state", "saved");
   expect(traffic.sockets).toHaveLength(1);
-  expect(new Set(traffic.joins)).toEqual(new Set([`kotoba:${id}-parent`, `kotoba:${id}-1`, `kotoba:${id}-2`]));
+  expect(new Set(traffic.joins)).toEqual(new Set([`issho:${id}-parent`, `issho:${id}-1`, `issho:${id}-2`]));
 });
 
 test("offline and back online, every editor joins again on one socket", async ({ page, context, browser }) => {
@@ -212,7 +215,7 @@ test("an editor whose push times out joins again alone while the others keep edi
   const other = await context.newPage();
   await open(other, `document=${id}&count=3&name=Grace`);
 
-  control.hold = `kotoba:${id}-2`;
+  control.hold = `issho:${id}-2`;
   await focusEnd(page, editor(page, 2));
   await page.keyboard.type("two");
   await expect(status(page, 2)).toHaveText("Saving…");
@@ -228,9 +231,9 @@ test("an editor whose push times out joins again alone while the others keep edi
   await page.clock.fastForward(16_000);
   await expect(status(page, 2)).toHaveText("Saved");
   await expect(editor(other, 2)).toHaveText("two");
-  expect(traffic.leaves).toEqual([`kotoba:${id}-2`]);
-  expect(count(traffic.joins, `kotoba:${id}-2`)).toBe(2);
-  expect(count(traffic.joins, `kotoba:${id}-1`)).toBe(1);
+  expect(traffic.leaves).toEqual([`issho:${id}-2`]);
+  expect(count(traffic.joins, `issho:${id}-2`)).toBe(2);
+  expect(count(traffic.joins, `issho:${id}-1`)).toBe(1);
   expect(traffic.sockets).toHaveLength(1);
 
   await focusEnd(page, editor(page, 1));
@@ -251,7 +254,7 @@ test("a push timeout on a dead connection reconnects the socket once and every e
   await focusEnd(page, editor(page, 2));
   await page.keyboard.type("two");
   await page.clock.fastForward(100);
-  await expect.poll(() => traffic.transactions).toEqual([`kotoba:${id}-2`]);
+  await expect.poll(() => traffic.transactions).toEqual([`issho:${id}-2`]);
   // The push times out and the lease pings the socket; Phoenix's own heartbeat would wait 30s more.
   await page.clock.fastForward(15_000);
   await expect(page.locator("#editor_2")).toHaveAttribute("data-collab-state", "offline");
@@ -262,7 +265,7 @@ test("a push timeout on a dead connection reconnects the socket once and every e
   await page.clock.fastForward(1_500);
   await expect.poll(() => traffic.sockets.length).toBe(2);
   for (let n = 1; n <= 3; n++) await expect(status(page, n)).toHaveText("Saved");
-  for (let n = 1; n <= 3; n++) expect(count(traffic.joins, `kotoba:${id}-${n}`)).toBe(2);
+  for (let n = 1; n <= 3; n++) expect(count(traffic.joins, `issho:${id}-${n}`)).toBe(2);
 
   const context = await browser.newContext();
   const other = await context.newPage();
@@ -283,7 +286,7 @@ test("going offline while a ping goes unanswered leaves the reconnect to the onl
   await focusEnd(page, editor(page, 2));
   await page.keyboard.type("two");
   await page.clock.fastForward(100);
-  await expect.poll(() => traffic.transactions).toEqual([`kotoba:${id}-2`]);
+  await expect.poll(() => traffic.transactions).toEqual([`issho:${id}-2`]);
   await page.clock.fastForward(15_000);
   await context.setOffline(true);
   for (let n = 1; n <= 2; n++) await expect(page.locator(`#editor_${n}`)).toHaveAttribute("data-collab-state", "offline");
@@ -293,7 +296,7 @@ test("going offline while a ping goes unanswered leaves the reconnect to the onl
   await context.setOffline(false);
   for (let n = 1; n <= 2; n++) await expect(status(page, n)).toHaveText("Saved");
   expect(traffic.sockets).toHaveLength(2);
-  for (let n = 1; n <= 2; n++) expect(count(traffic.joins, `kotoba:${id}-${n}`)).toBe(2);
+  for (let n = 1; n <= 2; n++) expect(count(traffic.joins, `issho:${id}-${n}`)).toBe(2);
   // Phoenix joined the channels again; no editor replaced its own.
   expect(traffic.leaves).toEqual([]);
 });
@@ -313,7 +316,7 @@ test("an editor removed while the socket reconnects leaves the others to join ag
   control.blocked = false;
   for (let n = 1; n <= 2; n++) await expect(status(page, n)).toHaveText("Saved", { timeout: 15_000 });
   const rejoined = traffic.joins.slice(joinsBefore);
-  expect(new Set(rejoined)).toEqual(new Set([`kotoba:${id}-1`, `kotoba:${id}-2`]));
+  expect(new Set(rejoined)).toEqual(new Set([`issho:${id}-1`, `issho:${id}-2`]));
   await focusEnd(page, editor(page, 2));
   await page.keyboard.type("after");
   await expect(status(page, 2)).toHaveText("Saved");
@@ -374,7 +377,7 @@ test("keyboard undo and redo return focus to the collaborative editor", async ({
   await expect(editable).toHaveText("to undo more");
 });
 
-test("an editor that missed a revision joins again alone", async ({ page, browser }) => {
+test("an editor that missed a revision opens its document again alone", async ({ page, browser }) => {
   const id = crypto.randomUUID();
   const control = await route(page);
   const traffic = watch(page);
@@ -384,15 +387,16 @@ test("an editor that missed a revision joins again alone", async ({ page, browse
   const other = await context.newPage();
   await open(other, `document=${id}&count=3&name=Grace`);
 
-  control.skip = `kotoba:${id}-2`;
+  control.skip = `issho:${id}-2`;
   await focusEnd(other, editor(other, 2));
   await other.keyboard.type("a");
   await expect(status(other, 2)).toHaveText("Saved");
   await other.keyboard.type("b");
   await expect(editor(page, 2)).toHaveText("ab");
-  expect(traffic.leaves).toEqual([`kotoba:${id}-2`]);
-  expect(count(traffic.joins, `kotoba:${id}-2`)).toBe(2);
-  expect(count(traffic.joins, `kotoba:${id}-1`)).toBe(1);
+  // The room asks for the document as the server has it, on the same channel.
+  expect(traffic.leaves).toEqual([]);
+  expect(count(traffic.opens, `issho:${id}-2`)).toBe(2);
+  expect(count(traffic.opens, `issho:${id}-1`)).toBe(1);
   expect(traffic.sockets).toHaveLength(1);
   await context.close();
 });

@@ -56,6 +56,8 @@ defmodule Kotoba.MixProject do
       {:dialyxir, "~> 1.4", only: [:dev], runtime: false},
       {:ecto, "~> 3.13"},
       {:esbuild, "~> 0.10", only: :dev, runtime: false},
+      # Until Issho 0.2 is on Hex.
+      {:issho, github: "hattoriai/issho", branch: "main", optional: true},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
       {:lazy_html, "~> 0.1", only: :test},
       {:mdex, "~> 0.13"},

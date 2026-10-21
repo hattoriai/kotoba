@@ -40,7 +40,7 @@ export default defineConfig({
   },
   projects: (picked as Browser[]).map((name) => ({ name, use: { ...browsers[name] } })),
   webServer: {
-    command: "mix do kotoba.build + esbuild kotoba_dev_nodes + dev",
+    command: "mix do kotoba.build + esbuild kotoba_dev_nodes + esbuild kotoba_dev_issho + dev",
     cwd: "..",
     url: baseURL,
     env: { PORT: String(port), KOTOBA_DEV_WATCH: "false" },

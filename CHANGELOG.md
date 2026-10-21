@@ -7,6 +7,43 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+Collaboration runs on [Issho](https://hex.pm/packages/issho): the same
+editor, document model, merge rules, offline drafts and form flow, with
+Issho as the document's authority, the room's people and their cursors.
+A page of Kotoba and other Issho components shares one connection.
+
+### Changed
+
+- **Breaking:** collaboration needs `{:issho, "~> 0.2"}`. To upgrade:
+  - replace `{Kotoba.Collab.Supervisor, name:, store:, policy:}` with an
+    `{Issho, name: MyApp.Issho, pubsub:, endpoint:, policy: MyApp.Collaboration}`
+    child, whose policy's `document/2` returns
+    `Kotoba.Collab.document(store: ..., policy: ...)`;
+  - move your channel's `authorize/3` into the policy's
+    `authorize(identity, document_id, action)` (`identity.key` is the
+    user's id; actions are `:join`, `:read`, `:write` and `:lock`);
+  - replace `use Kotoba.Collab.Channel` with `use Issho.Channel` and the
+    socket's `channel "kotoba:*"` with `channel "issho:*"`, at
+    `/issho/socket` (or pass `:socket` to `token/3`);
+  - call `Kotoba.Collab.token/3`, `content/2,3` and `transact/4` with the
+    Issho instance (`MyApp.Issho`) in place of the LiveView socket or the
+    supervisor;
+  - map `issho` in an import map, next to `kotoba/collab`.
+
+  `Kotoba.Collab.Store` is unchanged, and documents it saved before open
+  as they are, with their history, and are saved in Issho's form with
+  their next change.
+- `Kotoba.Collab.content/2` gives `{:ok, %{"epoch", "revision", "content"}}`
+  with the content as a `Kotoba.Content`.
+- Two editors of one document on a page share its channel.
+
+### Removed
+
+- `Kotoba.Collab.Supervisor`, `Kotoba.Collab.Channel`,
+  `Kotoba.Collab.DocServer`, and the transaction functions of
+  `Kotoba.Collab.Document` (`commit/4`, `at_revision/4`, `snapshot/1`):
+  Issho orders transactions and keeps their receipts and journal.
+
 ## [0.5.0] - 2026-10-20
 
 Attachment captions, and two fixes to rendered HTML.

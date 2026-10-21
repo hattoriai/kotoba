@@ -12,6 +12,7 @@ if config_env() == :dev do
     --define:process.env.NODE_ENV="production"
     --external:phoenix
     --external:phoenix_live_view
+    --external:issho
   )
 
   config :esbuild,
@@ -38,6 +39,15 @@ if config_env() == :dev do
         ["src/collab/index.ts" | tl(esbuild_args)] ++
           ~w(--format=cjs --outfile=../priv/static/kotoba-collab.cjs.js),
       cd: Path.expand("../assets", __DIR__),
+      env: %{"NODE_PATH" => nil}
+    ],
+    # Issho's browser client for the development server, from its source
+    # in deps/ until a release of Issho with it is on Hex. It goes to tmp/,
+    # never to priv/static.
+    kotoba_dev_issho: [
+      args:
+        ~w(src/index.ts --bundle --format=esm --target=es2022 --external:phoenix --outfile=../../../tmp/dev/issho/issho.esm.js),
+      cd: Path.expand("../deps/issho/assets", __DIR__),
       env: %{"NODE_PATH" => nil}
     ],
     # The JavaScript halves of the development server's nodes (dev.exs).

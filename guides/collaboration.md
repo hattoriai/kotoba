@@ -4,10 +4,20 @@ Kotoba Collab lets people edit the same document, see participant cursors,
 and recover local drafts after a reconnect. Forms submit a revision that the
 server has accepted and saved.
 
-Collaboration ships in Kotoba's Hex package. Import the optional bundle for
-editors that share a document.
+Collaboration runs on [Issho](https://hex.pm/packages/issho), collaboration
+for Phoenix: Issho is the document's authority, the room's people and their
+cursors, the connection and the offline drafts; Kotoba is the document, its
+operations and the editor. A page with Kotoba and other Issho components (a
+canvas, a grid) shares one connection and one list of people.
 
-## JavaScript
+## Dependencies and JavaScript
+
+Add Issho next to Kotoba:
+
+```elixir
+{:kotoba, "~> 0.6"},
+{:issho, "~> 0.2"}
+```
 
 Enable the optional implementation before connecting the LiveSocket:
 
@@ -19,29 +29,62 @@ enableCollaboration(registerCollaboration)
 // Use Kotoba in the LiveSocket's hooks as usual.
 ```
 
-For import maps, map `kotoba/collab` to `kotoba-collab.esm.js`. Both ESM and
+The collaboration bundle imports `issho`, which esbuild finds in `deps/`
+as it finds `phoenix`. For import maps, map `kotoba/collab` to
+`kotoba-collab.esm.js` and `issho` to Issho's `issho.esm.js`. Both ESM and
 CommonJS collaboration bundles are included. They use the core editor's
 Lexical instance through the registration boundary, so Lexical is not
-bundled a second time. Phoenix's JavaScript client is an external dependency,
-as it is in a Phoenix application.
+bundled a second time.
 
-## Supervision and storage
+## Issho, the policy and storage
 
-Start a document supervisor in your application's supervision tree:
+Start Issho in your application's supervision tree, after the PubSub:
 
 ```elixir
-{Kotoba.Collab.Supervisor,
- name: MyApp.CollabSupervisor,
- store: {MyApp.CollabStore, MyApp.Repo},
- policy: [features: ~w(bold italic links lists)],
- ttl: 30_000}
+{Issho,
+ name: MyApp.Issho,
+ pubsub: MyApp.PubSub,
+ endpoint: MyAppWeb.Endpoint,
+ policy: MyApp.Collaboration}
 ```
 
-The policy belongs to the shared document, rather than a browser. Every
-accepted transaction passes node validation, nesting rules, URL checks,
-feature checks, and an optional `:validate` callback that returns `:ok` or
-`{:error, reason}`. Configure custom nodes in `config :kotoba, nodes: [...]`
-and load their JavaScript modules in every editor that joins the document.
+The policy says who may open which document, and what each shared
+document is:
+
+```elixir
+defmodule MyApp.Collaboration do
+  @behaviour Issho.Policy
+
+  @impl true
+  def authorize(%Issho.Identity{key: user_id}, document_id, action) do
+    if MyApp.Documents.allowed?(user_id, document_id, action),
+      do: :ok, else: {:error, :forbidden}
+  end
+
+  @impl true
+  def document(_identity, _document_id) do
+    Kotoba.Collab.document(
+      store: {MyApp.CollabStore, MyApp.Repo},
+      policy: [features: ~w(bold italic links lists)]
+    )
+  end
+end
+```
+
+`action` is `:join` (open the document and see who is here), `:read`
+(receive its changes), `:write` (change it) or `:lock`. The identity's
+`key` is the `:id` of the user you sign credentials for. `authorize/3`
+runs on join, on every message from the browser, and before each change
+goes out to a browser: a person whose access you take away stops seeing
+the changes, and `Issho.revoke(MyApp.Issho, document_id, user_id)` takes
+them out at once.
+
+The document's `:policy` belongs to the shared document, rather than a
+browser. Every accepted transaction passes node validation, nesting
+rules, URL checks, feature checks, and an optional `:validate` callback
+that returns `:ok` or `{:error, reason}`. Configure custom nodes in
+`config :kotoba, nodes: [...]` and load their JavaScript modules in every
+editor that joins the document.
 
 Implement `Kotoba.Collab.Store`. `load/2` returns
 `{:ok, %{state: nil, content: server_owned_initial_content}}` for a document
@@ -99,60 +142,56 @@ your schema requires them. Authorize document access before opening or
 publishing it. The store's initial-content function must reject unknown
 documents if arbitrary creation is inappropriate for your application.
 
+Documents saved by an earlier Kotoba (before Issho) open as they are: the
+same epoch, revision, history and receipts, and the next accepted change
+saves them in Issho's format, through the same `save/5`.
+
 `Kotoba.Collab.Store.Memory` is supplied for development and tests. It
 survives a document process restart, but loses everything on a node restart.
 The repository's `/collab` demo uses this store.
 
-## Channel and permissions
+## Channel and socket
 
-Use an application channel so authorization remains in your domain:
+Mount Issho's channel on a socket of your endpoint:
 
 ```elixir
-defmodule MyAppWeb.CollabChannel do
-  use Kotoba.Collab.Channel, supervisor: MyApp.CollabSupervisor
-
-  def authorize(socket, document_id, action) do
-    user_id = socket.assigns.kotoba_collab_user["id"]
-    if MyApp.Documents.allowed?(user_id, document_id, action),
-      do: :ok, else: {:error, :forbidden}
-  end
+defmodule MyAppWeb.IsshoChannel do
+  use Issho.Channel, instance: MyApp.Issho
 end
 
-defmodule MyAppWeb.CollabSocket do
+defmodule MyAppWeb.IsshoSocket do
   use Phoenix.Socket
-  channel "kotoba:*", MyAppWeb.CollabChannel
+  channel "issho:*", MyAppWeb.IsshoChannel
   def connect(_params, socket, _connect_info), do: {:ok, socket}
   def id(_socket), do: nil
 end
 
 # In the endpoint:
-socket "/kotoba/socket", MyAppWeb.CollabSocket,
+socket "/issho/socket", MyAppWeb.IsshoSocket,
   websocket: [max_frame_size: 1_000_000]
 ```
 
-The channel verifies a signed, document-scoped token before assigning
-`kotoba_collab_user` and invoking authorization. Tokens expire after five
-minutes for new joins. Authorization runs on incoming messages and outgoing
-document/presence broadcasts. A signed `:read` role cannot transact, even
-when the browser enables contenteditable. Presence is separate from content
-and never persisted in the document.
+The channel verifies a signed, document-scoped token before it asks your
+policy. Tokens expire after five minutes for new joins. A signed `:read`
+role cannot transact, even when the browser enables contenteditable.
+Presence is separate from content and never persisted in the document.
 
-The shared editors of a page share one socket per socket URL, each with its
-own channel on it, so a page of many shared editors opens one WebSocket. A
-second editor of the same document on the page, or an editor past the
-socket's channel limit, gets another socket. The limit is
-`Kotoba.Collab.token/3`'s `:max_channels`, 100 by default, the default
+The shared editors of a page share one socket per socket URL, each
+document with its own channel on it, so a page of many shared editors
+opens one WebSocket; two editors of the same document share its channel.
+An editor past the socket's channel limit gets another socket. The limit
+is `Kotoba.Collab.token/3`'s `:max_channels`, 100 by default, the default
 `:max_channels_per_transport` of the Phoenix versions that limit channels
 (1.7.24 and later, 1.8.2 and later). If you set a lower
-`:max_channels_per_transport` on the collaboration socket, pass the same
-number as `:max_channels`.
+`:max_channels_per_transport` on the socket, pass the same number as
+`:max_channels`.
 
 ## LiveView and forms
 
 Authorize the authenticated user before signing credentials:
 
 ```elixir
-collab = Kotoba.Collab.token(socket, document.id,
+collab = Kotoba.Collab.token(MyApp.Issho, document.id,
   user: %{id: user.id, name: user.name, color: "#2563eb"}, role: :write)
 
 socket = assign(socket, collab: collab)
@@ -172,7 +211,7 @@ recheck access, then reply with fresh credentials:
 def handle_event("kotoba:collab_token", %{"id" => "body_editor", "document_id" => id}, socket) do
   user = socket.assigns.current_user
   # Check id against socket.assigns.document.id and authorize again here.
-  credentials = Kotoba.Collab.token(socket, id,
+  credentials = Kotoba.Collab.token(MyApp.Issho, id,
     user: %{id: user.id, name: user.name}, role: :write)
   {:reply, credentials, socket}
 end
@@ -189,7 +228,7 @@ revision through the authority:
 def handle_event("save", %{"kotoba_collab" => %{"body_editor" => json}}, socket) do
   # Authorize publishing this document independently of editing access.
   with {:ok, revision} <- JSON.decode(json),
-       {:ok, content} <- Kotoba.Collab.content(MyApp.CollabSupervisor,
+       {:ok, content} <- Kotoba.Collab.content(MyApp.Issho,
          socket.assigns.document.id, revision),
        {:ok, document} <- MyApp.Documents.publish(socket.assigns.document, content) do
     {:noreply, assign(socket, document: document)}
@@ -245,20 +284,19 @@ download; it preserves local work instead of silently replacing it. These
 conflicts do not currently have an interactive merge UI.
 
 The v1 store retains the initial snapshot, tombstones, receipts and accepted
-journal. It does not compact them. The defaults limit a channel message to
-1 MB, a transaction to 1,000 operations, and stored state to 16 MB. Size
+journal. It does not compact them. Issho's defaults limit a channel message
+to 1 MB (`:max_message_bytes`), a transaction to 1,000 operations, and
+stored state to 16 MB (`:max_document_bytes`). Size
 limits produce a rejected transaction, not a false acknowledgement. Plan
 retention and migrations before accepting unbounded documents. Removing
 tombstones or changing an epoch invalidates old pending work.
 
 Named branches, peer replication and branch review are not supported.
 
-The default owner registry is `:global`, suitable for a single node or a
+Issho's default registry is `:global`, suitable for a single node or a
 fully connected BEAM cluster. Storage compare-and-swap rejects stale writers;
-it does not promise availability across network partitions. A custom
-registry module can implement `name(supervisor_identity, document_id)`.
-Persistence and channel authorization must be shared consistently across
-nodes.
+it does not promise availability across network partitions. Persistence and
+the policy must be shared consistently across nodes.
 
 Backend edits use `Kotoba.Collab.transact/4` with semantic operations through
 the same authority. To retry idempotently, pass the original immutable
