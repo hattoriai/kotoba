@@ -86,9 +86,14 @@ if Code.ensure_loaded?(Issho.Tool) do
     defp target(doc, range_or_caret),
       do: %{"doc" => doc.document, "at" => Text.place(range_or_caret)}
 
+    # There already: its selection is the target, and its last gesture went
+    # to this document (not, since, to an element of the page).
     defp there?(doc, target) do
+      gone = get_in(Issho.Participant.awareness(doc.participant), ["motion", "to"])
+      here = gone == nil or gone["doc"] == doc.document
+
       case selection(doc) do
-        {:ok, %{block: %{id: id}, from: from, to: to}} ->
+        {:ok, %{block: %{id: id}, from: from, to: to}} when here ->
           {id, from, to} ==
             {target.block.id, Map.get(target, :from, target[:index]),
              Map.get(target, :to, target[:index])}
