@@ -33,6 +33,22 @@ defmodule Kotoba.Nodes.Embed do
   By default, an embed is its title: a `div.kotoba-embed` with its kind
   and ref in HTML, which a page can fill with the app's content, and the
   title in text and Markdown. See the [Embeds](embeds.md) guide.
+
+  ## In Markdown, and back
+
+  In Markdown, an embed is what the app renders (or its title) between two
+  comments that say what it is, which Markdown viewers leave out:
+
+      <!-- kotoba:embed {"kind":"grid","ref":"7","title":"Open tasks"} -->
+
+      | Task | Due |
+      | --- | --- |
+      | Write the guide | 2026-11-02 |
+
+      <!-- /kotoba:embed -->
+
+  `Kotoba.Content.from_markdown/2` reads it back as the embed, so a
+  document exported to Markdown comes back with its embeds, of any kind.
   """
   use Kotoba.Node, type: "embed", kind: :decorator
 
@@ -56,9 +72,40 @@ defmodule Kotoba.Nodes.Embed do
   @impl Kotoba.Node
   def render_text(node, opts), do: app(node, :text, opts) || node.title || ""
 
+  @end_marker "<!-- /kotoba:embed -->"
+
   @impl Kotoba.Node
-  def render_markdown(node, opts),
-    do: app(node, :markdown, opts) || Kotoba.Markdown.escape(node.title || "")
+  def render_markdown(node, opts) do
+    content = app(node, :markdown, opts) || Kotoba.Markdown.escape(node.title || "")
+    marker(node) <> "\n\n" <> content <> "\n\n" <> @end_marker
+  end
+
+  @doc false
+  # The comment that says what the Markdown after it is. Its JSON has no
+  # "--", which would end the comment.
+  def marker(node) do
+    json =
+      %{"kind" => node.kind, "ref" => node.ref, "title" => node.title || ""}
+      |> JSON.encode!()
+      |> String.replace("--", "-\\u002d")
+
+    "<!-- kotoba:embed " <> json <> " -->"
+  end
+
+  @doc false
+  def end_marker, do: @end_marker
+
+  @doc false
+  # The embed a comment says, or :error.
+  def read_marker(html) do
+    with [_, json] <- Regex.run(~r/\A<!--\s*kotoba:embed\s+(\{.*\})\s*-->\s*\z/s, html),
+         {:ok, %{"kind" => kind, "ref" => ref} = embed} when is_binary(kind) and is_binary(ref) <-
+           JSON.decode(json) do
+      {:ok, %{kind: kind, ref: ref, title: to_string(embed["title"] || "")}}
+    else
+      _ -> :error
+    end
+  end
 
   # The app's rendering: the `:embed` option, else the config.
   defp app(node, format, opts) do

@@ -23,6 +23,12 @@ On Issho 0.3: agents move with Issho's motion, and following is the room's.
   says them (its key, name and colour), so a person is one person in the
   editor, a Hakushi canvas and Issho's lists. A person with no colour gets
   Issho's palette colour rather than one blue for everyone.
+- An embed in Markdown is what the app renders between two comments that
+  say what it is (`<!-- kotoba:embed {...} -->`, `<!-- /kotoba:embed -->`),
+  which Markdown viewers leave out; `Kotoba.Content.from_markdown/2`
+  reads it back as the embed, of any kind (a grid's table, a canvas's
+  diagram), and the app's reader may say another, or `false` for the
+  content.
 - A pointer over an embed is no caret of the text, and the editor keeps
   the one followed on the screen unless Issho's pointers of its own room
   do (a page's pointers of another room do not).
