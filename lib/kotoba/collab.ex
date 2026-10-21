@@ -43,7 +43,9 @@ if Code.ensure_loaded?(Issho) do
     part of its id before the first `"/"`, or the whole id. The editors of
     a page whose documents share a room (`"notebook:7/cell-1"`,
     `"notebook:7/cell-2"`) share its people, and a person's cursor goes
-    from one editor to the other.
+    from one editor to the other. The editors of documents of two rooms
+    (`"notes:7"`, `"drafts:9"`) are independent of each other, on one page
+    too: each joins its own room, with its own people.
 
     Options: `:user` (required), `:role` (`:write` or `:read`), `:undo`
     (`:editor`, the editor's own steps; `:page`, the person's last change

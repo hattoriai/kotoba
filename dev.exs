@@ -1204,6 +1204,42 @@ defmodule KotobaDev.NotebookLive do
   end
 end
 
+defmodule KotobaDev.ApartLive do
+  @moduledoc false
+  # Two shared editors of two rooms on one page, independent of each
+  # other: /collab/apart?first=ID&second=ID&name=Ada. Each lists its own
+  # people, and a cursor stays in its own editor.
+  use Phoenix.LiveView
+  on_mount(Issho.Live)
+  import Kotoba.Components
+
+  def mount(params, _session, socket) do
+    name = Map.get(params, "name", "Ada")
+    user = %{id: name, name: name, color: if(name == "Ada", do: "#2563eb", else: "#be185d")}
+
+    rooms = %{
+      "first" => Map.get(params, "first", "notes"),
+      "second" => Map.get(params, "second", "drafts")
+    }
+
+    collab =
+      Map.new(rooms, fn {block, room} ->
+        {block, Kotoba.Collab.token(KotobaDev.Issho, room, user: user)}
+      end)
+
+    {:ok, assign(socket, collab: collab, form: to_form(%{}, as: :apart))}
+  end
+
+  def render(assigns) do
+    ~H"""
+    <h1>Two rooms</h1>
+    <.form for={@form} id="apart-form">
+      <.kotoba :for={block <- ~w(first second)} field={@form[block]} id={"apart_#{block}"} label={"The #{block} room"} collab={@collab[block]} />
+    </.form>
+    """
+  end
+end
+
 defmodule KotobaDev.MCP do
   @moduledoc false
   # MCP for agents: Issho's room tools and Kotoba's text tools, at /mcp,
@@ -1273,6 +1309,7 @@ defmodule KotobaDev.Router do
     live("/collab/many", KotobaDev.ManyCollabLive)
     live("/collab/nested", KotobaDev.NestedCollabLive)
     live("/collab/notebook", KotobaDev.NotebookLive)
+    live("/collab/apart", KotobaDev.ApartLive)
   end
 end
 
