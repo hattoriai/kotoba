@@ -219,6 +219,7 @@ defmodule Kotoba.Components do
         input_id: input_id,
         value: field_json(field.value),
         collab: assigns.collab && JSON.encode!(assigns.collab),
+        issho_doc: assigns.collab && assigns.collab["document_id"],
         node_urls: node_urls(assigns.nodes),
         triggers: json_map(Prompts.triggers(assigns.prompts)),
         prompt_labels: json_map(Prompts.labels(assigns.prompts)),
@@ -247,7 +248,7 @@ defmodule Kotoba.Components do
         phx-update="ignore"
         data-input={@input_id}
         data-collab={@collab}
-        data-issho-doc={@collab && @collab["document_id"]}
+        data-issho-doc={@issho_doc}
         data-readonly={to_string(@readonly)}
         data-change={to_string(@change)}
         data-placeholder={@placeholder}
