@@ -52,7 +52,11 @@ if Code.ensure_loaded?(Issho) do
     in any editor or component of the page, with Issho's undo; `false`,
     none), `:people`
     (whether the editor lists the room's people, `true`; `false` when the
-    page shows Issho's list, `Issho.Components.people/1`), `:socket`
+    page shows Issho's list, `Issho.Components.people/1`), `:follow`
+    (whether the editor takes part in following, the room's: `true`;
+    `false`, and its people list follows no one, it shows whom the room
+    follows nowhere, and it does not move when the room follows someone),
+    `:socket`
     (the Issho socket's path, `"/issho/socket"` by default) and
     `:max_channels` (that socket's `:max_channels_per_transport`, 100 by
     default).
@@ -95,6 +99,7 @@ if Code.ensure_loaded?(Issho) do
         "user" => user,
         "role" => Atom.to_string(role),
         "people" => Keyword.get(opts, :people, true),
+        "follow" => Keyword.get(opts, :follow, true) != false,
         "undo" => undo(Keyword.get(opts, :undo, :editor))
       }
     end

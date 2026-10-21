@@ -22,6 +22,8 @@ export class Presence {
 
   // `list`: whether the editor lists the people, or the page does (Issho's people list).
   private readonly stopFollowing: () => void;
+  // "Following Ada", with Stop, when the editor lists its people.
+  private readonly followingLine: HTMLElement;
   // The caret last scrolled to, for the one followed: once for each place they go.
   private scrolledTo = "";
 
@@ -31,7 +33,12 @@ export class Presence {
     this.list = document.createElement("ul");
     this.list.className = "kotoba-collab-people";
     this.list.setAttribute("aria-label", "People in this document");
-    if (listed) bar.append(this.list);
+    this.followingLine = document.createElement("p");
+    this.followingLine.className = "kotoba-collab-following";
+    this.followingLine.setAttribute("role", "status");
+    this.followingLine.dataset.isshoFollowControl = "";
+    this.followingLine.hidden = true;
+    if (listed) bar.append(this.list, this.followingLine);
     this.layer = document.createElement("div");
     this.layer.className = "kotoba-collab-cursors";
     this.layer.setAttribute("aria-hidden", "true");
@@ -77,7 +84,36 @@ export class Presence {
       item.append(button);
       return item;
     }));
+    this.showFollowing(unique);
     this.draw();
+  }
+
+  // Whom the room follows, when they are in this editor and it lists its
+  // people (on an Issho page, the page's people list says it): a line in
+  // their colour, with Stop, and a ring of it around the editor.
+  private showFollowing(unique: Map<string, Person>): void {
+    const key = this.room ? following(this.room) : null;
+    const person = key && key !== this.host.credentials.user.id ? unique.get(key) : undefined;
+    const element = this.host.element;
+    if (!this.listed || !person) {
+      this.followingLine.hidden = true;
+      this.followingLine.replaceChildren();
+      delete element.dataset.collabFollowing;
+      element.style.removeProperty("--collab-follow-color");
+      return;
+    }
+    const color = this.color(person);
+    element.dataset.collabFollowing = "";
+    element.style.setProperty("--collab-follow-color", color);
+    const text = document.createElement("span");
+    text.textContent = `Following ${person.user.name}`;
+    const stop = document.createElement("button");
+    stop.type = "button";
+    stop.className = "kotoba-collab-following-stop";
+    stop.textContent = "Stop";
+    stop.addEventListener("click", () => follow(this.room, null));
+    this.followingLine.replaceChildren(text, stop);
+    this.followingLine.hidden = false;
   }
 
   offline(): void { this.receive(this.people.filter(person => person.session === this.session())); }
