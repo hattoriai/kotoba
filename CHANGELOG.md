@@ -100,6 +100,9 @@ On Issho 0.3: agents move with Issho's motion, and following is the room's.
 
 ### Fixed
 
+- A click in an embed's content (a grid's cell, a canvas's field) selects
+  no embed, only a click on its edge does: the next click in the text puts
+  the caret there, where the embed selected took it away.
 - A caret or a pointer at a place between blocks (the start of the
   document, before an embed) is at the top of the block there, a line
   high, rather than as high as the editor: a page pointer there was at

@@ -29,6 +29,19 @@ test("an embed is the app's live content, in the document", async ({ page }) => 
   expect(await page.evaluate(() => (window as any).poll === document.querySelector(".kotoba-embed-slot .poll"))).toBe(true);
 });
 
+// A click in an embed's content (its text, a grid's cell) is the embed's:
+// it selects no embed, and the next click in the text puts the caret there.
+test("a click in an embed's content leaves the next click in the text its caret", async ({ page }) => {
+  await open(page);
+  await polls(page).locator("header strong").click();
+  await expect(page.locator(`#${EDITOR} .kotoba-embed.kotoba-selected`)).toHaveCount(0);
+
+  await page.getByText("The team decides").click();
+  await page.keyboard.press("End");
+  await page.keyboard.type(" Quickly.");
+  await expect(page.getByText("The team decides, live, in the document: Quickly.")).toBeVisible();
+});
+
 test("keys in an embed are the embed's", async ({ page }) => {
   await open(page);
   const before = JSON.stringify(await readDocument(page, "doc_body"));
