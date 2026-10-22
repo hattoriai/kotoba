@@ -86,6 +86,10 @@ export function registerDecorators(editor: LexicalEditor): () => void {
       CLICK_COMMAND,
       (event: MouseEvent) => {
         if (!isDOMNode(event.target)) return false;
+        // A click in an embed's content (a grid's cell, a canvas's field) is
+        // the embed's: only its edge selects it.
+        if (event.target instanceof Element && event.target.closest(".kotoba-embed-slot")) return false;
+        if (!(event.target instanceof Element) && event.target.parentElement?.closest(".kotoba-embed-slot")) return false;
         const node = $getNearestNodeFromDOMNode(event.target);
         if (!$isDecoratorNode(node)) return false;
 
