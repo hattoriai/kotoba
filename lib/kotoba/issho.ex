@@ -29,9 +29,23 @@ if Code.ensure_loaded?(Issho.Binding) do
   end
 
   defmodule Kotoba.Issho.Place do
-    @moduledoc false
-    # A selection: an anchor and a focus, each a node and the character
-    # before the caret (and an offset in a node with no characters).
+    @moduledoc """
+    A place in a Kotoba document: a selection, kept and sent as it is (in
+    a person's state, in an agent's motion, and in what an app keeps of
+    them), so its format is part of Kotoba's public API and only grows.
+
+        %{
+          "anchor" => %{"node" => node_id, "before" => atom_id | nil},
+          "focus" => %{"node" => node_id, "before" => atom_id | nil}
+        }
+
+    Each end is a caret: in the text node `node`, after the character
+    `before` (`nil` at the node's start). In a block with no text yet, a
+    point is the block and an `"offset"` (`%{"node" => block_id, "before"
+    => nil, "offset" => 0}`). Ids are the document's own (at most 160
+    bytes), so a place stays on the same words however the text around it
+    changes. A caret is a selection whose anchor and focus are the same.
+    """
     @behaviour Issho.Place
 
     @impl true
@@ -81,10 +95,64 @@ if Code.ensure_loaded?(Issho.Binding) do
     operations (`Kotoba.Collab.Document`), and a person's place their
     selection in it.
 
-    Name it as a document's engine through `Kotoba.Collab.document/1`.
+    Name it as a document's engine through `document/1`, in your policy;
+    change a document from your own code with `change/4`; give agents
+    `tools/0`. A place is a selection (`Kotoba.Issho.Place`).
     """
 
     use Issho.Binding, engine: Kotoba.Issho.Engine, place: Kotoba.Issho.Place
+
+    @doc """
+    What a shared editor's document is, for your policy's `document/2`
+    (`Issho.Policy`), the same wherever it opens first.
+
+        def document(_identity, "page:" <> _ = id),
+          do: Kotoba.Issho.document(store: {MyApp.CollabStore, MyApp.Repo})
+
+    Options: `:store` (required), your `Kotoba.Collab.Store` and its
+    context; `:policy`, the document's checks (`:features`, `:nodes`,
+    `:validate`), as every accepted transaction must pass them.
+    """
+    @spec document(keyword()) :: {:ok, map()}
+    def document(opts) do
+      {:ok,
+       %{
+         engine: __MODULE__,
+         opts: Keyword.get(opts, :policy, []),
+         store: {Kotoba.Issho.Store, Keyword.fetch!(opts, :store)}
+       }}
+    end
+
+    @doc """
+    Changes a shared document from your own code (a job, an import),
+    through the same authority, checks and store as the editors' changes:
+    operations (`Kotoba.Collab.Document`), or a transaction map (with its
+    `"id"` and `"base_revision"`) to retry one idempotently.
+
+    Options: `:author`, who made it, as the document's hook and history
+    know them: an actor (`Issho.Actor`, your user or an agent) or a key
+    (`"server"` unless given, a service); `:id`, the transaction's.
+    """
+    @spec change(atom(), String.t(), list() | map(), keyword()) :: {:ok, map()} | {:error, term()}
+    def change(instance, document_id, operations_or_transaction, opts \\ [])
+
+    def change(instance, document_id, %{"ops" => _} = transaction, opts) do
+      with {:ok, pid} <- Issho.Documents.open(instance, document_id),
+           do:
+             Issho.Authority.commit(
+               pid,
+               transaction,
+               author(Keyword.get(opts, :author, "server"))
+             )
+    end
+
+    def change(instance, document_id, operations, opts) when is_list(operations) do
+      opts = Keyword.put_new_lazy(opts, :id, &Kotoba.Collab.Document.random_id/0)
+      Issho.transact(instance, document_id, operations, opts)
+    end
+
+    defp author(key) when is_binary(key), do: key
+    defp author(actor), do: Issho.Identity.new(actor)
 
     @doc ~S"""
     Kotoba's tools for agents (`Issho.Tool`): an agent reads a shared

@@ -12,6 +12,17 @@ On Issho 0.3: agents move with Issho's motion, and following is the room's.
 ### Changed (breaking)
 
 - Requires `{:issho, "~> 0.3"}`.
+- A shared editor joins with `issho`, the keys of every component
+  (`Issho.Join`: `:instance`, `:document`, `:can`, `:people`, `:follow`,
+  `:on_behalf_of`, `:claims`) and Kotoba's own (`:undo`, `:socket`,
+  `:max_channels`), and `user`: `<.kotoba issho={[instance: MyApp.Issho,
+  document: id]} user={@user}>`. `collab` and `Kotoba.Collab.token` are
+  removed; `collab` raises with what to write instead. An unknown key
+  raises.
+- The server's functions are `Kotoba.Issho`'s, as Hakushi's and Masu's:
+  `Kotoba.Issho.document/1` and `Kotoba.Issho.change/4`
+  (`Kotoba.Collab.document` and `transact/4` are deprecated). A
+  change's `:author` is a key or the app's actor.
 - An agent moves with `Issho.Motion`: it goes to where it works and
   selects as a drag does only when someone of the room sees it, within a
   tool call's time budget; Issho's `travel: false` turns it off for every
@@ -19,7 +30,10 @@ On Issho 0.3: agents move with Issho's motion, and following is the room's.
 
 ### Added
 
-- `Kotoba.Collab.token/3` takes the app's user as its `Issho.Actor`
+- A person's place (their selection) has a documented format, part of
+  the API (`Kotoba.Issho.Place`, the Collaboration guide's "A person's
+  place").
+- The editor takes the app's user as its `Issho.Actor`
   says them (its key, name and colour), so a person is one person in the
   editor, a Hakushi canvas and Issho's lists. A person with no colour gets
   Issho's palette colour rather than one blue for everyone.
@@ -75,7 +89,7 @@ On Issho 0.3: agents move with Issho's motion, and following is the room's.
   every block of the page (restyled with Issho's
   `--issho-following-background`, `--issho-following-text` and
   `--issho-following-ring`).
-- `Kotoba.Collab.token/3`'s `follow: false`: an editor that takes no part
+- `follow: false`: an editor that takes no part
   in following, though its room's other blocks do.
 - The person's motion, as the app says it (Issho's `data-issho-motion`):
   carets glide and selections sweep only for a person who wants motion.
@@ -141,7 +155,7 @@ what it gives a page, and the steps: the
   - replace `use Kotoba.Collab.Channel` with `use Issho.Channel` and the
     socket's `channel "kotoba:*"` with `channel "issho:*"`, at
     `/issho/socket` (or pass `:socket` to `token/3`);
-  - call `Kotoba.Collab.token/3`, `content/2,3` and `transact/4` with the
+  - call `Kotoba.Collab.token`, `content/2,3` and `transact/4` with the
     Issho instance (`MyApp.Issho`) in place of the LiveView socket or the
     supervisor;
   - add `on_mount Issho.Live` to the LiveViews of shared editors, and
@@ -158,15 +172,15 @@ what it gives a page, and the steps: the
 - The editors of a page whose documents share an Issho room
   (`"notebook:7/cell-1"`, `"notebook:7/cell-2"`: the part before the
   `"/"`) share one connection and the room's people, and a person's
-  cursor goes from one editor to the other. `Kotoba.Collab.token/3`
+  cursor goes from one editor to the other. `Kotoba.Collab.token`
   signs for the room and says it in the credentials' `"room"`; the
   policy's `authorize/3` is asked about the room.
-- Undo in shared editors is the app's choice (`Kotoba.Collab.token/3`'s
+- Undo in shared editors is the app's choice (`Kotoba.Collab.token`'s
   `:undo`): the editor's own steps (`:editor`, as before), the page's
   (`:page`, Issho's `pageHistory`: the person's last change in whichever
   editor or component they made it, which takes the focus), or none
   (`false`).
-- `Kotoba.Collab.token/3` takes `people: false` for a page that lists the
+- `Kotoba.Collab.token` takes `people: false` for a page that lists the
   room's people once, with Issho's `Issho.Components.people/1`: the
   editors then list and announce no one.
 
@@ -253,7 +267,7 @@ Changed.
   editors opens one WebSocket, not 20. A missed revision or removing an
   editor affects that editor's channel only, and so does a push timeout
   unless a ping finds the connection dead, which reconnects the socket
-  once for all its editors. A socket takes up to `Kotoba.Collab.token/3`'s
+  once for all its editors. A socket takes up to `Kotoba.Collab.token`'s
   new `:max_channels` editors, 100 by default; pass a lower
   `:max_channels_per_transport` of the socket there.
   ([#38](https://github.com/hattoriai/kotoba/issues/38))

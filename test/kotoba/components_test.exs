@@ -14,8 +14,6 @@ defmodule Kotoba.ComponentsTest do
 
   defp html(assigns), do: render_component(&Components.kotoba/1, assigns)
 
-  defp html_without_collab(_html), do: html(field: field(nil), id: "body")
-
   defp find(html, selector), do: html |> LazyHTML.from_fragment() |> LazyHTML.query(selector)
 
   defp attr(html, selector, name) do
@@ -101,13 +99,12 @@ defmodule Kotoba.ComponentsTest do
       assert find(html, "[phx-hook]") |> LazyHTML.attribute("aria-label") == ["From rest"]
     end
 
-    test "a shared editor holds its credentials, and names its document for Issho's page" do
-      collab = %{"document_id" => "notebook:7/intro", "room" => "notebook:7", "token" => "t"}
-      html = html(field: field(nil), id: "body", collab: collab)
+    test "collab, removed in 0.7, says what replaces it" do
+      assert_raise ArgumentError, ~r/issho=/, fn ->
+        html(field: field(nil), id: "body", collab: %{"token" => "t"})
+      end
 
-      assert JSON.decode!(attr(html, "#body", "data-collab")) == collab
-      assert attr(html, "#body", "data-issho-doc") == "notebook:7/intro"
-      assert html |> html_without_collab() |> attr("#body", "data-issho-doc") == nil
+      assert html(field: field(nil), id: "body") |> attr("#body", "data-issho-doc") == nil
     end
 
     test "renders every attribute that is given" do
