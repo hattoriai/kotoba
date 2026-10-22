@@ -22,7 +22,7 @@ defmodule Kotoba.Content.MarkdownImport do
   import Bitwise
 
   alias Kotoba.Features
-  alias Kotoba.Nodes.Attachment
+  alias Kotoba.Nodes.{Attachment, Embed}
 
   @parse_options [
     extension: [
@@ -50,10 +50,75 @@ defmodule Kotoba.Content.MarkdownImport do
     attachments = Keyword.get(opts, :attachments, %{})
     embed = if on?(features, :embeds), do: Keyword.get(opts, :embed)
     document = MDEx.parse_document!(markdown, @parse_options)
-    element("root", Enum.flat_map(document.nodes, &root_block(&1, features, attachments, embed)))
+    element("root", root_blocks(document.nodes, features, attachments, embed))
   end
 
   # -- embeds ------------------------------------------------------------------
+
+  # An embed of a document exported to Markdown: what the app rendered,
+  # between the comments that say what it is (`Kotoba.Nodes.Embed`). It is
+  # the embed again; the app's reader, given it, may say another one (a
+  # canvas made anew from its diagram, in another app), or `false` for its
+  # content as Markdown. With the embeds feature off, it is its content.
+  defp root_blocks([], _features, _attachments, _embed), do: []
+
+  defp root_blocks(
+         [%MDEx.HtmlBlock{literal: literal} = node | rest],
+         features,
+         attachments,
+         embed
+       ) do
+    case {Embed.read_marker(literal), on?(features, :embeds)} do
+      {{:ok, marked}, true} ->
+        {inside, after_end} = Enum.split_while(rest, &(not end_marker?(&1)))
+
+        # A region with no end is the embed alone.
+        {inside, after_end} =
+          if after_end == [], do: {[], rest}, else: {inside, tl(after_end)}
+
+        marked_embed(marked, inside, features, attachments, embed) ++
+          root_blocks(after_end, features, attachments, embed)
+
+      # The comments of an embed are no text of the document.
+      {{:ok, _marked}, false} ->
+        root_blocks(rest, features, attachments, embed)
+
+      {:error, _embeds} ->
+        if end_marker?(node),
+          do: root_blocks(rest, features, attachments, embed),
+          else:
+            root_block(node, features, attachments, embed) ++
+              root_blocks(rest, features, attachments, embed)
+    end
+  end
+
+  defp root_blocks([node | rest], features, attachments, embed) do
+    root_block(node, features, attachments, embed) ++
+      root_blocks(rest, features, attachments, embed)
+  end
+
+  defp end_marker?(%MDEx.HtmlBlock{literal: literal}),
+    do: String.trim(literal) == Embed.end_marker()
+
+  defp end_marker?(_node), do: false
+
+  defp marked_embed(marked, _inside, _features, _attachments, nil), do: [embed_json(marked)]
+
+  defp marked_embed(marked, inside, features, attachments, embed) do
+    code = Enum.find(inside, &match?(%MDEx.CodeBlock{}, &1))
+
+    block = %{
+      embed: marked,
+      language: code && code.info |> to_string() |> String.split() |> List.first(),
+      code: code && code.literal
+    }
+
+    case call(embed, block) do
+      nil -> [embed_json(marked)]
+      false -> root_blocks(inside, features, attachments, nil)
+      found -> [embed_json(found)]
+    end
+  end
 
   # A fenced block of the root that the app reads as an embed (a Mermaid
   # diagram of a canvas): `embed` gets its language and code and returns

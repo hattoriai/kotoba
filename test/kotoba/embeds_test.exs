@@ -188,7 +188,18 @@ defmodule Kotoba.EmbedsTest do
       doc: doc
     } do
       assert Kotoba.Renderer.to_markdown(doc, embed: &render/2) ==
-               "Before\n\n```mermaid\nerDiagram\n  t7\n```"
+               """
+               Before
+
+               <!-- kotoba:embed {"kind":"canvas","ref":"7","title":"Model"} -->
+
+               ```mermaid
+               erDiagram
+                 t7
+               ```
+
+               <!-- /kotoba:embed -->\
+               """
 
       assert Kotoba.Renderer.to_html(doc, embed: &render/2) |> Phoenix.HTML.safe_to_string() ==
                "<p>Before</p><figure>Model</figure>"
@@ -282,6 +293,88 @@ defmodule Kotoba.EmbedsTest do
 
       assert [_p, %{"type" => "embed"}, _code] =
                Kotoba.MarkdownPaste.nodes(@markdown, %{features: Kotoba.Features.all(), nodes: []})
+    end
+  end
+
+  describe "an embed in Markdown, and back" do
+    @grid %{
+      "type" => "embed",
+      "version" => 1,
+      "kind" => "grid",
+      "ref" => "open--tasks",
+      "title" => "Open tasks -->"
+    }
+
+    defp snapshot(%{kind: "grid"}, :markdown), do: "| Task |\n| --- |\n| Write the guide |"
+    defp snapshot(_embed, _format), do: nil
+
+    test "an exported embed comes back as the embed, of any kind" do
+      doc = TestJSON.doc([TestJSON.paragraph([TestJSON.text("Before")]), @grid])
+      markdown = Kotoba.Renderer.to_markdown(doc, embed: &snapshot/2)
+
+      # The comment stays one comment: no "--" in its JSON.
+      assert [_, json] = Regex.run(~r/<!-- kotoba:embed (.*?) -->/, markdown)
+      refute json =~ "--"
+      assert markdown =~ "| Write the guide |"
+
+      assert [
+               %{"type" => "paragraph"},
+               %{
+                 "type" => "embed",
+                 "kind" => "grid",
+                 "ref" => "open--tasks",
+                 "title" => "Open tasks -->"
+               }
+             ] = Kotoba.Content.from_markdown(markdown).doc["root"]["children"]
+    end
+
+    test "the reader may say another embed, or false for the content" do
+      doc = TestJSON.doc([@grid])
+      markdown = Kotoba.Renderer.to_markdown(doc, embed: &snapshot/2)
+
+      again = fn %{embed: %{ref: ref}} -> %{kind: "grid", ref: "copy-of-" <> ref} end
+
+      assert [%{"type" => "embed", "ref" => "copy-of-open--tasks"}] =
+               Kotoba.Content.from_markdown(markdown, embed: again).doc["root"]["children"]
+
+      assert [%{"type" => "table"}] =
+               Kotoba.Content.from_markdown(markdown, embed: fn _block -> false end).doc["root"][
+                 "children"
+               ]
+
+      # nil: the embed as it was.
+      assert [%{"type" => "embed", "ref" => "open--tasks"}] =
+               Kotoba.Content.from_markdown(markdown, embed: fn _block -> nil end).doc["root"][
+                 "children"
+               ]
+    end
+
+    test "a canvas's diagram reaches the reader with the embed" do
+      doc = TestJSON.doc([%{@grid | "kind" => "canvas", "ref" => "7"}])
+      markdown = Kotoba.Renderer.to_markdown(doc, embed: &render/2)
+      parent = self()
+
+      Kotoba.Content.from_markdown(markdown,
+        embed: fn block ->
+          send(parent, {:read, block})
+          nil
+        end
+      )
+
+      assert_received {:read,
+                       %{embed: %{kind: "canvas", ref: "7"}, language: "mermaid", code: code}}
+
+      assert code =~ "erDiagram"
+    end
+
+    test "without the embeds feature, it is its content, with no comment" do
+      markdown = Kotoba.Renderer.to_markdown(TestJSON.doc([@grid]), embed: &snapshot/2)
+
+      content =
+        Kotoba.Content.from_markdown(markdown, features: Kotoba.Features.all() -- [:embeds])
+
+      assert [%{"type" => "table"}] = content.doc["root"]["children"]
+      refute content.text =~ "kotoba:embed"
     end
   end
 

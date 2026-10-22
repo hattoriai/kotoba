@@ -62,6 +62,12 @@ when it goes full screen, and back.
 
 An embed takes the height of `--kotoba-embed-height` (24rem); give what
 you render `height: 100%`, or set the property on `.kotoba-embed-slot`.
+An embed carries its kind (`data-kind`), so each kind may have its own:
+a grid that takes the height of its rows, a canvas a fixed height.
+
+```css
+.kotoba-embed[data-kind="grid"] .kotoba-embed-slot { height: auto; }
+```
 
 ### Insert an embed
 
@@ -202,9 +208,36 @@ default.
 
 ## Read an embed back from Markdown
 
-`Kotoba.Content.from_markdown/2` reads a fenced block of the document as
-an embed when your app's reader returns one, so that a document exported
-to Markdown comes back with its embeds:
+In Markdown, an embed is what your app renders (or its title) between
+two comments that say what it is, which Markdown viewers leave out:
+
+```markdown
+<!-- kotoba:embed {"kind":"grid","ref":"7","title":"Open tasks"} -->
+
+| Task | Due |
+| --- | --- |
+| Write the guide | 2026-11-02 |
+
+<!-- /kotoba:embed -->
+```
+
+`Kotoba.Content.from_markdown/2` reads it back as the embed, of any kind,
+with no code of yours: a document exported and imported again has its
+embeds. Your app's reader, if you give one, gets it first, as
+`%{embed: %{kind, ref, title}, language, code}` (the language and code of
+the first fenced block in it, a canvas's diagram), and returns:
+
+* `nil`, for the embed as it was;
+* another embed, for one of your own (the canvas made anew from its
+  diagram, when the ref is not one of this app's, or not this person's);
+* `false`, for its content as Markdown (the table, the diagram).
+
+A ref read from Markdown is the person's input, as a document's is:
+your `:embed` slot checks that they may see what it names.
+
+Markdown from elsewhere has no comments. `Kotoba.Content.from_markdown/2`
+reads a fenced block of it as an embed when your app's reader returns
+one:
 
 ```elixir
 def read(%{language: "mermaid", code: code}) do
