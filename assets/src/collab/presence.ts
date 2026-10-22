@@ -257,19 +257,24 @@ export class Presence {
   }
 }
 
-function lineStart(node: Node): DOMRect | null {
-  const element = node instanceof Element ? node : node.parentElement;
+// The start of the line at a point, a line high: the block at it when the
+// point is between blocks (the start of the document, before an embed),
+// else its element (an empty line).
+function lineStart(node: Node, offset: number): DOMRect | null {
+  const child = node instanceof Element ? node.childNodes[offset] : null;
+  const element = child instanceof Element && child.getBoundingClientRect().height > 0 ? child : node instanceof Element ? node : node.parentElement;
   if (!element) return null;
   const box = element.getBoundingClientRect();
-  return new DOMRect(box.left, box.top, 0, box.height);
+  const line = parseFloat(getComputedStyle(element).lineHeight);
+  return new DOMRect(box.left, box.top, 0, Math.min(box.height, Number.isFinite(line) ? line : 24));
 }
 
-// The caret at a point: an empty line has no rectangle for a collapsed range, so the caret goes at the line's start.
+// The caret at a point: an empty line, or a place between blocks, has no rectangle for a collapsed range, so the caret goes at the line's start.
 function caretRect(focus: { node: Node; offset: number }): DOMRect | null {
   const range = document.createRange();
   range.setStart(focus.node, focus.offset);
   range.collapse(true);
-  return range.getClientRects()[0] ?? lineStart(focus.node);
+  return range.getClientRects()[0] ?? lineStart(focus.node, focus.offset);
 }
 
 // A range's rectangles, one for each line: the slivers at the edges of its elements go into their line.

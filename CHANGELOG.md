@@ -92,6 +92,13 @@ On Issho 0.3: agents move with Issho's motion, and following is the room's.
   `point`): each page draws it on the same word, however the text wraps
   there.
 
+### Fixed
+
+- A caret or a pointer at a place between blocks (the start of the
+  document, before an embed) is at the top of the block there, a line
+  high, rather than as high as the editor: a page pointer there was at
+  the bottom of the editor, off the screen.
+
 ## [0.6.0] - 2026-10-21
 
 Collaboration runs on [Issho](https://hex.pm/packages/issho): the same
