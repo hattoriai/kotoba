@@ -53,6 +53,14 @@ The slot renders one embed. `:let` gets a map:
 | `toggle_full` | a `Phoenix.LiveView.JS` command that takes it full screen and back, for a button |
 | `readonly` | the `readonly` of `kotoba_embeds/1` |
 
+**A ref is the person's input.** The document keeps an embed's `kind` and
+`ref`, and whoever edits it can put any ref there: a pasted link, the
+form's JSON, an agent. Load what an embed shows as its own page does,
+with the viewer's permission (`Diagrams.get_for(user, embed.ref)`, not a
+lookup of every diagram by id), and render its title, or nothing, for a
+ref they may not see; otherwise a person could embed something they may
+not open and read it in the document.
+
 What you render is your LiveView's own: its events go to your LiveView,
 a LiveComponent in it (a canvas, a grid) is a LiveComponent as any, and a
 change of your assigns updates it. LiveView puts it in the embed's place
@@ -272,6 +280,14 @@ renders it for them. What is in it is your app's: a Hakushi canvas with
 room's wherever they are. Someone reading the document sees the cursor of
 someone on the canvas's own page, and the other way round.
 
+* The document's LiveView renders the embed: the canvas's own page need
+  not be open, and when it is, the two are one canvas, through its room.
+* Define the canvas's document in your Issho policy (Hakushi's
+  `Hakushi.Issho.document/2` in `document/2`): it is then the same
+  document whichever opens it first, its page or an embed, and agents
+  work on it with no browser. See Issho's "One document, many places".
+* Give each embed's content an id of the embed's (`embed.id`) and the same
+  room: the same canvas can be in a document twice.
 * Give the canvas the same user as the editor (`Kotoba.Collab.token/3`'s
   `user`): the person is one person in both rooms.
 * Issho's pointers of the document's room (`Issho.Components.pointers/1`)
