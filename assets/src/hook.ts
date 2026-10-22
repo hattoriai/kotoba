@@ -679,7 +679,7 @@ class Instance {
 
   private setContent(doc: unknown): void {
     if (this.config.collab) {
-      this.announce("Use Kotoba.Collab.transact to change a shared document.");
+      this.announce("Use Kotoba.Issho.change to change a shared document.");
       return;
     }
     // A suggestion's place may not be in the new document.

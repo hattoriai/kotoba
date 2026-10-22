@@ -130,9 +130,19 @@ defmodule Kotoba.Components do
 
   attr :placeholder, :string, default: nil, doc: "the text of an empty editor"
 
-  attr :collab, :map,
+  attr :issho, :any,
     default: nil,
-    doc: "credentials from Kotoba.Collab.token/3; enables the optional collaboration bundle"
+    doc:
+      "a shared editor, on [Issho](https://hex.pm/packages/issho): `[instance: MyApp.Issho, document: \"page:1/body\"]`, with `Issho.Join`'s keys as every component of the page (`can`, `people`, `follow`, `on_behalf_of`, `claims`) and Kotoba's own: `undo` (`:editor`, `:page` or `false`), `socket` and `max_channels`; needs `user` and a LiveView with `on_mount Issho.Live`; see the Collaboration guide"
+
+  attr :user, :any,
+    default: nil,
+    doc:
+      "the person, in a shared editor: your user, as its `Issho.Actor` says them (or a map with an `:id`, a `:name` and a `:color`), the same as in the page's other components"
+
+  attr :collab, :any,
+    default: nil,
+    doc: "removed in 0.7: `issho` and `user`; see the Upgrading guide"
 
   attr :nodes, :list,
     default: [],
@@ -220,6 +230,13 @@ defmodule Kotoba.Components do
       "a custom toolbar, for example `<.kotoba_toolbar>`; the default toolbar has the commands of the editor's features, but `subscript` and `superscript`"
 
   def kotoba(assigns) do
+    if assigns.collab,
+      do:
+        raise(
+          ArgumentError,
+          "<.kotoba collab={...}> was removed in Kotoba 0.7: give it issho={[instance: MyApp.Issho, document: id]} and user={@user}; see the Upgrading guide"
+        )
+
     %FormField{} = field = assigns.field
     input_id = field.id
     id = assigns.id || "#{field.id}_editor"
@@ -229,8 +246,8 @@ defmodule Kotoba.Components do
         id: id,
         input_id: input_id,
         value: field_json(field.value),
-        collab: assigns.collab && JSON.encode!(assigns.collab),
-        issho_doc: assigns.collab && assigns.collab["document_id"],
+        collab: assigns.issho && JSON.encode!(collab_credentials(assigns.issho, assigns.user)),
+        issho_doc: assigns.issho && issho_document(assigns.issho),
         node_urls: node_urls(assigns.nodes),
         triggers: json_map(Prompts.triggers(assigns.prompts)),
         prompt_labels: json_map(Prompts.labels(assigns.prompts)),
@@ -320,6 +337,21 @@ defmodule Kotoba.Components do
   end
 
   # No rendering here: this runs on every render of the form.
+  # A shared editor's credentials (Kotoba.Collab, with Issho).
+  defp collab_credentials(issho, user) do
+    collab = Kotoba.Collab
+
+    if Code.ensure_loaded?(collab),
+      do: collab.credentials(issho, user),
+      else:
+        raise(
+          ArgumentError,
+          "<.kotoba issho={...}> needs {:issho, \"~> 0.3\"} in your dependencies"
+        )
+  end
+
+  defp issho_document(issho), do: issho |> Enum.into(%{}) |> Map.get(:document)
+
   defp field_json(value) do
     {:ok, doc} =
       with :error <- Content.to_doc(value), do: Content.to_doc(nil)

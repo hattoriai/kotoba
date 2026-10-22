@@ -19,37 +19,44 @@ defmodule Kotoba.CollabTest do
 
     @impl true
     def document(_identity, "plain:" <> _),
-      do: Collab.document(store: {Store.Memory, :kotoba_collab_store}, policy: [features: []])
+      do:
+        Kotoba.Issho.document(store: {Store.Memory, :kotoba_collab_store}, policy: [features: []])
 
     def document(_identity, _document_id),
-      do: Collab.document(store: {Store.Memory, :kotoba_collab_store})
+      do: Kotoba.Issho.document(store: {Store.Memory, :kotoba_collab_store})
   end
 
   defmodule CredentialsLive do
     @moduledoc false
-    # A LiveView that signs an editor's credentials, as an app's does.
+    # A LiveView with a shared editor, as an app's: it shows the editor's
+    # credentials, or with "editor" in the session the editor itself.
     use Phoenix.LiveView
 
     on_mount(Issho.Live)
 
     @impl true
-    def mount(
-          _params,
-          %{"instance" => instance, "document" => document, "role" => role} = session,
-          socket
-        ) do
+    def mount(_params, %{"issho" => issho} = session, socket) do
       user =
         if session["user"] == "member",
           do: %KotobaTest.Member{id: 7, name: "Ada"},
           else: %{id: 7, name: "Ada", color: "#e84a1c"}
 
-      credentials =
-        Collab.token(instance, document, user: user, role: String.to_existing_atom(role))
-
-      {:ok, assign(socket, credentials: credentials)}
+      {:ok,
+       assign(socket,
+         issho: issho,
+         user: user,
+         editor: session["editor"],
+         credentials: Collab.credentials(issho, user)
+       )}
     end
 
     @impl true
+    def render(%{editor: true} = assigns) do
+      ~H"""
+      <Kotoba.Components.kotoba field={to_form(%{}, as: :post)[:body]} id="body" issho={@issho} user={@user} />
+      """
+    end
+
     def render(assigns), do: ~H"<pre id='credentials'>{JSON.encode!(@credentials)}</pre>"
   end
 
@@ -76,7 +83,7 @@ defmodule Kotoba.CollabTest do
              Collab.content(instance, "post:1")
 
     assert {:ok, %{"revision" => 1}} =
-             Collab.transact(instance, "post:1", [insert("a:1", "seed:2:0", "X")])
+             Kotoba.Issho.change(instance, "post:1", [insert("a:1", "seed:2:0", "X")])
 
     assert %{state: %{"engine" => "kotoba", "revision" => 1}, content: %Content{text: "aXbc"}} =
              stored("post:1")
@@ -93,13 +100,13 @@ defmodule Kotoba.CollabTest do
       "ops" => [insert("a:1", nil, "X")]
     }
 
-    assert {:ok, %{"revision" => 1}} = Collab.transact(instance, "post:2", tx, author: "7")
+    assert {:ok, %{"revision" => 1}} = Kotoba.Issho.change(instance, "post:2", tx, author: "7")
 
     assert {:ok, %{"revision" => 1, "duplicate" => true}} =
-             Collab.transact(instance, "post:2", tx, author: "7")
+             Kotoba.Issho.change(instance, "post:2", tx, author: "7")
 
     assert {:error, _reused} =
-             Collab.transact(instance, "post:2", %{tx | "ops" => [insert("a:2", nil, "Y")]},
+             Kotoba.Issho.change(instance, "post:2", %{tx | "ops" => [insert("a:2", nil, "Y")]},
                author: "7"
              )
   end
@@ -107,8 +114,8 @@ defmodule Kotoba.CollabTest do
   test "a form publishes the exact revision it saw", %{instance: instance} do
     :ok = Store.Memory.seed(:kotoba_collab_store, "post:3", Content.from_markdown("abc"))
     {:ok, %{"epoch" => epoch}} = Collab.content(instance, "post:3")
-    {:ok, _} = Collab.transact(instance, "post:3", [insert("a:1", "seed:2:0", "X")])
-    {:ok, _} = Collab.transact(instance, "post:3", [insert("a:2", "a:1", "Y")])
+    {:ok, _} = Kotoba.Issho.change(instance, "post:3", [insert("a:1", "seed:2:0", "X")])
+    {:ok, _} = Kotoba.Issho.change(instance, "post:3", [insert("a:2", "a:1", "Y")])
 
     assert {:ok, %Content{text: "abc"}} =
              Collab.content(instance, "post:3", %{"epoch" => epoch, "revision" => 0})
@@ -131,7 +138,7 @@ defmodule Kotoba.CollabTest do
       "stamp" => "a:bold"
     }
 
-    assert {:error, {:invalid_content, _}} = Collab.transact(instance, "plain:1", [bold])
+    assert {:error, {:invalid_content, _}} = Kotoba.Issho.change(instance, "plain:1", [bold])
     assert {:ok, %{"revision" => 0}} = Collab.content(instance, "plain:1")
   end
 
@@ -168,31 +175,37 @@ defmodule Kotoba.CollabTest do
              Collab.content(instance, "post:4", %{"epoch" => "old", "revision" => 0})
 
     assert {:ok, %{"revision" => 2}} =
-             Collab.transact(instance, "post:4", [insert("a:2", "a:1", "Y")])
+             Kotoba.Issho.change(instance, "post:4", [insert("a:2", "a:1", "Y")])
 
     assert %{state: %{"engine" => "kotoba", "epoch" => "old", "revision" => 2}} =
              stored("post:4")
   end
 
-  defp credentials(instance, document, role \\ "write", user \\ nil) do
-    {:ok, view, _html} =
-      live_isolated(Phoenix.ConnTest.build_conn(), CredentialsLive,
-        session: %{"instance" => instance, "document" => document, "role" => role, "user" => user}
-      )
+  defp credentials(instance, document, opts \\ []) do
+    {user, opts} = Keyword.pop(opts, :user)
+    {view, html} = mount_editor(instance, [document: document] ++ opts, %{"user" => user})
 
     credentials =
-      view
-      |> element("#credentials")
-      |> render()
+      html
       |> LazyHTML.from_fragment()
+      |> LazyHTML.query("#credentials")
       |> LazyHTML.text()
       |> JSON.decode!()
 
     {view, credentials}
   end
 
+  defp mount_editor(instance, issho, session) do
+    {:ok, view, html} =
+      live_isolated(Phoenix.ConnTest.build_conn(), CredentialsLive,
+        session: Map.put(session, "issho", [instance: instance] ++ issho)
+      )
+
+    {view, html}
+  end
+
   test "credentials name the document, its room, the person and their role", %{instance: instance} do
-    {_view, credentials} = credentials(instance, "post:5", "read")
+    {_view, credentials} = credentials(instance, "post:5", can: :read)
 
     assert %{
              "document_id" => "post:5",
@@ -205,7 +218,7 @@ defmodule Kotoba.CollabTest do
            } = credentials
 
     # An editor that takes no part in following, though the room's others do.
-    assert %{"follow" => false} = Collab.token(instance, "post:5", user: %{id: 7}, follow: false)
+    assert {_view, %{"follow" => false}} = credentials(instance, "post:5", follow: false)
 
     assert {:ok, %Issho.Identity{key: "7"}, :read} =
              Issho.Token.verify(instance, credentials["token"], "post:5")
@@ -216,18 +229,16 @@ defmodule Kotoba.CollabTest do
     assert {:ok, _identity, :write} =
              Issho.Token.verify(instance, notebook["token"], "notebook:7")
 
-    assert_raise ArgumentError, fn ->
-      Collab.token(instance, "post:5", user: %{id: 7}, role: :admin)
-    end
-
-    assert_raise ArgumentError, fn ->
-      Collab.token(instance, "post:5", user: %{id: 7}, undo: :always)
+    for wrong <- [[can: :admin], [undo: :always], [room: "post:5"], [max_channels: 0]] do
+      assert_raise ArgumentError, fn ->
+        Collab.credentials([instance: instance, document: "post:5"] ++ wrong, %{id: 7})
+      end
     end
   end
 
   test "the person is the app's actor: its key and name, and Issho's colour when it has none",
        %{instance: instance} do
-    {_view, credentials} = credentials(instance, "post:6", "write", "member")
+    {_view, credentials} = credentials(instance, "post:6", user: "member")
 
     assert %{"id" => "member:7", "name" => "Ada", "color" => color} = credentials["user"]
     assert color =~ ~r/^var\(--issho-person-[1-8], #2563eb\)$/
@@ -245,6 +256,33 @@ defmodule Kotoba.CollabTest do
 
     assert {:ok, %Issho.Identity{key: "7"}, :write} =
              Issho.Token.verify(instance, token, "notebook:8")
+  end
+
+  test "a shared editor joins with its issho option, and names its document for Issho's page",
+       %{instance: instance} do
+    {_view, html} =
+      mount_editor(instance, [document: "notebook:7/intro", undo: :page], %{"editor" => true})
+
+    editor = html |> LazyHTML.from_fragment() |> LazyHTML.query("#body")
+    [collab] = LazyHTML.attribute(editor, "data-collab")
+
+    assert %{"document_id" => "notebook:7/intro", "room" => "notebook:7", "undo" => "page"} =
+             JSON.decode!(collab)
+
+    assert LazyHTML.attribute(editor, "data-issho-doc") == ["notebook:7/intro"]
+  end
+
+  test "an author is a key, or the app's actor", %{instance: instance} do
+    :ok = Store.Memory.seed(:kotoba_collab_store, "post:9", Content.from_markdown("abc"))
+    :ok = Issho.Events.subscribe(instance, "post:9")
+
+    assert {:ok, %{"revision" => 1}} =
+             Kotoba.Issho.change(instance, "post:9", [insert("a:1", "seed:2:0", "X")],
+               author: %KotobaTest.Member{id: 7, name: "Ada"}
+             )
+
+    assert_receive {Issho, :event, %Issho.Event{name: "document.changed", by: by}}
+    assert %Issho.Identity{key: "member:7", name: "Ada"} = by
   end
 
   test "a selection is a place Kotoba checks" do

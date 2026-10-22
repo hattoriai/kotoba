@@ -63,7 +63,7 @@ defmodule MyApp.Collaboration do
 
   @impl true
   def document(_identity, _document_id) do
-    Kotoba.Collab.document(
+    Kotoba.Issho.document(
       store: {MyApp.CollabStore, MyApp.Repo},
       policy: [features: ~w(bold italic links lists)]
     )
@@ -180,7 +180,7 @@ The shared editors of a page share one socket per socket URL, each
 document with its own channel on it, so a page of many shared editors
 opens one WebSocket; two editors of the same document share its channel.
 An editor past the socket's channel limit gets another socket. The limit
-is `Kotoba.Collab.token/3`'s `:max_channels`, 100 by default, the default
+is the editor's `issho` `:max_channels`, 100 by default, the default
 `:max_channels_per_transport` of the Phoenix versions that limit channels
 (1.7.24 and later, 1.8.2 and later). If you set a lower
 `:max_channels_per_transport` on the socket, pass the same number as
@@ -195,13 +195,28 @@ or in the LiveView itself:
 live_session :default, on_mount: [Issho.Live] do
 ```
 
-Authorize the authenticated user before signing credentials:
+The editor joins with its `issho` option, the same keys as every
+component of the page (`Issho.Join`: Hakushi's canvas, Masu's grid), and
+its `user`:
 
-```elixir
-collab = Kotoba.Collab.token(MyApp.Issho, document.id, user: current_user, role: :write)
-
-socket = assign(socket, collab: collab)
+```heex
+<.kotoba
+  field={@form[:body]}
+  id="body_editor"
+  issho={[instance: MyApp.Issho, document: @document.id, can: :write]}
+  user={@current_user}
+/>
 ```
+
+The keys: `:instance` and `:document` (required); `:can`, `:write` or
+`:read`; `:people`, `false` when the page shows Issho's people list;
+`:follow`, `false` for an editor that takes no part in following;
+`:on_behalf_of` and `:claims`, for your policy. Kotoba's own: `:undo`
+(`:editor`, the default, undoes in the editor; `:page`, the person's last
+change on the page; `false`, the browser's own), and `:socket` and
+`:max_channels` (above). Any other key raises,
+so a typo does not go unnoticed. The editor signs its credentials once
+for the LiveView's life.
 
 `user` is your user, as your `Issho.Actor` implementation says them: its
 key (`"user:4"`), name and colour, the same person in every block of the
@@ -209,11 +224,7 @@ page (a Hakushi canvas, Issho's people list). A map works too:
 `%{id: user.id, name: user.name, color: "#2563eb"}`. A person with no
 colour gets one of Issho's palette, the same as in Issho's lists.
 
-```heex
-<.kotoba field={@form[:body]} id="body_editor" collab={@collab} />
-```
-
-Use `role: :read` for viewers. `readonly` also locks the UI, but authorization
+Use `can: :read` for viewers. `readonly` also locks the UI, but authorization
 and the signed role enforce permissions. The credentials are an Issho grant
 for the document's room (`Issho.Live.grant/4`): the browser renews it
 through the LiveView every three minutes and after an expired join, and
@@ -328,9 +339,9 @@ properties, on the page, restyle all of them at once:
 rules.
 
 An editor that should take no part in following, though the room's other
-blocks do, says so in its credentials:
+blocks do, says so in its `issho`:
 
-    Kotoba.Collab.token(MyApp.Issho, "post:5", user: user, follow: false)
+    issho={[instance: MyApp.Issho, document: "post:5", follow: false]}
 
 Its people list then follows no one, it shows no one followed, and it
 does not move to the caret of whom the room follows.
@@ -363,6 +374,26 @@ The repository's development app serves them at `/mcp`: with `mix dev`
 running and `/collab/notebook` open, connect Claude Code with
 `claude mcp add --transport http kotoba-dev http://localhost:4099/mcp`
 and ask it to edit the notebook (`notebook/one`, `notebook/two`).
+
+## A person's place
+
+Where a person is in the document, their selection, is in their state
+under Issho's `place` key, and so in what an agent sees of them, in
+Issho's motion and in what your app keeps of it. Its format is part of
+Kotoba's API, and only grows (`Kotoba.Issho.Place`):
+
+```elixir
+%{
+  "anchor" => %{"node" => node_id, "before" => atom_id | nil},
+  "focus" => %{"node" => node_id, "before" => atom_id | nil}
+}
+```
+
+Each end is a caret in the text node `node`, after the character
+`before` (`nil` at the node's start); in a block with no text yet, the
+block and an `"offset"`. Ids are the document's own, so a place stays on
+the same words however the text around it changes. A caret is a
+selection whose two ends are the same.
 
 ## Merge and history behavior
 
@@ -418,8 +449,10 @@ fully connected BEAM cluster. Storage compare-and-swap rejects stale writers;
 it does not promise availability across network partitions. Persistence and
 the policy must be shared consistently across nodes.
 
-Backend edits use `Kotoba.Collab.transact/4` with semantic operations through
-the same authority. To retry idempotently, pass the original immutable
+Backend edits use `Kotoba.Issho.change/4` with semantic operations through
+the same authority. Its `:author` is a key (`"system"`) or your actor
+(`current_user`), and is the change's author everywhere: the journal,
+your document hook's `:by` and Issho's `"document.changed"` event. To retry idempotently, pass the original immutable
 transaction map, including its original base revision and ID. Whole-document
 `Kotoba.Live.push_content/3` is refused by collaborative editors because it
 cannot preserve pending identities. Ordinary editors keep their existing

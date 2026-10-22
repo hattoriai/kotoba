@@ -5,102 +5,66 @@ if Code.ensure_loaded?(Issho) do
     Issho is the document's authority, its people and their cursors;
     Kotoba is the document and its editor.
 
-    Your Issho policy names Kotoba's documents with `document/1`, your
-    LiveView signs `token/3` for the component's `collab` attribute, and
-    the application's JavaScript imports `kotoba/collab` once. See the
-    Collaboration guide.
+    Your Issho policy names Kotoba's documents with `document/1`, the
+    editor joins with its `issho` option (`Issho.Join`'s keys, as every
+    component of the page, and Kotoba's `:undo`), and the application's
+    JavaScript imports `kotoba/collab` once. Changes from your own code go
+    through `Kotoba.Issho.change/4`. See the Collaboration guide.
     """
 
-    alias Kotoba.Collab.Document
+    @doc false
+    @deprecated "Use Kotoba.Issho.document/1"
+    def document(opts), do: Kotoba.Issho.document(opts)
 
-    @doc """
-    What a shared editor's document is, for your policy's `document/2`.
+    @doc false
+    # The editor's credentials, from its `issho` option (`Issho.Join`, and
+    # Kotoba's own `:undo`, `:socket` and `:max_channels`) and its `user`:
+    # an Issho grant for the document's room, which the LiveView renews
+    # when the editor asks, after asking the policy again
+    # (`Issho.Live.grant/4`). Kept for the LiveView's life, so that a
+    # render signs no new token.
+    @spec credentials(keyword() | map() | Issho.Join.t(), term()) :: map()
+    def credentials(issho, user) do
+      join = Issho.Join.new!(issho, [:undo, :socket, :max_channels])
 
-        def document(_identity, _document_id),
-          do: Kotoba.Collab.document(store: {MyApp.CollabStore, MyApp.Repo})
+      if is_nil(user),
+        do: raise(ArgumentError, "<.kotoba issho={...}> needs user, the person who edits")
 
-    Options: `:store` (required), your `Kotoba.Collab.Store` and its
-    context; `:policy`, the document's checks (`:features`, `:nodes`,
-    `:validate`), as every accepted transaction must pass them.
-    """
-    @spec document(keyword()) :: {:ok, map()}
-    def document(opts) do
-      {:ok,
-       %{
-         engine: Kotoba.Issho,
-         opts: Keyword.get(opts, :policy, []),
-         store: {Kotoba.Issho.Store, Keyword.fetch!(opts, :store)}
-       }}
+      {actor, person} = person(user)
+      key = {__MODULE__, :credentials, join, actor}
+
+      case Process.get(key) do
+        nil -> tap(sign(join, actor, person), &Process.put(key, &1))
+        credentials -> credentials
+      end
     end
 
-    @doc """
-    Makes short-lived join credentials from the LiveView's authenticated
-    user, in a LiveView with Issho's hook (`on_mount Issho.Live`): an Issho
-    grant for the document's room, which the LiveView renews when the
-    editor asks, after asking the policy again (`Issho.Live.grant/4`).
-
-    The credentials join the document's room (`Issho.Policy.room/1`): the
-    part of its id before the first `"/"`, or the whole id. The editors of
-    a page whose documents share a room (`"notebook:7/cell-1"`,
-    `"notebook:7/cell-2"`) share its people, and a person's cursor goes
-    from one editor to the other. The editors of documents of two rooms
-    (`"notes:7"`, `"drafts:9"`) are independent of each other, on one page
-    too: each joins its own room, with its own people.
-
-    `:user` (required) is your user: a struct of yours for which you
-    implement `Issho.Actor` (its key, `"user:4"`, its name and colour), the
-    same person as in the page's other blocks (a canvas, Issho's lists), or
-    a map with an `:id`, a `:name` and a `:color`. A person with no colour
-    gets one of Issho's palette (`--issho-person-1` to `-8`).
-
-    Options: `:role` (`:write` or `:read`), `:undo`
-    (`:editor`, the editor's own steps; `:page`, the person's last change
-    in any editor or component of the page, with Issho's undo; `false`,
-    none), `:people`
-    (whether the editor lists the room's people, `true`; `false` when the
-    page shows Issho's list, `Issho.Components.people/1`), `:follow`
-    (whether the editor takes part in following, the room's: `true`;
-    `false`, and its people list follows no one, it shows whom the room
-    follows nowhere, and it does not move when the room follows someone),
-    `:socket`
-    (the Issho socket's path, `"/issho/socket"` by default) and
-    `:max_channels` (that socket's `:max_channels_per_transport`, 100 by
-    default).
-    """
-    @spec token(atom(), String.t(), keyword()) :: map()
-    def token(instance, document_id, opts) when is_atom(instance) and is_binary(document_id) do
-      user = Keyword.fetch!(opts, :user)
-      role = Keyword.get(opts, :role, :write)
-
-      unless role in [:read, :write],
-        do: raise(ArgumentError, "collaboration role must be :read or :write")
-
-      max_channels = Keyword.get(opts, :max_channels, 100)
+    defp sign(%Issho.Join{} = join, actor, person) do
+      max_channels = Map.get(join.extra, :max_channels, 100)
 
       unless is_integer(max_channels) and max_channels > 0,
-        do: raise(ArgumentError, "collaboration :max_channels must be a positive integer")
-
-      {actor, user} = person(user)
-      room = Issho.Policy.room(document_id)
+        do: raise(ArgumentError, "issho's :max_channels must be a positive integer")
 
       grant =
-        Issho.Live.grant(instance, actor, room,
-          can: role,
-          socket: Keyword.get(opts, :socket, "/issho/socket"),
-          max_channels: max_channels
+        Issho.Live.grant(
+          join.instance,
+          actor,
+          join.room,
+          Issho.Join.grant_opts(join) ++
+            [socket: Map.get(join.extra, :socket, "/issho/socket"), max_channels: max_channels]
         )
 
       %{
-        "document_id" => document_id,
-        "room" => room,
+        "document_id" => join.document,
+        "room" => join.room,
         "token" => grant["token"],
         "socket" => grant["socket"],
         "max_channels" => max_channels,
-        "user" => user,
-        "role" => Atom.to_string(role),
-        "people" => Keyword.get(opts, :people, true),
-        "follow" => Keyword.get(opts, :follow, true) != false,
-        "undo" => undo(Keyword.get(opts, :undo, :editor))
+        "user" => person,
+        "role" => Atom.to_string(join.can),
+        "people" => join.people,
+        "follow" => join.follow,
+        "undo" => undo(Map.get(join.extra, :undo, :editor))
       }
     end
 
@@ -133,7 +97,7 @@ if Code.ensure_loaded?(Issho) do
       do:
         raise(
           ArgumentError,
-          "collaboration :undo is :editor, :page or false, got: #{inspect(other)}"
+          "issho's :undo is :editor, :page or false, got: #{inspect(other)}"
         )
 
     @doc """
@@ -149,22 +113,9 @@ if Code.ensure_loaded?(Issho) do
     def content(instance, document_id, %{"epoch" => epoch, "revision" => revision}),
       do: Issho.content(instance, document_id, epoch, revision)
 
-    @doc """
-    Applies backend operations through the same authority, checks and
-    store as the editors' changes. Pass the original transaction map
-    (with its `"id"` and `"base_revision"`) to retry one idempotently.
-    Options: `:author` (`"server"`), `:id`.
-    """
-    def transact(instance, document_id, operations_or_transaction, opts \\ [])
-
-    def transact(instance, document_id, %{"ops" => _} = transaction, opts) do
-      with {:ok, pid} <- Issho.Documents.open(instance, document_id),
-           do: Issho.Authority.commit(pid, transaction, Keyword.get(opts, :author, "server"))
-    end
-
-    def transact(instance, document_id, operations, opts) when is_list(operations) do
-      opts = Keyword.put_new_lazy(opts, :id, &Document.random_id/0)
-      Issho.transact(instance, document_id, operations, opts)
-    end
+    @doc false
+    @deprecated "Use Kotoba.Issho.change/4"
+    def transact(instance, document_id, operations_or_transaction, opts \\ []),
+      do: Kotoba.Issho.change(instance, document_id, operations_or_transaction, opts)
   end
 end

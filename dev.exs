@@ -1183,7 +1183,7 @@ defmodule KotobaDev.Collaboration do
 
   @impl true
   def document(_identity, _document_id),
-    do: Kotoba.Collab.document(store: {Kotoba.Collab.Store.Memory, KotobaDev.CollabStore})
+    do: Kotoba.Issho.document(store: {Kotoba.Collab.Store.Memory, KotobaDev.CollabStore})
 end
 
 defmodule KotobaDev.IsshoChannel do
@@ -1216,19 +1216,19 @@ defmodule KotobaDev.CollabLive do
     user = %{id: name, name: name, color: if(name == "Ada", do: "#2563eb", else: "#be185d")}
     role = if params["role"] == "read", do: :read, else: :write
 
-    collab =
-      Kotoba.Collab.token(KotobaDev.Issho, id,
-        user: user,
-        role: role,
-        follow: params["follow"] != "false"
-      )
+    issho = [
+      instance: KotobaDev.Issho,
+      document: id,
+      can: role,
+      follow: params["follow"] != "false"
+    ]
 
     {:ok,
      assign(socket,
        document_id: id,
        user: user,
        role: role,
-       collab: collab,
+       issho: issho,
        form: to_form(%{"body" => nil}, as: :shared),
        saved: nil
      )}
@@ -1239,7 +1239,7 @@ defmodule KotobaDev.CollabLive do
     <h1>Shared document</h1>
     <p>Open this document in another tab with a different <code>?name=</code> to collaborate.</p>
     <.form for={@form} id="collab-form" phx-submit="save">
-      <.kotoba field={@form[:body]} id="shared_editor" label="Shared document" collab={@collab} nodes={["/assets/nodes/tag.js"]} />
+      <.kotoba field={@form[:body]} id="shared_editor" label="Shared document" issho={@issho} user={@user} nodes={["/assets/nodes/tag.js"]} />
       <button type="submit" id="collab-save">Publish accepted revision</button>
     </.form>
     <button id="collab-insert" phx-click="insert">Insert tag</button>
@@ -1303,8 +1303,8 @@ defmodule KotobaDev.ManyCollabLive do
 
     signing =
       if params["socket"] == "small",
-        do: [user: user, socket: "/issho/small-socket", max_channels: 5],
-        else: [user: user]
+        do: [socket: "/issho/small-socket", max_channels: 5],
+        else: []
 
     {:ok,
      assign(socket,
@@ -1312,7 +1312,7 @@ defmodule KotobaDev.ManyCollabLive do
        editors: editors,
        next: length(editors) + 1,
        signing: signing,
-       collab: Map.new(ids, &{&1, Kotoba.Collab.token(KotobaDev.Issho, &1, signing)}),
+       user: user,
        form: to_form(%{}, as: :many)
      )}
   end
@@ -1324,7 +1324,7 @@ defmodule KotobaDev.ManyCollabLive do
     <button id="many-add" phx-click="add">Add an editor</button>
     <.form for={@form} id="many-form">
       <div :for={{id, index} <- @editors} style="min-height: 60vh">
-        <.kotoba field={@form["body_#{index}"]} id={"editor_#{index}"} label={"Block #{index}"} collab={@collab[id]} />
+        <.kotoba field={@form["body_#{index}"]} id={"editor_#{index}"} label={"Block #{index}"} issho={[instance: KotobaDev.Issho, document: id] ++ @signing} user={@user} />
       </div>
     </.form>
     """
@@ -1338,17 +1338,7 @@ defmodule KotobaDev.ManyCollabLive do
     n = socket.assigns.next
     id = "#{socket.assigns.prefix}-#{n}"
 
-    {:noreply,
-     assign(socket,
-       editors: socket.assigns.editors ++ [{id, n}],
-       next: n + 1,
-       collab:
-         Map.put(
-           socket.assigns.collab,
-           id,
-           Kotoba.Collab.token(KotobaDev.Issho, id, socket.assigns.signing)
-         )
-     )}
+    {:noreply, assign(socket, editors: socket.assigns.editors ++ [{id, n}], next: n + 1)}
   end
 end
 
@@ -1371,7 +1361,6 @@ defmodule KotobaDev.NestedCollabLive do
        params: params,
        document_id: id,
        user: user,
-       collab: Kotoba.Collab.token(KotobaDev.Issho, id, user: user),
        form: to_form(%{}, as: :parent)
      )}
   end
@@ -1379,7 +1368,7 @@ defmodule KotobaDev.NestedCollabLive do
   def render(assigns) do
     ~H"""
     <h1>Nested shared editors</h1>
-    <.kotoba field={@form[:body]} id="parent_editor" label="Parent" collab={@collab} />
+    <.kotoba field={@form[:body]} id="parent_editor" label="Parent" issho={[instance: KotobaDev.Issho, document: @document_id]} user={@user} />
     {live_render(@socket, KotobaDev.ManyCollabLive, id: "nested", session: %{"params" => @params})}
     """
   end
@@ -1402,22 +1391,23 @@ defmodule KotobaDev.NotebookLive do
     user = %{id: name, name: name, color: if(name == "Ada", do: "#2563eb", else: "#be185d")}
 
     # The page lists the people, once: the editors do not.
-    collab =
+    issho =
       Map.new(
         @blocks,
         &{&1,
-         Kotoba.Collab.token(KotobaDev.Issho, "#{notebook}/#{&1}",
-           user: user,
+         [
+           instance: KotobaDev.Issho,
+           document: "#{notebook}/#{&1}",
            people: false,
            undo: if(params["undo"] == "false", do: false, else: :page)
-         )}
+         ]}
       )
 
     {:ok,
      assign(socket,
        notebook: notebook,
        user: user,
-       collab: collab,
+       issho: issho,
        grant: Issho.Live.grant(KotobaDev.Issho, user, notebook),
        form: to_form(%{}, as: :notebook)
      )}
@@ -1431,7 +1421,7 @@ defmodule KotobaDev.NotebookLive do
     <Issho.Components.people id="notebook-people" grant={@grant} />
     <Issho.Components.pointers id="notebook-pointers" grant={@grant} />
     <.form for={@form} id="notebook-form">
-      <.kotoba :for={block <- @blocks} field={@form[block]} id={"notebook_#{block}"} label={"Block #{block}"} collab={@collab[block]} />
+      <.kotoba :for={block <- @blocks} field={@form[block]} id={"notebook_#{block}"} label={"Block #{block}"} issho={@issho[block]} user={@user} />
     </.form>
     <p id="notebook-note">A note beside the editors, in plain HEEx.</p>
     <p id="notebook-secret" data-issho-private>Only for you.</p>
@@ -1457,19 +1447,17 @@ defmodule KotobaDev.ApartLive do
       "second" => Map.get(params, "second", "drafts")
     }
 
-    collab =
-      Map.new(rooms, fn {block, room} ->
-        {block, Kotoba.Collab.token(KotobaDev.Issho, room, user: user)}
-      end)
+    issho =
+      Map.new(rooms, fn {block, room} -> {block, [instance: KotobaDev.Issho, document: room]} end)
 
-    {:ok, assign(socket, collab: collab, form: to_form(%{}, as: :apart))}
+    {:ok, assign(socket, issho: issho, user: user, form: to_form(%{}, as: :apart))}
   end
 
   def render(assigns) do
     ~H"""
     <h1>Two rooms</h1>
     <.form for={@form} id="apart-form">
-      <.kotoba :for={block <- ~w(first second)} field={@form[block]} id={"apart_#{block}"} label={"The #{block} room"} collab={@collab[block]} />
+      <.kotoba :for={block <- ~w(first second)} field={@form[block]} id={"apart_#{block}"} label={"The #{block} room"} issho={@issho[block]} user={@user} />
     </.form>
     """
   end

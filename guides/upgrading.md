@@ -13,6 +13,10 @@ block of a page. An editor that is not shared needs nothing.
 | `{:issho, "~> 0.2"}` | `{:issho, "~> 0.3"}` |
 | an agent's edits appeared at once | it goes to the text, selects as a drag does, holds a moment, and types at a person's pace (`config :kotoba, Kotoba.Issho, pace: 25, travel: true`), when someone sees it (`Issho.Motion`) |
 | no following | the editor's people list follows on a click, and the editor follows the one followed in the room to their caret |
+| `collab={Kotoba.Collab.token(MyApp.Issho, id, user: user, role: :write)}` | `issho={[instance: MyApp.Issho, document: id, can: :write]} user={user}`: the keys of every component (`Issho.Join`) |
+| `token/3`'s `role:`, `people:`, `follow:`, `undo:`, `socket:`, `max_channels:` | the same in `issho`, with `can:` for `role:` |
+| `Kotoba.Collab.document`, `Kotoba.Collab.transact` | `Kotoba.Issho.document/1`, `Kotoba.Issho.change/4` (the old names still work, deprecated) |
+| a change's author, a key | a key, or your actor (`author: current_user`) |
 
 ### Steps
 
@@ -20,7 +24,23 @@ block of a page. An editor that is not shared needs nothing.
 2. **For changes that appear at once**, as in 0.6:
    `config :kotoba, Kotoba.Issho, pace: 0, travel: false` (or Issho's
    `config :issho, Issho.Motion, travel: false` for every component).
-3. **On a page of several blocks**, add Issho's pointers
+3. **Join with `issho`.** Where a LiveView signed credentials, give the
+   editor its options instead:
+
+   ```diff
+   -collab = Kotoba.Collab.token(MyApp.Issho, document.id, user: user, role: :write)
+   -<.kotoba field={@form[:body]} id="body" collab={@collab} />
+   +<.kotoba field={@form[:body]} id="body"
+   +  issho={[instance: MyApp.Issho, document: @document.id, can: :write]}
+   +  user={@current_user} />
+   ```
+
+   `collab` raises with what to write instead, and an unknown `issho` key
+   raises, so nothing is left behind silently.
+4. **Rename** `Kotoba.Collab.document` and `transact/4` to
+   `Kotoba.Issho.document/1` and `change/4`, in your policy and your
+   server code.
+5. **On a page of several blocks**, add Issho's pointers
    (`Issho.Components.pointers/1`): an agent's pointer goes from block to
    block, the page follows the one followed, and a person's motion is the
    app's to say (`motion` on the pointers).

@@ -288,8 +288,8 @@ someone on the canvas's own page, and the other way round.
   work on it with no browser. See Issho's "One document, many places".
 * Give each embed's content an id of the embed's (`embed.id`) and the same
   room: the same canvas can be in a document twice.
-* Give the canvas the same user as the editor (`Kotoba.Collab.token/3`'s
-  `user`): the person is one person in both rooms.
+* Give the canvas the same `user` as the editor: the person is one
+  person in both rooms.
 * Issho's pointers of the document's room (`Issho.Components.pointers/1`)
   leave the canvas to its room, which draws its people there; following
   someone who goes into the canvas follows them on it too.
