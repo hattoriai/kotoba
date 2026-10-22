@@ -339,8 +339,10 @@ defmodule Kotoba.Components do
   # No rendering here: this runs on every render of the form.
   # A shared editor's credentials (Kotoba.Collab, with Issho).
   defp collab_credentials(issho, user) do
-    if Code.ensure_loaded?(Kotoba.Collab),
-      do: apply(Kotoba.Collab, :credentials, [issho, user]),
+    collab = Kotoba.Collab
+
+    if Code.ensure_loaded?(collab),
+      do: collab.credentials(issho, user),
       else:
         raise(
           ArgumentError,

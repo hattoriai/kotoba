@@ -102,6 +102,8 @@ if Code.ensure_loaded?(Issho.Binding) do
 
     use Issho.Binding, engine: Kotoba.Issho.Engine, place: Kotoba.Issho.Place
 
+    alias Kotoba.Collab.Document
+
     @doc """
     What a shared editor's document is, for your policy's `document/2`
     (`Issho.Policy`), the same wherever it opens first.
@@ -147,7 +149,7 @@ if Code.ensure_loaded?(Issho.Binding) do
     end
 
     def change(instance, document_id, operations, opts) when is_list(operations) do
-      opts = Keyword.put_new_lazy(opts, :id, &Kotoba.Collab.Document.random_id/0)
+      opts = Keyword.put_new_lazy(opts, :id, &Document.random_id/0)
       Issho.transact(instance, document_id, operations, opts)
     end
 
