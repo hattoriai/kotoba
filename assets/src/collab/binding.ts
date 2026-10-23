@@ -2,6 +2,29 @@ import type { LexicalNode, PointType, SerializedLexicalNode } from "lexical";
 import type { CollaborationHost } from "../collaboration";
 import { apply, atomLocation, findAtom, children, clone, equal, spans, textAttrs, visibleAtoms, uuid, TEXT_TYPES, type Attrs, type Atom, type Operation, type State, type WireNode } from "./model";
 
+/** The nodes that stay in this browser (protocol.ts): never shared. */
+const LOCAL_TYPES: ReadonlySet<string> = new Set(["kotoba-upload", "kotoba-pending"]);
+
+/**
+ * The children `desired`, with the local nodes of `current` kept after the
+ * node they follow (first when they follow none, last when it is gone).
+ */
+function withLocal(current: LexicalNode[], desired: LexicalNode[]): LexicalNode[] {
+  const result = [...desired];
+  let previous: string | null = null;
+  for (const child of current) {
+    if (!LOCAL_TYPES.has(child.getType())) {
+      previous = child.getKey();
+      continue;
+    }
+    const index = previous === null ? 0 : result.findIndex(node => node.getKey() === previous) + 1;
+    if (previous !== null && index === 0) result.push(child);
+    else result.splice(index, 0, child);
+    previous = child.getKey();
+  }
+  return result;
+}
+
 export const COLLAB_TAG = "kotoba-collab";
 interface NodeRef { id: string; atoms?: string[] }
 export interface Anchor { node: string; before: string | null; offset?: number }
@@ -138,7 +161,7 @@ export class Binding {
     delete data.children;
     const view: ViewNode = { id: persistent, data, element: this.host.api.lexical.$isElementNode(node), key: node.getKey(), children: [] };
     if (!this.host.api.lexical.$isElementNode(node)) return view;
-    const list = node.getChildren().filter(child => child.getType() !== "kotoba-upload");
+    const list = node.getChildren().filter(child => !LOCAL_TYPES.has(child.getType()));
     for (let index = 0; index < list.length; index++) {
       const child = list[index];
       if (!TEXT_TYPES.has(child.getType())) { view.children.push(this.readElement(child, used)); continue; }
@@ -311,10 +334,11 @@ export class Binding {
               }
             } else desired.push(reconcile(child));
           }
-          // An upload marker is local and stays attached until its owner completes it.
-          const markers = node.getChildren().filter(child => child.getType() === "kotoba-upload");
+          // An upload marker or a pending suggestion is local: it stays, after
+          // the node it was after, until its owner completes it.
           const current = node.getChildren();
-          if (current.length !== desired.length + markers.length || desired.some((child, index) => current[index]?.getKey() !== child.getKey())) node.splice(0, node.getChildrenSize(), [...desired, ...markers]);
+          const next = withLocal(current, desired);
+          if (current.length !== next.length || next.some((child, index) => current[index]?.getKey() !== child.getKey())) node.splice(0, node.getChildrenSize(), next);
         }
         return node;
       };

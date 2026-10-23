@@ -61,8 +61,8 @@
 //   * `focus` `{}`
 //   * `kotoba:prompt_results` `{prompt, query?, items: [{id, label, hint?, text?, attrs?}], error?}`
 //   * `kotoba:stream` `{ref, op, ...}` - a suggestion: `op` is "start"
-//     (with `at`, `format` and `label`), "chunk" (with `text`), "end" or
-//     "cancel".
+//     (with `at`, `format`, `label` and `display`), "chunk" (with `text`),
+//     "end" or "cancel".
 //
 // A change of `data-readonly` in a LiveView patch also sets the read-only
 // state, and a change of `data-change` turns the pushes on or off.

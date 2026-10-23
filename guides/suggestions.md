@@ -64,6 +64,32 @@ editor's selection when the stream starts. When that text is no longer in
 the document (the person deleted it, or the server loaded a new
 document), the suggestion goes at the end.
 
+### In the panel, or in the text
+
+`:display` chooses how it shows while it streams:
+
+* `:panel` (the default): in a panel under the editable area, with its
+  status and its Accept and Reject buttons.
+* `:inline`: in the text, where it goes. After the caret, in the line;
+  after the selection it replaces, in the line, the replaced words struck
+  through (in browsers with CSS highlights); in a block below, for
+  `:after` and `:end`. It is tinted until it is accepted, and its status
+  and buttons float under it.
+
+```elixir
+Kotoba.Live.stream_start(socket, "post-body", ref, at: :caret, display: :inline, label: "Continue")
+```
+
+Inline or not, the suggestion is not in the document until the person
+accepts it: the hidden input, `kotoba:change` and the server never have
+half an answer, the undo history has none of its chunks, and in a shared
+editor the others do not see it (their edits around it go on). Accept
+puts it where it was shown, as one undo step; Reject, Escape, or typing
+over it leaves the document as it was. The person can write elsewhere
+meanwhile. A caret or a selection that ends in the middle of a word shows
+the suggestion as a block below its paragraph (the word is not split);
+accepted, it goes at the caret, or in place of the selection.
+
 ### Markdown or plain text
 
 `:format` is `:markdown` (the default) or `:text`.

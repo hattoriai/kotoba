@@ -58,7 +58,7 @@ import { registerGallery } from "./gallery";
 import { AttachmentNode } from "./nodes/attachment";
 import { GalleryNode } from "./nodes/gallery";
 import { registerDecorators } from "./nodes/decorator";
-import { UnknownNode, UploadMarkerNode } from "./nodes/internal";
+import { PendingNode, UnknownNode, UploadMarkerNode } from "./nodes/internal";
 import { FootnoteDefinitionNode, FootnoteReferenceNode } from "./nodes/footnote";
 import { $isImageNode, ImageNode } from "./nodes/image";
 import { MentionNode } from "./nodes/mention";
@@ -242,7 +242,7 @@ export function builtInExtensions(features: ReadonlySet<Feature>, options: Featu
 
   const core: KotobaExtension = {
     name: "core",
-    nodes: [UnknownNode],
+    nodes: [UnknownNode, PendingNode],
     markdown: MARKDOWN_TRANSFORMERS.filter((transformer) => keepsTransformer(transformer, features)),
     register: (editor) =>
       mergeRegister(

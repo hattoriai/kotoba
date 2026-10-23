@@ -1,9 +1,10 @@
 // Nodes that only the editor uses. The document on the wire never has them:
-// `toEnvelope` drops upload markers and writes unknown nodes back as the JSON
-// they were read from.
+// `toEnvelope` drops upload markers and pending suggestions, and writes
+// unknown nodes back as the JSON they were read from.
 
 import {
   $applyNodeReplacement,
+  type LexicalEditor,
   type LexicalNode,
   type NodeKey,
   type SerializedLexicalNode,
@@ -11,7 +12,7 @@ import {
   type Spread,
 } from "lexical";
 
-import { UNKNOWN_TYPE, UPLOAD_MARKER_TYPE, type JSONNode } from "../protocol";
+import { PENDING_TYPE, UNKNOWN_TYPE, UPLOAD_MARKER_TYPE, type JSONNode } from "../protocol";
 import { KotobaDecoratorNode, element } from "./decorator";
 
 type SerializedUploadMarkerNode = Spread<{ name: string }, SerializedLexicalNode>;
@@ -62,6 +63,87 @@ export function $createUploadMarkerNode(name: string): UploadMarkerNode {
 
 export function $isUploadMarkerNode(node: LexicalNode | null | undefined): node is UploadMarkerNode {
   return node instanceof UploadMarkerNode;
+}
+
+type SerializedPendingNode = Spread<{ ref: string; inline: boolean }, SerializedLexicalNode>;
+
+/** The element that a pending suggestion shows, for each editor (see suggestions.ts). */
+const PENDING_CONTENT = new WeakMap<LexicalEditor, HTMLElement>();
+
+/** Sets the element that the pending suggestion of `editor` shows, or `null` for none. */
+export function setPendingContent(editor: LexicalEditor, content: HTMLElement | null): void {
+  if (content === null) PENDING_CONTENT.delete(editor);
+  else PENDING_CONTENT.set(editor, content);
+}
+
+/**
+ * The place of a suggestion that streams in the text (`display: "inline"`):
+ * it shows the suggestion where it goes, as a part of the text (inline) or
+ * a block. It is not saved, not shared and not copied, and not in the undo
+ * history (see suggestions.ts).
+ */
+export class PendingNode extends KotobaDecoratorNode {
+  __ref: string;
+  __inline: boolean;
+
+  static getType(): string {
+    return PENDING_TYPE;
+  }
+
+  static clone(node: PendingNode): PendingNode {
+    return new PendingNode(node.__ref, node.__inline, node.__key);
+  }
+
+  static importJSON(json: SerializedPartial<SerializedPendingNode>): PendingNode {
+    return $createPendingNode(String(json.ref ?? ""), json.inline === true);
+  }
+
+  constructor(ref: string, inline: boolean, key?: NodeKey) {
+    super(key);
+    this.__ref = ref;
+    this.__inline = inline;
+  }
+
+  exportJSON(): SerializedPendingNode {
+    const latest = this.getLatest();
+    return { type: PENDING_TYPE, version: 1, ref: latest.__ref, inline: latest.__inline };
+  }
+
+  getRef(): string {
+    return this.getLatest().__ref;
+  }
+
+  isInline(): boolean {
+    return this.__inline;
+  }
+
+  isKeyboardSelectable(): boolean {
+    return false;
+  }
+
+  excludeFromCopy(): boolean {
+    return true;
+  }
+
+  className(): string {
+    return this.__inline ? "kotoba-pending kotoba-pending-inline" : "kotoba-pending";
+  }
+
+  decorate(editor: LexicalEditor): HTMLElement {
+    return PENDING_CONTENT.get(editor) ?? this.render();
+  }
+
+  render(): HTMLElement {
+    return element("span", "kotoba-pending-empty");
+  }
+}
+
+export function $createPendingNode(ref: string, inline: boolean): PendingNode {
+  return $applyNodeReplacement(new PendingNode(ref, inline));
+}
+
+export function $isPendingNode(node: LexicalNode | null | undefined): node is PendingNode {
+  return node instanceof PendingNode;
 }
 
 type SerializedUnknownNode = Spread<{ raw: JSONNode; inline: boolean }, SerializedLexicalNode>;

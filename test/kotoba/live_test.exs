@@ -298,6 +298,10 @@ defmodule Kotoba.LiveTest do
       )
 
       refute Map.has_key?(start, :label)
+      refute Map.has_key?(start, :display)
+
+      send(view.pid, {:stream, :stream_start, ["r3", [display: :inline]]})
+      assert_push_event(view, "kotoba:stream", %{ref: "r3", op: "start", display: "inline"})
 
       send(view.pid, {:stream, :stream_chunk, ["r2", "Hello **wo"]})
       assert_push_event(view, "kotoba:stream", %{ref: "r2", op: "chunk", text: "Hello **wo"})
@@ -309,7 +313,7 @@ defmodule Kotoba.LiveTest do
       assert_push_event(view, "kotoba:stream", %{ref: "r1", op: "cancel"})
     end
 
-    test "refuse a target or a format that is not one" do
+    test "refuse a target, a format or a display that is not one" do
       socket = %Phoenix.LiveView.Socket{}
 
       assert_raise ArgumentError, ~r/:at must be one of/, fn ->
@@ -318,6 +322,10 @@ defmodule Kotoba.LiveTest do
 
       assert_raise ArgumentError, ~r/:format must be one of/, fn ->
         Kotoba.Live.stream_start(socket, @editor, "r", format: :html)
+      end
+
+      assert_raise ArgumentError, ~r/:display must be :panel or :inline/, fn ->
+        Kotoba.Live.stream_start(socket, @editor, "r", display: :overlay)
       end
     end
 

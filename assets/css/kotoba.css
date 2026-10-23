@@ -991,6 +991,57 @@ div.kotoba-unknown {
   box-shadow: var(--kotoba-focus-ring, 0 0 0 2px var(--kotoba-accent));
 }
 
+/* An inline suggestion (display: :inline): in the text where it goes,
+   tinted until it is accepted, with its status and buttons under it. */
+.kotoba-pending {
+  margin: var(--kotoba-space) 0;
+  border-left: 3px solid var(--kotoba-accent);
+  border-radius: calc(var(--kotoba-radius) - 2px);
+  background: var(--kotoba-selection);
+}
+
+.kotoba-pending-inline {
+  display: inline;
+  margin: 0;
+  border-left: 0;
+}
+
+.kotoba-pending .kotoba-suggestion-content {
+  max-height: none;
+  overflow: visible;
+  padding: calc(var(--kotoba-space) / 2) var(--kotoba-space);
+}
+
+.kotoba-pending-inline .kotoba-suggestion-content,
+.kotoba-pending-inline .kotoba-suggestion-content > * {
+  display: inline;
+  margin: 0;
+  padding: 0;
+}
+
+.kotoba-suggestion-floating {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  margin: 0;
+  box-shadow: var(--kotoba-shadow);
+}
+
+.kotoba-suggestion-floating .kotoba-suggestion-header {
+  border-bottom: 0;
+}
+
+.kotoba-suggestion-floating .kotoba-suggestion-actions {
+  border-top: 0;
+}
+
+/* The text that an inline suggestion replaces. */
+::highlight(kotoba-replaced) {
+  color: var(--kotoba-muted);
+  text-decoration: line-through;
+}
+
 /* The Assist menu, under the toolbar. */
 .kotoba-assist-menu {
   position: absolute;

@@ -264,9 +264,10 @@ defmodule Kotoba.Live do
   [Suggestions](suggestions.md) guide.
 
   The text is not in the document while it streams: the editor shows it in
-  a panel, and the person accepts it (it goes into the document, as one
-  undo step) or rejects it. A new stream in the same editor replaces the
-  open suggestion.
+  a panel, or in the text where it goes (`display: :inline`), and the
+  person accepts it (it goes into the document, as one undo step) or
+  rejects it. A new stream in the same editor replaces the open
+  suggestion.
 
   `ref` is the ref of the `kotoba:assist` event that asked for it, or a new
   one from `stream_ref/0`.
@@ -281,6 +282,12 @@ defmodule Kotoba.Live do
     * `:format` - `:markdown` (the default) or `:text`. Markdown has only
       the formats and blocks of the editor's features.
     * `:label` - the name of the suggestion, for example `"Rewrite"`.
+    * `:display` - `:panel` (the default): the text streams in a panel under
+      the editable area; `:inline`: it streams in the text, where it goes
+      (after the caret, after the selection it replaces, or in a block
+      below), marked as a suggestion, with its status and buttons under
+      it. Inline or not, it is not in the saved document, nor seen by the
+      others in a shared editor, until the person accepts it.
   """
   @spec stream_start(Socket.t(), String.t(), String.t(), keyword()) :: Socket.t()
   def stream_start(socket, id, ref, opts \\ []) when is_binary(id) and is_binary(ref) do
@@ -301,7 +308,17 @@ defmodule Kotoba.Live do
           "stream :format must be one of #{inspect(@stream_formats)}, got: #{inspect(format)}"
         )
 
+    display = Keyword.get(opts, :display, :panel)
+
+    unless display in [:panel, :inline],
+      do:
+        raise(
+          ArgumentError,
+          "stream :display must be :panel or :inline, got: #{inspect(display)}"
+        )
+
     fields = %{ref: ref, op: "start", at: Atom.to_string(at), format: Atom.to_string(format)}
+    fields = if display == :inline, do: Map.put(fields, :display, "inline"), else: fields
     fields = if label = opts[:label], do: Map.put(fields, :label, to_string(label)), else: fields
     push_event(socket, "kotoba:stream", payload(id, fields))
   end
