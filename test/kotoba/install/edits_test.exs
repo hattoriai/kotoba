@@ -198,20 +198,22 @@ defmodule Kotoba.Install.EditsTest do
 
       assert new =~
                """
-               # Kotoba stores the files of the editor's uploads with this adapter.
-               # Give it a directory in the :prod block of config/runtime.exs, an
-               # absolute path outside the release:
+               # Kotoba keeps the files of the editor's uploads with Storehouse
+               # ({:storehouse, "~> 0.1"} in your deps), on the local disk here. Give
+               # it a directory in the :prod block of config/runtime.exs, an absolute
+               # path outside the release:
                #
                #     if config_env() == :prod do
-               #       config :kotoba, Kotoba.Storage.Local,
-               #         root: System.get_env("KOTOBA_UPLOADS", "/var/lib/my_app/uploads"),
-               #         url_prefix: "/uploads/kotoba"
+               #       config :storehouse, Storehouse.Local,
+               #         root: System.get_env("UPLOADS", "/var/lib/my_app/uploads")
                #     end
                #
                # and one for development in config/dev.exs:
                #
-               #     config :kotoba, Kotoba.Storage.Local, root: Path.expand("../tmp/uploads", __DIR__)
-               config :kotoba, storage: Kotoba.Storage.Local
+               #     config :storehouse, Storehouse.Local, root: Path.expand("../tmp/uploads", __DIR__)
+               #
+               # For S3 (and R2, MinIO, LocalStack): https://hexdocs.pm/storehouse/stores.html
+               config :storehouse, adapter: Storehouse.Local
 
                # Import environment specific config. This must remain at the end
                # of this file so it overrides the configuration above.
@@ -224,11 +226,12 @@ defmodule Kotoba.Install.EditsTest do
 
     test "appends the config when there is no import_config" do
       assert {:changed, new} = Edits.config("import Config\n", :my_app)
-      assert new =~ ~r/\Aimport Config\n\n# Kotoba stores/
-      assert String.ends_with?(new, "config :kotoba, storage: Kotoba.Storage.Local\n")
+      assert new =~ ~r/\Aimport Config\n\n# Kotoba keeps/
+      assert String.ends_with?(new, "config :storehouse, adapter: Storehouse.Local\n")
     end
 
     test "leaves a storage config that is there" do
+      assert Edits.config("config :storehouse, adapter: Storehouse.S3\n") == :unchanged
       assert Edits.config("config :kotoba, storage: MyApp.S3\n") == :unchanged
 
       assert Edits.config("config :kotoba,\n  nodes: [MyApp.Pointer],\n  storage: MyApp.S3\n") ==

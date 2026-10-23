@@ -68,7 +68,10 @@ defmodule Kotoba.MixProject do
       {:phoenix_html, "~> 4.1"},
       {:phoenix_live_reload, "~> 1.6", only: :dev},
       {:phoenix_live_view, if(@oldest, do: "~> 1.1.0", else: "~> 1.1")},
-      {:stream_data, "~> 1.1", only: :test}
+      {:stream_data, "~> 1.1", only: :test},
+      # Uploads: each file checked, stored and served. An editor without
+      # attachments never needs it.
+      {:storehouse, "~> 0.1", optional: true}
     ]
   end
 

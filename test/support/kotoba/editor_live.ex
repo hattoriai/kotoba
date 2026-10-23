@@ -51,7 +51,7 @@ defmodule KotobaTest.EditorLive do
   defp storage("failing"), do: KotobaTest.FailingStorage
   defp storage("unsafe"), do: KotobaTest.UnsafeStorage
   defp storage("broken"), do: KotobaTest.BrokenStorage
-  defp storage(_other), do: Kotoba.Storage.Local
+  defp storage(_other), do: Storehouse.Local
 
   # ?preview=ok gives each upload a preview URL, ?preview=unsafe an unsafe
   # one, ?preview=raise an exception.
@@ -150,8 +150,8 @@ defmodule KotobaTest.EditorLive do
 end
 
 defmodule KotobaTest.FailingStorage do
-  @moduledoc "A `Kotoba.Storage` adapter that fails every `put/3`."
-  @behaviour Kotoba.Storage
+  @moduledoc "A store (`Storehouse.Adapter`) that fails every `put/3`."
+  @behaviour Storehouse.Adapter
 
   @impl true
   def put(_key, _path, _meta), do: {:error, :disk_full}
@@ -164,8 +164,8 @@ defmodule KotobaTest.FailingStorage do
 end
 
 defmodule KotobaTest.UnsafeStorage do
-  @moduledoc "A `Kotoba.Storage` adapter that returns a URL that is not a safe link."
-  @behaviour Kotoba.Storage
+  @moduledoc "A store (`Storehouse.Adapter`) that returns a URL that is not a safe link."
+  @behaviour Storehouse.Adapter
 
   @impl true
   def put(_key, _path, _meta), do: {:ok, "javascript:alert(1)"}
@@ -178,8 +178,8 @@ defmodule KotobaTest.UnsafeStorage do
 end
 
 defmodule KotobaTest.BrokenStorage do
-  @moduledoc "A `Kotoba.Storage` adapter whose `put/3` breaks its contract."
-  @behaviour Kotoba.Storage
+  @moduledoc "A store (`Storehouse.Adapter`) whose `put/3` breaks its contract."
+  @behaviour Storehouse.Adapter
 
   @impl true
   def put(_key, _path, _meta), do: {:ok, nil}

@@ -85,16 +85,16 @@ a script on your origin:
   a PDF or a video (`Kotoba.Attachments.inline?/1`).
 * `Content-Security-Policy: default-src 'none'; sandbox`.
 
-`Kotoba.Storage.Local.Plug` sends all of these headers, and
+`Storehouse.Local.Plug` sends all of these headers, and
 `Cache-Control: private`. Do not serve the upload directory with
 `Plug.Static`: it takes the type from the extension and sends none of
 these headers.
 
-An adapter for S3 or another store must set the content type from
-`meta.content_type` and `Content-Disposition: attachment` for each type
-that `Kotoba.Attachments.inline?/1` refuses. Without the disposition, the
-store serves an uploaded HTML file inline, as a page on the store's
-origin. The `Kotoba.Storage` docs have an example.
+A store must set the content type from `meta.content_type` and
+`Content-Disposition: attachment` for each type that
+`Kotoba.Attachments.inline?/1` refuses: `Storehouse.S3` does. Without the
+disposition, the store serves an uploaded HTML file inline, as a page on
+the store's origin. A store of your own must do the same.
 
 Serve private files through a path in your app that checks access (for
 example a controller that redirects to a short-lived signed URL). The URL

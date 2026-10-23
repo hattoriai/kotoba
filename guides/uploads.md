@@ -2,9 +2,23 @@
 
 The editor takes files from its "Attach a file" button, from a drop and
 from a paste. It gives them to a normal LiveView upload. The LiveView
-stores each finished file through a `Kotoba.Storage` adapter, and the
-editor puts an attachment node (an image or a file link) in the place of
-the file's marker.
+checks and stores each finished file with
+[Storehouse](https://hexdocs.pm/storehouse), and the editor puts an
+attachment node (an image or a file link) in the place of the file's
+marker.
+
+Storehouse is an optional dependency of Kotoba: an editor with uploads
+needs it in your deps.
+
+```elixir
+{:storehouse, "~> 0.1"}
+```
+
+The files go to Storehouse's store (`config :storehouse, adapter: ...`):
+the local disk by default, S3 and the stores that speak its API, or one
+of your own. An app that keeps other files with Storehouse (an avatar, a
+document's attachments, a canvas's images) keeps Kotoba's in the same
+store.
 
 ## The LiveView
 
@@ -75,23 +89,22 @@ client's file name. So a key never ends in `.html` or `.svg`. The file
 name stays in the node for display, without control characters and
 without bidirectional format characters.
 
-## The local adapter
+## The local disk
 
-`Kotoba.Storage.Local` keeps the files in a directory:
+`Storehouse.Local` keeps the files in a directory:
 
 ```elixir
 # config/config.exs
-config :kotoba, storage: Kotoba.Storage.Local
+config :storehouse, adapter: Storehouse.Local
 
 # config/runtime.exs
 if config_env() == :prod do
-  config :kotoba, Kotoba.Storage.Local,
-    root: System.get_env("KOTOBA_UPLOADS", "/var/lib/my_app/uploads"),
-    url_prefix: "/uploads/kotoba"
+  config :storehouse, Storehouse.Local,
+    root: System.get_env("UPLOADS", "/var/lib/my_app/uploads")
 end
 
 # config/dev.exs
-config :kotoba, Kotoba.Storage.Local, root: Path.expand("../tmp/uploads", __DIR__)
+config :storehouse, Storehouse.Local, root: Path.expand("../tmp/uploads", __DIR__)
 ```
 
 In a release, give an absolute `root` outside the release directory, in
@@ -101,17 +114,17 @@ next deploy. Keep the production root inside the `:prod` block:
 `config/runtime.exs` runs in every environment, after `config/dev.exs`,
 so outside the block it would replace the development root.
 
-Serve the files with `Kotoba.Storage.Local.Plug`, in the endpoint before
+Serve the files with `Storehouse.Local.Plug`, in the endpoint before
 the router:
 
 ```elixir
-plug Kotoba.Storage.Local.Plug
+plug Storehouse.Local.Plug
 ```
 
 or in the router:
 
 ```elixir
-forward "/uploads/kotoba", Kotoba.Storage.Local.Plug, at: "/"
+forward "/uploads", Storehouse.Local.Plug, at: "/"
 ```
 
 ### Files behind a login, per tenant
@@ -124,15 +137,15 @@ path of that route:
 
 ```elixir
 # config/config.exs
-config :kotoba, Kotoba.Storage.Local, url_prefix: "/"
+config :storehouse, Storehouse.Local, url_prefix: "/"
 
 # The LiveView: keys like "acme/uploads/2026/09/<uuid>-name.png"
 Kotoba.Live.consume_uploads(socket, :attachments, "post-body",
-  key: &("#{slug}/uploads/" <> Kotoba.Storage.key(&1.client_name, &2))
+  key: &("#{slug}/uploads/" <> Storehouse.key(&1.client_name, &2))
 )
 
 # The router, in the scope that requires a member of :org_slug
-get "/uploads/*key", Kotoba.Storage.Local.Plug, [at: "/"], alias: false
+get "/uploads/*key", Storehouse.Local.Plug, [at: "/"], alias: false
 ```
 
 The URL of a file is then its key, the router lets only the account's
@@ -144,20 +157,33 @@ The plug serves only `GET` and `HEAD`, with safe headers. See the
 [Security](security.md) guide. Do not serve the directory with
 `Plug.Static`: it sends none of these headers.
 
+Storehouse can also keep files private, behind signed URLs that expire,
+with a lasting URL of your app that checks the person
+(`Storehouse.Redirect`): see its
+[Private files](https://hexdocs.pm/storehouse/private_files.html) guide.
+
 ## Another store
 
-Write a module with the three callbacks of `Kotoba.Storage` (`put/3`,
-`url/1` and `delete/1`) and name it in the config:
+S3, and the stores that speak its API (Cloudflare R2, MinIO, Tigris,
+LocalStack in development), are `Storehouse.S3`:
 
 ```elixir
-config :kotoba, storage: MyApp.KotobaStorage
+config :storehouse, adapter: Storehouse.S3
+
+config :storehouse, Storehouse.S3,
+  bucket: "my-app-uploads",
+  region: "eu-west-1",
+  access_key_id: System.fetch_env!("AWS_ACCESS_KEY_ID"),
+  secret_access_key: System.fetch_env!("AWS_SECRET_ACCESS_KEY")
 ```
 
-or give it per call: `consume_uploads(socket, :attachments, "post-body",
-storage: MyApp.KotobaStorage)`. The `Kotoba.Storage` docs have a full
-example for S3.
+Storehouse's [Stores](https://hexdocs.pm/storehouse/stores.html) guide has
+the rest. A store of your own is a module with the callbacks of
+`Storehouse.Adapter` (`put/3`, `url/1` and `delete/1`), named in the same
+config, or given to Kotoba alone, per call:
+`consume_uploads(socket, :attachments, "post-body", storage: MyApp.Store)`.
 
-Two rules for an adapter:
+Two rules for a store of your own:
 
 * Store each file with its checked content type (`meta.content_type`), and
   with `Content-Disposition: attachment` for every type that
@@ -320,9 +346,9 @@ The editor and the rendered page load the file from its URL, so:
 * **Signed URLs**: a URL that expires breaks the preview of a stored
   document. Give a path in your app that redirects to a fresh signed URL.
 * **Range requests**: a video needs them to seek, and Safari to play at
-  all. `Kotoba.Storage.Local.Plug` answers `Range` with `206`; S3 and most
+  all. `Storehouse.Local.Plug` answers `Range` with `206`; S3 and most
   stores do too. A controller that sends a file with `send_file/3` does
-  not: use `Plug.Static`'s range handling or `Kotoba.Storage.Local.Plug`.
+  not: use `Plug.Static`'s range handling or `Storehouse.Local.Plug`.
 * **Headers**: `Content-Type` from the checked type, and
   `Content-Disposition: inline` (`Kotoba.Attachments.inline?/1` is `true`
   for PDF, MP4 and WebM). `Content-Security-Policy: default-src 'none';
@@ -335,7 +361,7 @@ The editor and the rendered page load the file from its URL, so:
 
 A seed, an import or a file the app makes itself becomes an attachment
 the same way, without a browser: `Kotoba.Attachments.store/2` checks the
-file, stores it with the storage adapter and returns its node, as an
+file, stores it with Storehouse and returns its node, as an
 upload makes it. Put it in a document with the `:attachments` option of
 `Kotoba.Content.from_markdown/2`: a paragraph of only
 `![alt](attachment:name)` images becomes that attachment, or a gallery of
@@ -367,12 +393,30 @@ The file at the path stays where it is; the storage has its copy. The
 options are those of an upload: `:storage`, `:key` and `:preview`, and
 `:name` and `:content_type` in place of the browser's.
 
-## Direct uploads are not supported
+## Direct uploads are not supported yet
 
 LiveView's `external:` uploads (the browser sends the file straight to a
-cloud store) are not supported. The file always comes to the LiveView
-first, and the adapter then sends it on. Kotoba must read the bytes to
-check the content type.
+cloud store) are not supported by the editor yet, though Storehouse has
+them. The file always comes to the LiveView first, Storehouse checks its
+bytes, and then sends it on to the store.
+
+## From Kotoba 0.7
+
+Kotoba 0.7 kept the files itself, with `Kotoba.Storage.Local`. That store,
+its plug, and `config :kotoba, storage:` still work, with deprecation
+warnings, and are removed in Kotoba 1.0. To move:
+
+1. Add `{:storehouse, "~> 0.1"}` to your deps.
+2. Replace `config :kotoba, Kotoba.Storage.Local, ...` with
+   `config :storehouse, Storehouse.Local, ...`, with the same `root`, and
+   `url_prefix: "/uploads/kotoba"` (the old default, unless you gave
+   another), so that the URLs in your documents stay valid.
+3. Remove `config :kotoba, storage: Kotoba.Storage.Local`; a store of your
+   own goes in `config :storehouse, adapter: MyApp.Store`, and its
+   `@behaviour Kotoba.Storage` becomes `@behaviour Storehouse.Adapter`
+   (the callbacks are the same).
+4. Replace `Kotoba.Storage.Local.Plug` with `Storehouse.Local.Plug`, and
+   `Kotoba.Storage`'s `key/2` with `Storehouse.key/2`.
 
 ## Deleted attachments
 

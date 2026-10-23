@@ -35,7 +35,8 @@ The installer changes three files, and prints what it changed:
   `Kotoba` in the `hooks` of the `LiveSocket`.
 * `assets/css/app.css`: it adds the Kotoba style sheet, and the Sumi theme
   import as a comment.
-* `config/config.exs`: it adds `config :kotoba, storage: Kotoba.Storage.Local`.
+* `config/config.exs`: it adds `config :storehouse, adapter: Storehouse.Local`,
+  the store of uploads.
 
 It does not add what a file already has, so you can run it again. When it
 cannot edit a file safely, it changes nothing in that file and prints the
@@ -71,7 +72,7 @@ installer puts them there):
 
 ```elixir
 # config/config.exs
-config :kotoba, storage: Kotoba.Storage.Local
+config :storehouse, adapter: Storehouse.Local
 ```
 
 ### The limits of the installer
@@ -130,16 +131,23 @@ it, so run that task in the Kotoba directory before the app's
 
 ## 4. Give the uploads a directory
 
-The local storage adapter needs a configured root directory. For
-production, give an absolute path outside the release, in the `:prod`
-block of `config/runtime.exs`:
+Uploads keep their files with [Storehouse](https://hexdocs.pm/storehouse).
+Add it to your deps in `mix.exs` (an editor without uploads never needs
+it):
+
+```elixir
+{:storehouse, "~> 0.1"}
+```
+
+Its local store needs a configured root directory. For production, give
+an absolute path outside the release, in the `:prod` block of
+`config/runtime.exs`:
 
 ```elixir
 # config/runtime.exs
 if config_env() == :prod do
-  config :kotoba, Kotoba.Storage.Local,
-    root: System.get_env("KOTOBA_UPLOADS", "/var/lib/my_app/uploads"),
-    url_prefix: "/uploads/kotoba"
+  config :storehouse, Storehouse.Local,
+    root: System.get_env("UPLOADS", "/var/lib/my_app/uploads")
 end
 ```
 
@@ -147,26 +155,26 @@ For development, in `config/dev.exs`:
 
 ```elixir
 # config/dev.exs
-config :kotoba, Kotoba.Storage.Local, root: Path.expand("../tmp/uploads", __DIR__)
+config :storehouse, Storehouse.Local, root: Path.expand("../tmp/uploads", __DIR__)
 ```
 
 And for the tests, in `config/test.exs`, when a test uploads a file:
 
 ```elixir
 # config/test.exs
-config :kotoba, Kotoba.Storage.Local, root: Path.expand("../tmp/test_uploads", __DIR__)
+config :storehouse, Storehouse.Local, root: Path.expand("../tmp/test_uploads", __DIR__)
 ```
 
 `config/runtime.exs` runs in every environment, after `config/dev.exs`.
 Outside the `:prod` block, its root would also replace the development
-root, and uploads in development would fail. The adapter raises when it
+root, and uploads in development would fail. The store raises when it
 stores a file with no root configured.
 
-Serve the files with `Kotoba.Storage.Local.Plug`, in the endpoint before
+Serve the files with `Storehouse.Local.Plug`, in the endpoint before
 the router:
 
 ```elixir
-plug Kotoba.Storage.Local.Plug
+plug Storehouse.Local.Plug
 ```
 
 Uploads are optional. The [Uploads](uploads.md) guide has the full setup.

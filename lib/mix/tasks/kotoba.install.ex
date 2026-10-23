@@ -20,16 +20,17 @@ defmodule Mix.Tasks.Kotoba.Install do
       an umbrella child or with `MIX_DEPS_PATH`. For a path dependency
       (`{:kotoba, path: "../kotoba"}`), which Mix does not copy into
       `deps/`, the imports point at the dependency's directory instead.
-    * `config/config.exs` - adds `config :kotoba, storage: Kotoba.Storage.Local`,
+    * `config/config.exs` - adds `config :storehouse, adapter: Storehouse.Local`
+      (the store of uploads, with [Storehouse](https://hexdocs.pm/storehouse)),
       with a comment that shows the directory config for
       `config/runtime.exs`.
 
-  Then it prints the `Kotoba.Storage.Local` directory config for the
-  `:prod` block of `config/runtime.exs` and for `config/dev.exs` (the adapter needs a `:root`
+  Then it prints the `Storehouse.Local` directory config for the
+  `:prod` block of `config/runtime.exs` and for `config/dev.exs` (the store needs a `:root`
   before the first upload), the esbuild note (the app's esbuild must resolve `kotoba`
   through `NODE_PATH`: from `deps/`, or, for a path dependency, from the
-  directory that holds it) and the router line for
-  `Kotoba.Storage.Local.Plug`.
+  directory that holds it), the line for `Storehouse.Local.Plug`, and the
+  `{:storehouse, "~> 0.1"}` dependency that uploads need.
 
   The task is idempotent: it does not add what a file already has, and when
   there is nothing to add it says so.
@@ -141,31 +142,36 @@ defmodule Mix.Tasks.Kotoba.Install do
 
     #{esbuild_note(config_source, package, deps_path)}
 
-    Kotoba.Storage.Local needs a directory for the files. Give it one in
+    Uploads keep their files with Storehouse. Add it to your deps in
+    mix.exs, then run mix deps.get:
+
+        {:storehouse, "~> 0.1"}
+
+    Storehouse.Local needs a directory for the files. Give it one in
     the :prod block of config/runtime.exs, an absolute path outside the
     release (runtime.exs runs in every environment, so outside that block
     it would also replace the development directory):
 
         if config_env() == :prod do
-          config :kotoba, Kotoba.Storage.Local,
-            root: System.get_env("KOTOBA_UPLOADS", "/var/lib/#{app}/uploads"),
-            url_prefix: "/uploads/kotoba"
+          config :storehouse, Storehouse.Local,
+            root: System.get_env("UPLOADS", "/var/lib/#{app}/uploads")
         end
 
     and one for development in config/dev.exs:
 
-        config :kotoba, Kotoba.Storage.Local, root: Path.expand("../tmp/uploads", __DIR__)
+        config :storehouse, Storehouse.Local, root: Path.expand("../tmp/uploads", __DIR__)
 
     For the Sumi theme, remove the comment marks around the kotoba-sumi.css
     import in assets/css/app.css.
 
-    Serve the uploaded files with Kotoba.Storage.Local.Plug. In your router:
+    Serve the uploaded files with Storehouse.Local.Plug, in your endpoint,
+    before the router:
 
-        forward "/uploads/kotoba", Kotoba.Storage.Local.Plug, at: "/"
+        plug Storehouse.Local.Plug
 
-    or in your endpoint, before the router:
+    or in your router:
 
-        plug Kotoba.Storage.Local.Plug
+        forward "/uploads", Storehouse.Local.Plug, at: "/"
     """)
   end
 

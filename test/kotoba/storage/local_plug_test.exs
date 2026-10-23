@@ -1,6 +1,7 @@
 defmodule Kotoba.Storage.Local.PlugTest do
   use ExUnit.Case, async: true
 
+  import ExUnit.CaptureIO
   import Plug.Test
   import Plug.Conn
 
@@ -20,7 +21,19 @@ defmodule Kotoba.Storage.Local.PlugTest do
     File.write!(Path.join(Path.dirname(root), "secret.txt"), "secret")
     on_exit(fn -> File.rm_rf!(base) end)
 
-    %{root: root, opts: FilePlug.init(at: "/files", root: root, max_age: 60)}
+    %{root: root, opts: init(at: "/files", root: root, max_age: 60)}
+  end
+
+  # The plug is deprecated: its init warns, when the endpoint is compiled.
+  defp init(opts) do
+    {opts, _warning} = with_io(:stderr, fn -> FilePlug.init(opts) end)
+    opts
+  end
+
+  test "is deprecated, for Storehouse.Local.Plug", %{root: root} do
+    warning = capture_io(:stderr, fn -> FilePlug.init(root: root) end)
+    assert warning =~ "Kotoba.Storage.Local.Plug is deprecated, and removed in Kotoba 1.0"
+    assert warning =~ "Storehouse.Local.Plug"
   end
 
   defp call(method \\ :get, path, opts), do: conn(method, path) |> FilePlug.call(opts)
@@ -141,7 +154,7 @@ defmodule Kotoba.Storage.Local.PlugTest do
     File.ln_s!(root, link)
     on_exit(fn -> File.rm(link) end)
 
-    opts = FilePlug.init(at: "/files", root: link)
+    opts = init(at: "/files", root: link)
     assert call("/files/2026/09/cat.png", opts).status == 200
   end
 
@@ -157,7 +170,7 @@ defmodule Kotoba.Storage.Local.PlugTest do
   end
 
   test "with at: \"/\", serves the whole path (for a router forward)", %{root: root} do
-    conn = call("/2026/09/cat.png", FilePlug.init(at: "/", root: root))
+    conn = call("/2026/09/cat.png", init(at: "/", root: root))
     assert conn.status == 200
     assert get_resp_header(conn, "cache-control") == ["private, max-age=3600"]
   end
