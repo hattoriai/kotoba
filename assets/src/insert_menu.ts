@@ -15,7 +15,10 @@
 //   * "upload" and "embed": the file chooser, the app's embed picker;
 //   * an extension's insert item (`<extension>:<command>`): its `run`;
 //   * an item with a `node`: that node (a block below, or in place of an
-//     empty paragraph; an inline node at the caret), and with `text`, text.
+//     empty paragraph; an inline node at the caret), and with `text`, text;
+//   * an item with `assist`: asks the app for a suggestion of that action,
+//     as the Assist menu does (`kotoba:assist`, with the text of the block
+//     as `block`); the app streams it, and it goes where the caret was.
 //
 // An item of a feature that the editor does not have, or a node of a type
 // that it does not have, is left out of the menu.
@@ -76,7 +79,15 @@ export interface InsertMenuOptions {
   embeds: boolean;
   openUpload(): void;
   openEmbed(): void;
+  /** Asks the app for a suggestion (see suggestions.ts), or `null` for an editor without assist. */
+  assist: ((action: string, detail: Record<string, unknown>) => void) | null;
   announce(message: string): void;
+}
+
+/** What an item did: what the live region says, and what runs once its update is done. */
+export interface InsertResult {
+  said: string | null;
+  then?: () => void;
 }
 
 export interface InsertMenu {
@@ -86,8 +97,8 @@ export interface InsertMenu {
   allows(item: PromptItem): boolean;
   /** The icon of an item, or `null`. */
   icon(item: PromptItem): Element | null;
-  /** Runs an item at the caret, in an update; `withText` is the prompt's. Returns what the live region says. */
-  $run(item: PromptItem, withText: "below" | "turn_into"): string | null;
+  /** Runs an item at the caret, in an update; `withText` is the prompt's. */
+  $run(item: PromptItem, withText: "below" | "turn_into"): InsertResult;
 }
 
 export function createInsertMenu(editor: LexicalEditor, options: InsertMenuOptions): InsertMenu {
@@ -116,6 +127,7 @@ export function createInsertMenu(editor: LexicalEditor, options: InsertMenuOptio
   ];
 
   const allows = (item: PromptItem): boolean => {
+    if (item.assist !== undefined) return options.assist !== null;
     if (item.node !== undefined) return typeof item.node.type === "string" && options.types.has(item.node.type);
     const command = item.command;
     if (command === undefined) return item.text !== undefined;
@@ -158,7 +170,18 @@ export function createInsertMenu(editor: LexicalEditor, options: InsertMenuOptio
     else block.insertAfter(node);
   };
 
-  const $run = (item: PromptItem, withText: "below" | "turn_into"): string | null => {
+  const $run = (item: PromptItem, withText: "below" | "turn_into"): InsertResult => {
+    const assist = options.assist;
+    if (item.assist !== undefined && assist !== null) {
+      // The request reads the caret once the trigger is gone, after this update.
+      const block = $caretBlock()?.getTextContent() ?? "";
+      const action = item.assist;
+      return { said: null, then: () => assist(action, { block }) };
+    }
+    return { said: $runCommand(item, withText) };
+  };
+
+  const $runCommand = (item: PromptItem, withText: "below" | "turn_into"): string | null => {
     if (item.text !== undefined && item.node === undefined && item.command === undefined) {
       const selection = $getSelection();
       if ($isRangeSelection(selection)) selection.insertText(item.text);

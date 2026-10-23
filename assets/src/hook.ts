@@ -618,6 +618,7 @@ class Instance {
                 embeds: embedButton !== undefined,
                 openUpload: () => uploads.open(),
                 openEmbed: () => this.pushEmbeds({ action: "picker" }),
+                assist: assist === null ? null : (action, detail) => void this.suggestions?.request(action, detail),
                 announce: this.announce,
               }),
       });

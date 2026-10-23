@@ -202,7 +202,22 @@ An item has one of:
   2048 bytes of JSON): an embed, a node of the app. A block takes the
   place of an empty paragraph, or goes below the block; an inline node
   goes at the caret;
-* `:text`: text, at the caret (a snippet, a template line).
+* `:text`: text, at the caret (a snippet, a template line);
+* `:assist`: a suggestion from your app, "Summarize" or "Continue
+  writing", in an editor with `assist`. The menu pushes `kotoba:assist`
+  with the action, as the Assist menu does, and the text of the block in
+  `"block"`; your app streams the answer, which shows in the suggestion
+  panel as it comes, and goes where the trigger was when the person
+  accepts it (see the [Suggestions](suggestions.md) guide):
+
+  ```elixir
+  %{id: "summarize", label: "Summarize", group: "AI", assist: "summarize"}
+
+  def handle_event("kotoba:assist", %{"ref" => ref, "action" => "summarize", "block" => block}, socket) do
+    socket = Kotoba.Live.stream_start(socket, "post-body", ref, at: :after, label: "Summary")
+    {:noreply, start_summary(socket, ref, block)}
+  end
+  ```
 
 and may have a `:group` (a heading over its items, where it changes) and
 `:keywords`, words that find it besides its label: `/title` finds

@@ -49,6 +49,8 @@ test("the menu: the field's items, in groups, filtered as the person types", asy
     "Callout",
     "Tag",
     "Signature",
+    "Continue writing",
+    "Summarize",
   ]);
   await expect(menu(page).getByRole("group", { name: "Basic" })).toBeVisible();
   await expect(menu(page).getByRole("group", { name: "The app's" })).toBeVisible();
@@ -152,4 +154,22 @@ test("an insert menu that the server searches", async ({ page }) => {
   await expect(options(page, "search_editor")).toHaveText(["Table"]);
   await page.keyboard.press("Enter");
   await expect.poll(async () => (await blocks(page, "search_body")).map((block) => block.split(":")[0])).toContain("table");
+});
+
+test("an Assist item asks the app for a suggestion, which streams, and goes where \"/\" was", async ({ page }) => {
+  await openEditor(page, "/insert", EDITOR);
+  await focusEnd(page, page.locator(`#${EDITOR} .kotoba-editable`));
+  await page.keyboard.type(" /summ");
+  await expect(options(page)).toHaveText(["Summarize"]);
+  await page.keyboard.press("Enter");
+
+  // The trigger and the query are gone; the answer streams into the panel.
+  const panel = page.locator(`#${EDITOR} .kotoba-suggestion`);
+  await expect(panel).toBeVisible();
+  await expect(panel.locator(".kotoba-suggestion-content")).toContainText("Summary:");
+  await expect.poll(() => blocks(page)).toEqual(["paragraph: First paragraph "]);
+
+  await panel.getByRole("button", { name: "Accept" }).click();
+  // The block's text went to the app with the request: the fake model sums it up.
+  await expect.poll(() => blocks(page)).toEqual(["paragraph: First paragraph ", "paragraph: Summary: First paragraph…"]);
 });

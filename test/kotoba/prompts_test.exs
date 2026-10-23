@@ -388,6 +388,9 @@ defmodule Kotoba.PromptsTest do
 
       assert Prompts.item(%{id: "a", label: "A", command: "Not a command", node: %{label: "x"}}) ==
                [%{id: "a", label: "A"}]
+
+      assert Prompts.item(%{id: "s", label: "Summarize", assist: "summarize"}) ==
+               [%{id: "s", label: "Summarize", assist: "summarize"}]
     end
   end
 end

@@ -104,7 +104,11 @@ defmodule Kotoba.Prompts do
       an extension's insert item (`"<extension>:<command>"`);
     * `:node` - a node to insert, as a document has it (a map with a
       `"type"`, at most 2048 bytes in JSON): an embed, a node of the app;
-    * `:text` - text to insert (a snippet).
+    * `:text` - text to insert (a snippet);
+    * `:assist` - the action of a suggestion to ask for, as the Assist menu
+      does (`kotoba:assist`, with the text of the block as `"block"`): the
+      app streams the answer, which the person accepts or rejects. Only in
+      an editor with `assist`. See the [Suggestions](suggestions.md) guide.
 
   and may have a `:group` (the menu shows a heading where the group
   changes: "Basic", "Media", "Embeds", the app's own) and `:keywords`, more
@@ -152,7 +156,8 @@ defmodule Kotoba.Prompts do
           optional(:command) => String.t(),
           optional(:node) => map(),
           optional(:group) => String.t(),
-          optional(:keywords) => [String.t()]
+          optional(:keywords) => [String.t()],
+          optional(:assist) => String.t()
         }
 
   @typedoc "A prompt callback."
@@ -749,6 +754,7 @@ defmodule Kotoba.Prompts do
         |> put_ok(:node, node_json(fetch(map, :node)))
         |> put_ok(:group, text(fetch(map, :group)))
         |> put_ok(:keywords, keywords(fetch(map, :keywords)))
+        |> put_ok(:assist, text(fetch(map, :assist)))
 
       [item]
     else

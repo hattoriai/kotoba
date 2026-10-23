@@ -61,6 +61,8 @@ export interface PromptItem {
   group?: string;
   /** More words that find the item. */
   keywords?: string[];
+  /** The action of the suggestion that an insert menu's item asks for. */
+  assist?: string;
 }
 
 export interface PromptConfig {
@@ -200,7 +202,7 @@ export function readItems(items: unknown, max = MAX_ITEMS): PromptItem[] {
 
   for (const item of items) {
     if (!isObject(item)) continue;
-    const { id, label, hint, text, attrs, command, node, group, keywords } = item;
+    const { id, label, hint, text, attrs, command, node, group, keywords, assist } = item;
     if ((typeof id !== "string" && typeof id !== "number") || typeof label !== "string") continue;
     const read: PromptItem = { id: String(id), label };
     if (typeof hint === "string") read.hint = hint;
@@ -209,6 +211,7 @@ export function readItems(items: unknown, max = MAX_ITEMS): PromptItem[] {
     if (typeof command === "string" && command !== "") read.command = command;
     if (isObject(node) && typeof node.type === "string") read.node = node;
     if (typeof group === "string" && group !== "") read.group = group;
+    if (typeof assist === "string" && assist !== "") read.assist = assist;
     if (Array.isArray(keywords)) read.keywords = keywords.filter((word): word is string => typeof word === "string");
     valid.push(read);
     if (valid.length === max) break;
@@ -502,6 +505,7 @@ export function createPrompts(editor: LexicalEditor, options: PromptOptions): Pr
 
     // The update can run after this function (in a command, Lexical runs it
     // at the end of the command's update), so it says what it did.
+    let then: (() => void) | undefined;
     editor.update(() => {
       const node = $getNodeByKey(current.nodeKey);
       if (!$isTextNode(node)) return;
@@ -510,8 +514,9 @@ export function createPrompts(editor: LexicalEditor, options: PromptOptions): Pr
       if (config.insert === "command") {
         // The trigger and the query go, and the command runs where they were.
         node.select(current.start, current.end).removeText();
-        const said = insertMenu?.$run(item, config.withText) ?? null;
-        if (said !== null) options.announce(said);
+        const result = insertMenu?.$run(item, config.withText);
+        if (result?.said != null) options.announce(result.said);
+        then = result?.then;
         return;
       } else if (config.insert === "text") {
         node.select(current.start, current.end).insertText(`${item.text ?? item.label} `);
@@ -537,7 +542,7 @@ export function createPrompts(editor: LexicalEditor, options: PromptOptions): Pr
         space.select(1, 1);
       }
       options.announce(`Inserted ${item.label}`);
-    });
+    }, { onUpdate: () => then?.() });
 
     close();
     return true;

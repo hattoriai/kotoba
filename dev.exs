@@ -1274,6 +1274,14 @@ defmodule KotobaDev.InsertLive do
         group: "The app's",
         text: "— Ada",
         keywords: ["sign"]
+      },
+      %{id: "continue", label: "Continue writing", group: "Assist", assist: "continue"},
+      %{
+        id: "summarize",
+        label: "Summarize",
+        group: "Assist",
+        assist: "summarize",
+        keywords: ["ai"]
       }
     ],
     insert: :command,
@@ -1286,7 +1294,8 @@ defmodule KotobaDev.InsertLive do
      assign(socket,
        insert: to_form(%{"body" => Kotoba.Content.from_markdown("First paragraph")}, as: :insert),
        small: to_form(%{"body" => Kotoba.Content.from_markdown("Some text")}, as: :small),
-       search: to_form(%{"body" => nil}, as: :search)
+       search: to_form(%{"body" => nil}, as: :search),
+       assist_refs: MapSet.new()
      )}
   end
 
@@ -1306,6 +1315,7 @@ defmodule KotobaDev.InsertLive do
         extensions={["/assets/nodes/callout.js"]}
         nodes={[{KotobaDev.Nodes.Tag, "/assets/nodes/tag.js"}]}
         prompts={[{"/", :insert, @menu}]}
+        assist={true}
       />
     </.form>
     <.form for={@small} id="small-form">
@@ -1338,6 +1348,22 @@ defmodule KotobaDev.InsertLive do
   @impl true
   def handle_event("kotoba:prompt", params, socket),
     do: {:noreply, Kotoba.Live.handle_prompt(socket, params, search())}
+
+  # An Assist item of the menu: the fake model streams its answer after the
+  # block where "/" was.
+  def handle_event("kotoba:assist", %{"ref" => ref, "action" => action} = params, socket),
+    do:
+      {:noreply,
+       KotobaDev.Assist.start(socket, "insert_editor", ref, action, params["block"] || "",
+         at: :after
+       )}
+
+  def handle_event("kotoba:suggestion", %{"ref" => ref, "action" => action}, socket),
+    do: {:noreply, if(action == "accept", do: socket, else: KotobaDev.Assist.stop(socket, ref))}
+
+  @impl true
+  def handle_info({:assist_chunk, id, ref, action, rest}, socket),
+    do: {:noreply, KotobaDev.Assist.next(socket, id, ref, action, rest)}
 end
 
 defmodule KotobaDev.Collaboration do
