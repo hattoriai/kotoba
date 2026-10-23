@@ -6,7 +6,8 @@
 //
 //   * a grip (⋮⋮): dragged, it moves the whole block, and a line shows
 //     where it lands; clicked, it opens the block's menu;
-//   * a `+`, which adds an empty paragraph below the block.
+//   * a `+`, which adds an empty paragraph below the block, and opens the
+//     editor's insert menu in it when it has one (see insert_menu.ts).
 //
 // The menu has Turn into (paragraph, headings, quote, lists, code block and
 // the blocks of the app's extensions, as the editor's features allow),
@@ -76,7 +77,7 @@ import { gripVertical, plus, renderIcon } from "./icons";
 import { placeOver, type Floating } from "./selection_menu";
 
 /** A block that Turn into makes. */
-interface Target {
+export interface Target {
   /** A toolbar command, "paragraph", or `ext:<type>` for an extension's block. */
   id: string;
   label: string;
@@ -276,6 +277,8 @@ export interface BlockHandleOptions {
   features: ReadonlySet<Feature>;
   /** The blocks of the extensions. */
   blocks: readonly BlockSpec[];
+  /** The trigger of the editor's insert menu: the `+` types it in the new paragraph. `null` for none. */
+  insertTrigger?: string | null;
   announce(message: string): void;
 }
 
@@ -556,10 +559,11 @@ export function attachBlockHandles(editor: LexicalEditor, options: BlockHandleOp
       if (block === null) return;
       const paragraph = $createParagraphNode();
       block.insertAfter(paragraph);
-      paragraph.select();
+      // The insert menu opens on its trigger, in the new paragraph.
+      paragraph.select().insertText(options.insertTrigger ?? "");
     });
     editor.focus();
-    announce("Paragraph added");
+    if (options.insertTrigger == null) announce("Paragraph added");
   };
 
   // A press on a button keeps the focus (and the caret) in the editor.

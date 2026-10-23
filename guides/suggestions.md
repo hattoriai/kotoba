@@ -133,6 +133,15 @@ Both events have the editor's `id`, and go to the editor's `phx-target`
 when it has one, as the other events do (see
 [Forms and changesets](forms.md)).
 
+### From the insert menu
+
+An item of an insert menu with `assist: "summarize"` asks for a
+suggestion the same way, from `/` (see the [Prompts](prompts.md) guide,
+"The insert menu"). Its `kotoba:assist` has the text of the block where
+the person typed `/` in `"block"`, and `"text"` is empty (the caret has no
+selection). The suggestion keeps that place: `at: :caret` puts the answer
+there, `at: :after` below the block.
+
 ### From an extension
 
 An extension can ask for a suggestion from its own button or shortcut

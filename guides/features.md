@@ -195,7 +195,8 @@ shows two buttons there:
 * a grip (⋮⋮). Drag it to move the whole block: a line shows where it
   lands, and Escape calls the drag off. Click it for the block's menu;
 * a `+`, which adds an empty paragraph below the block, with the caret in
-  it.
+  it, and opens the insert menu there when the editor has one (see the
+  [Prompts](prompts.md) guide).
 
 The menu has:
 

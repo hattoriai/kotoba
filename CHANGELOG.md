@@ -9,6 +9,17 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- An insert menu: a prompt with `insert: :command`
+  (`{"/", :insert, insert: :command}`) opens on `/` a menu of what the
+  field can insert or turn the block into, filtered as the person types:
+  the built-in items of its features (`Kotoba.Prompts.commands/1`), the
+  extensions' blocks and insert items (`insert` of an extension), and the
+  app's own (a node, text, or a command), in the app's order and groups.
+  An item runs as one undo step; in a block with text it goes below
+  (`with_text: :below`) or turns the block (`:turn_into`). The `+` of the
+  block handles opens it. Items have `:group` and `:keywords`, and an
+  item with `:assist` asks the app for a suggestion (`/summarize`), which
+  streams into the suggestion panel. Prompts guide, "The insert menu".
 - Block handles, the `blocks` feature (off unless a field lists it):
   a grip beside each block drags it to another place, and opens its
   menu (Turn into, Duplicate, Delete, Copy a link to the block); a `+`

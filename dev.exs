@@ -1241,6 +1241,131 @@ defmodule KotobaDev.BlocksLive do
   end
 end
 
+defmodule KotobaDev.InsertLive do
+  @moduledoc """
+  The insert menu: a prompt with `insert: :command`. The first editor has
+  the built-in items of its features, the example extension's callout, and
+  the app's own (a tag node, a snippet), in groups, and the block handles,
+  whose `+` opens the menu. The second has fewer features, so fewer items,
+  and turns a block with text into the new one. The third searches on the
+  server.
+  """
+  use Phoenix.LiveView
+
+  import Kotoba.Components
+
+  @features ~w(bold italic links headings quotes lists check_lists code_blocks horizontal_rules tables blocks)
+  @small ~w(bold lists)
+
+  @menu [
+    items: [
+      :builtin,
+      :extensions,
+      %{
+        id: "tag",
+        label: "Tag",
+        group: "The app's",
+        node: %{type: "dev-tag", label: "from the menu"},
+        keywords: ["label"]
+      },
+      %{
+        id: "signature",
+        label: "Signature",
+        group: "The app's",
+        text: "— Ada",
+        keywords: ["sign"]
+      },
+      %{id: "continue", label: "Continue writing", group: "Assist", assist: "continue"},
+      %{
+        id: "summarize",
+        label: "Summarize",
+        group: "Assist",
+        assist: "summarize",
+        keywords: ["ai"]
+      }
+    ],
+    insert: :command,
+    label: "Insert"
+  ]
+
+  @impl true
+  def mount(_params, _session, socket) do
+    {:ok,
+     assign(socket,
+       insert: to_form(%{"body" => Kotoba.Content.from_markdown("First paragraph")}, as: :insert),
+       small: to_form(%{"body" => Kotoba.Content.from_markdown("Some text")}, as: :small),
+       search: to_form(%{"body" => nil}, as: :search),
+       assist_refs: MapSet.new()
+     )}
+  end
+
+  @impl true
+  def render(assigns) do
+    assigns = assign(assigns, features: @features, small_features: @small, menu: @menu)
+
+    ~H"""
+    <h1>Insert menu</h1>
+    <.form for={@insert} id="insert-form">
+      <label id="insert-label" class="label">Insert</label>
+      <.kotoba
+        field={@insert[:body]}
+        id="insert_editor"
+        label_id="insert-label"
+        features={@features}
+        extensions={["/assets/nodes/callout.js"]}
+        nodes={[{KotobaDev.Nodes.Tag, "/assets/nodes/tag.js"}]}
+        prompts={[{"/", :insert, @menu}]}
+        assist={true}
+      />
+    </.form>
+    <.form for={@small} id="small-form">
+      <label id="small-label" class="label">Fewer features</label>
+      <.kotoba
+        field={@small[:body]}
+        id="small_editor"
+        label_id="small-label"
+        features={@small_features}
+        prompts={[{"/", :insert, insert: :command, with_text: :turn_into}]}
+      />
+    </.form>
+    <.form for={@search} id="search-form">
+      <label id="search-label" class="label">Server search</label>
+      <.kotoba field={@search[:body]} id="search_editor" label_id="search-label" prompts={search()} />
+    </.form>
+    """
+  end
+
+  # The built-in items of an editor with every feature, found on the server.
+  defp search,
+    do: [
+      {"/", :insert,
+       [
+         search: fn query -> Kotoba.Prompts.filter(Kotoba.Prompts.commands(), query) end,
+         insert: :command
+       ]}
+    ]
+
+  @impl true
+  def handle_event("kotoba:prompt", params, socket),
+    do: {:noreply, Kotoba.Live.handle_prompt(socket, params, search())}
+
+  # An Assist item of the menu: the fake model streams its answer after the
+  # block where "/" was.
+  def handle_event("kotoba:assist", %{"ref" => ref, "action" => action} = params, socket),
+    do:
+      {:noreply,
+       KotobaDev.Assist.start(socket, "insert_editor", ref, action, params["block"] || "",
+         at: :after
+       )}
+
+  def handle_event("kotoba:suggestion", %{"ref" => ref, "action" => action}, socket),
+    do: {:noreply, if(action == "accept", do: socket, else: KotobaDev.Assist.stop(socket, ref))}
+
+  @impl true
+  def handle_info({:assist_chunk, id, ref, action, rest}, socket),
+    do: {:noreply, KotobaDev.Assist.next(socket, id, ref, action, rest)}
+end
+
 defmodule KotobaDev.Collaboration do
   @moduledoc false
   # The Issho policy. Demo only: production authorization consults the
@@ -1600,6 +1725,7 @@ defmodule KotobaDev.Router do
     live("/nodes", KotobaDev.NodesLive)
     live("/extensions", KotobaDev.ExtensionsLive)
     live("/blocks", KotobaDev.BlocksLive)
+    live("/insert", KotobaDev.InsertLive)
     live("/embeds", KotobaDev.EmbedsLive)
     live("/collab", KotobaDev.CollabLive)
     live("/collab/many", KotobaDev.ManyCollabLive)
