@@ -70,7 +70,7 @@ defmodule Kotoba.MixProject do
       {:stream_data, "~> 1.1", only: :test},
       # Uploads: each file checked, stored and served. An editor without
       # attachments never needs it.
-      {:storehouse, "~> 0.1", optional: true}
+      {:storehouse, "~> 0.2", optional: true}
     ]
   end
 

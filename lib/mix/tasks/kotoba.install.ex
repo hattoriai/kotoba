@@ -30,7 +30,7 @@ defmodule Mix.Tasks.Kotoba.Install do
   before the first upload), the esbuild note (the app's esbuild must resolve `kotoba`
   through `NODE_PATH`: from `deps/`, or, for a path dependency, from the
   directory that holds it), the line for `Storehouse.Local.Plug`, and the
-  `{:storehouse, "~> 0.1"}` dependency that uploads need.
+  `{:storehouse, "~> 0.2"}` dependency that uploads need.
 
   The task is idempotent: it does not add what a file already has, and when
   there is nothing to add it says so.
@@ -145,7 +145,7 @@ defmodule Mix.Tasks.Kotoba.Install do
     Uploads keep their files with Storehouse. Add it to your deps in
     mix.exs, then run mix deps.get:
 
-        {:storehouse, "~> 0.1"}
+        {:storehouse, "~> 0.2"}
 
     Storehouse.Local needs a directory for the files. Give it one in
     the :prod block of config/runtime.exs, an absolute path outside the

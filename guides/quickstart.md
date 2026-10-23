@@ -136,7 +136,7 @@ Add it to your deps in `mix.exs` (an editor without uploads never needs
 it):
 
 ```elixir
-{:storehouse, "~> 0.1"}
+{:storehouse, "~> 0.2"}
 ```
 
 Its local store needs a configured root directory. For production, give

@@ -11,7 +11,7 @@ Storehouse is an optional dependency of Kotoba: an editor with uploads
 needs it in your deps.
 
 ```elixir
-{:storehouse, "~> 0.1"}
+{:storehouse, "~> 0.2"}
 ```
 
 The files go to Storehouse's store (`config :storehouse, adapter: ...`):
@@ -406,7 +406,7 @@ Kotoba 0.7 kept the files itself, with `Kotoba.Storage.Local`. That store,
 its plug, and `config :kotoba, storage:` still work, with deprecation
 warnings, and are removed in Kotoba 1.0. To move:
 
-1. Add `{:storehouse, "~> 0.1"}` to your deps.
+1. Add `{:storehouse, "~> 0.2"}` to your deps.
 2. Replace `config :kotoba, Kotoba.Storage.Local, ...` with
    `config :storehouse, Storehouse.Local, ...`, with the same `root`, and
    `url_prefix: "/uploads/kotoba"` (the old default, unless you gave

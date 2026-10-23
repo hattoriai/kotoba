@@ -34,7 +34,7 @@ if Code.ensure_loaded?(Storehouse) do
     CHANGELOG).
 
     Storehouse is an optional dependency of Kotoba: an app with uploads has
-    `{:storehouse, "~> 0.1"}` in its deps, and this module is there only
+    `{:storehouse, "~> 0.2"}` in its deps, and this module is there only
     with it.
     """
 

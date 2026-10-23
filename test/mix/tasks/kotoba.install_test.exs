@@ -64,7 +64,7 @@ defmodule Mix.Tasks.Kotoba.InstallTest do
     assert output =~ "+   hooks: {...colocatedHooks, Kotoba},"
     assert output =~ "NODE_PATH"
     assert output =~ ~s|root: System.get_env("UPLOADS", "/var/lib/kotoba/uploads")|
-    assert output =~ ~s|{:storehouse, "~> 0.1"}|
+    assert output =~ ~s|{:storehouse, "~> 0.2"}|
     assert output =~ "if config_env() == :prod do"
 
     assert output =~

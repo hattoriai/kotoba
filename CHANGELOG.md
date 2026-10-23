@@ -9,6 +9,11 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Uploads take Storehouse 0.2 (`{:storehouse, "~> 0.2"}`, which
+  `mix kotoba.install` adds): its security changes, and requests made with
+  Req. A HEIF file is now `image/heic`, by its bytes, not
+  `application/octet-stream`.
+
 - Shared editors need `{:issho, "~> 0.4.2"}`, from Hex. An editor that is
   not shared needs nothing.
 - Uploads keep their files with [Storehouse](https://hexdocs.pm/storehouse),
