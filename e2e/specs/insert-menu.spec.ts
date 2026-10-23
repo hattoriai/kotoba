@@ -23,6 +23,8 @@ const options = (page: Page, editorId = EDITOR) => menu(page, editorId).getByRol
 /** A new line at the end of the editor, and the text typed in it. */
 async function typeOnNewLine(page: Page, editorId: string, text: string): Promise<void> {
   await focusEnd(page, page.locator(`#${editorId} .kotoba-editable`));
+  // Enter at once after Ctrl+End would race Lexical's selectionchange.
+  await settle(page);
   await page.keyboard.press("Enter");
   await page.keyboard.type(text);
   await settle(page);
@@ -93,6 +95,7 @@ test("in a block with text, the block goes below; tables, dividers, the extensio
 }) => {
   await openEditor(page, "/insert", EDITOR);
   await focusEnd(page, page.locator(`#${EDITOR} .kotoba-editable`));
+  await settle(page);
   await page.keyboard.type(" /quote");
   await page.keyboard.press("Enter");
   await page.keyboard.type("Said");
@@ -140,6 +143,7 @@ test("Markdown shortcuts stay, and the + of a block opens the menu", async ({ pa
 test("a field with fewer features has fewer items, and with_text: :turn_into turns the block", async ({ page }) => {
   await openEditor(page, "/insert", "small_editor");
   await focusEnd(page, page.locator("#small_editor .kotoba-editable"));
+  await settle(page);
   await page.keyboard.type(" /");
   await expect(options(page, "small_editor")).toHaveText(["Text", "Bulleted list", "Numbered list"]);
   await page.keyboard.type("num");
@@ -159,6 +163,7 @@ test("an insert menu that the server searches", async ({ page }) => {
 test("an Assist item asks the app for a suggestion, which streams, and goes where \"/\" was", async ({ page }) => {
   await openEditor(page, "/insert", EDITOR);
   await focusEnd(page, page.locator(`#${EDITOR} .kotoba-editable`));
+  await settle(page);
   await page.keyboard.type(" /summ");
   await expect(options(page)).toHaveText(["Summarize"]);
   await page.keyboard.press("Enter");
