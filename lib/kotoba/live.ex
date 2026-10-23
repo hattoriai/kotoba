@@ -530,6 +530,25 @@ defmodule Kotoba.Live do
          preview: preview_fun
        )}
     end
+  else
+    @doc false
+    # Uploads with no Storehouse in the app's deps: the developer learns
+    # what is missing, not that a function is undefined.
+    def consume_uploads(_socket, _upload_name, _editor_id, _opts \\ []),
+      do: missing_storehouse!()
+  end
+
+  @doc false
+  @spec missing_storehouse!() :: no_return()
+  def missing_storehouse! do
+    raise ArgumentError, """
+    Kotoba's uploads keep their files with Storehouse, which is not in the \
+    app's deps. Add it to mix.exs, and run mix deps.get:
+
+        {:storehouse, "~> 0.1"}
+
+    An editor without uploads (no `uploads` on <.kotoba>) does not need it.
+    """
   end
 
   defp editor_id(%{"id" => id}) when is_binary(id) and id != "", do: id

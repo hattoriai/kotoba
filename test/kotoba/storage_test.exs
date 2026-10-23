@@ -37,4 +37,10 @@ defmodule Kotoba.StorageTest do
       assert capture_log(fn -> assert Storage.adapter() == Kotoba.Storage.Local end) == ""
     end
   end
+
+  test "uploads without Storehouse in the deps say what is missing" do
+    assert_raise ArgumentError, ~r/\{:storehouse, "~> 0.1"\}/, fn ->
+      Kotoba.Live.missing_storehouse!()
+    end
+  end
 end
