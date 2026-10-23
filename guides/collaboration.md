@@ -16,7 +16,7 @@ Add Issho next to Kotoba:
 
 ```elixir
 {:kotoba, "~> 0.7"},
-{:issho, "~> 0.4"}
+{:issho, "~> 0.4.2"}
 ```
 
 Enable the optional implementation before connecting the LiveSocket:

@@ -9,7 +9,7 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
-- Shared editors need `{:issho, "~> 0.4"}`, from Hex. An editor that is
+- Shared editors need `{:issho, "~> 0.4.2"}`, from Hex. An editor that is
   not shared needs nothing.
 - Uploads keep their files with [Storehouse](https://hexdocs.pm/storehouse),
   Kotoba's storage taken out into a library of its own: each file is
