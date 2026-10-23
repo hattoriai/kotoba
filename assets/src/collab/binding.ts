@@ -42,6 +42,17 @@ export class Binding {
 
   constructor(host: CollaborationHost) { this.host = host; }
 
+  /** The editor node of a shared node id. */
+  keyOf(id: string): string | null {
+    for (const [key, ref] of this.refs) if (ref.id === id) return key;
+    return null;
+  }
+
+  /** The shared id of an editor node. */
+  idOf(key: string): string | null {
+    return this.refs.get(key)?.id ?? null;
+  }
+
   selection(): SharedSelection | null {
     let selection: SharedSelection | null = null;
     this.host.editor.getEditorState().read(() => {

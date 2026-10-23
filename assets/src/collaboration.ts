@@ -22,6 +22,10 @@ export interface Collaboration {
   readonly: boolean;
   flush(): Promise<{ epoch: string; revision: number }>;
   updateCredentials(credentials: CollabCredentials): void;
+  /** The editor node of a shared node id, or `null`. */
+  keyOf(id: string): string | null;
+  /** The shared id of an editor node, or `null`. */
+  idOf(key: string): string | null;
   dispose(): void;
 }
 

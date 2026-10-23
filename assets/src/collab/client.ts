@@ -377,6 +377,10 @@ class Client implements Collaboration {
     setTimeout(() => URL.revokeObjectURL(url), 1_000);
   }
 
+  keyOf(id: string): string | null { return this.binding.keyOf(id); }
+
+  idOf(key: string): string | null { return this.binding.idOf(key); }
+
   updateCredentials(credentials: CollabCredentials): void {
     if (credentials.document_id !== this.credentials.document_id || credentials.user.id !== this.credentials.user.id || credentials.socket !== this.credentials.socket) throw new Error("Collaboration identity cannot change while mounted");
     this.credentials = credentials;
