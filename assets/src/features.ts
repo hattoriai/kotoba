@@ -35,6 +35,9 @@ import {
   COMMAND_PRIORITY_CRITICAL,
   COMMAND_PRIORITY_EDITOR,
   COMMAND_PRIORITY_LOW,
+  CLEAR_HISTORY_COMMAND,
+  CAN_REDO_COMMAND,
+  CAN_UNDO_COMMAND,
   CONTROL_OR_META,
   FORMAT_TEXT_COMMAND,
   KEY_DOWN_COMMAND,
@@ -84,9 +87,16 @@ export const FEATURES = [
   "images",
   "footnotes",
   "embeds",
+  "blocks",
 ] as const;
 
 export type Feature = (typeof FEATURES)[number];
+
+/**
+ * The features that an editor has only when its `data-features` names them:
+ * an editor with no attribute has every other feature.
+ */
+export const OPT_IN_FEATURES: readonly Feature[] = ["blocks"];
 
 /** A feature that needs another one. */
 const REQUIRES: Partial<Record<Feature, Feature>> = { check_lists: "lists" };
@@ -125,11 +135,11 @@ function isFeature(value: string): value is Feature {
 
 /**
  * Reads `data-features`: comma-separated feature names. No attribute gives
- * every feature. An unknown name, or a feature without the one it needs,
- * is left out with a log.
+ * every feature but the opt-in ones (`blocks`). An unknown name, or a
+ * feature without the one it needs, is left out with a log.
  */
 export function parseFeatures(value: string | undefined): Set<Feature> {
-  if (value === undefined) return new Set(FEATURES);
+  if (value === undefined) return new Set(FEATURES.filter((feature) => !OPT_IN_FEATURES.includes(feature)));
 
   const named = new Set<Feature>();
   for (const name of value.split(",").map((part) => part.trim()).filter((part) => part !== "")) {
@@ -187,6 +197,32 @@ function registerFormatShortcut(
   );
 }
 
+/**
+ * Undo and redo. Clearing the history (after a document loads) keeps the
+ * document as the history's start, so the first change after it is undone
+ * too, even when no click or caret move came before it (a block dragged at
+ * once, see blocks.ts).
+ */
+function registerKotobaHistory(editor: LexicalEditor): () => void {
+  const history = createEmptyHistoryState();
+  return mergeRegister(
+    registerHistory(editor, history, 300),
+    editor.registerCommand(
+      CLEAR_HISTORY_COMMAND,
+      () => {
+        history.undoStack = [];
+        history.redoStack = [];
+        history.current = { editor, editorState: editor.getEditorState() };
+        editor.dispatchCommand(CAN_REDO_COMMAND, false);
+        editor.dispatchCommand(CAN_UNDO_COMMAND, false);
+        return true;
+      },
+      // Before the history's own, which forgets the document.
+      COMMAND_PRIORITY_LOW,
+    ),
+  );
+}
+
 export interface FeatureOptions {
   /** The allowed link schemes, as `Kotoba.Sanitizer` has them. */
   linkSchemes: readonly string[];
@@ -211,7 +247,7 @@ export function builtInExtensions(features: ReadonlySet<Feature>, options: Featu
     register: (editor) =>
       mergeRegister(
         registerRichText(editor),
-        options.history === false ? () => {} : registerHistory(editor, createEmptyHistoryState(), 300),
+        options.history === false ? () => {} : registerKotobaHistory(editor),
         registerDecorators(editor),
         editor.registerCommand(
           FORMAT_TEXT_COMMAND,
@@ -307,6 +343,9 @@ export function builtInExtensions(features: ReadonlySet<Feature>, options: Featu
     },
     footnotes: { name: "footnotes", nodes: FEATURE_NODES.footnotes },
     embeds: { name: "embeds", nodes: FEATURE_NODES.embeds, register: registerEmbedKeys },
+    // The block handles are in the margin, outside the editable area: the
+    // hook attaches them (see blocks.ts).
+    blocks: { name: "blocks" },
   };
 
   return [core, ...FEATURES.filter((feature) => features.has(feature)).map((feature) => extensions[feature])];

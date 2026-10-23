@@ -119,4 +119,26 @@ defmodule Kotoba.Issho.TextTest do
     assert html(next) == "<h2>Title</h2><p>One</p><p>Two</p><p>Three</p>"
     assert {:error, _} = Text.insert_block(next, 9, "paragraph", "x")
   end
+
+  test "moves a top-level block with all of it, after another one or first" do
+    state = state("A\n\n- one\n- two\n\nB")
+
+    # A list item moves its list, as a block handle does.
+    assert {:ok, ops, next, _list} = Text.move_block(state, 3, 4)
+    assert [%{"op" => "move_node"}] = ops
+    assert html(next) == "<p>A</p><p>B</p><ul><li>one</li><li>two</li></ul>"
+    assert replayed(state, ops) |> html() == html(next)
+
+    assert {:ok, _ops, next, _id} = Text.move_block(next, 2, 0)
+    assert html(next) == "<p>B</p><p>A</p><ul><li>one</li><li>two</li></ul>"
+  end
+
+  test "says why a block does not move" do
+    state = state("A\n\n- one\n- two\n\nB")
+    assert {:error, "Block 1 is already there."} = Text.move_block(state, 1, 0)
+    assert {:error, "Block 4 is already there."} = Text.move_block(state, 4, 3)
+    assert {:error, "Blocks 2 and 3 are in the same block" <> _} = Text.move_block(state, 2, 3)
+    assert {:error, "The document has no block 9: it has 4."} = Text.move_block(state, 9, 0)
+    assert {:error, "The document has no block 7: it has 4."} = Text.move_block(state, 1, 7)
+  end
 end

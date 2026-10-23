@@ -235,6 +235,14 @@ defmodule Kotoba.ComponentsTest do
 
       # An empty list is an editor with no feature: paragraphs and text.
       assert attr(html(field: field(nil), features: []), "[phx-hook]", "data-features") == ""
+
+      # The block handles only when the list names them.
+      assert attr(
+               html(field: field(nil), features: [:blocks, :bold]),
+               "[phx-hook]",
+               "data-features"
+             ) ==
+               "bold,blocks"
     end
 
     test "raises on features or extensions that are not valid" do

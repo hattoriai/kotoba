@@ -66,7 +66,8 @@ defmodule Kotoba.FeaturesTest do
         %{"type" => "embed", "version" => 1, "kind" => "canvas", "ref" => "1", "title" => "Model"}
       ]
 
-      assert Features.used(doc(input)) == Features.all()
+      # The block handles are the editor's: no node of a document has them.
+      assert Features.used(doc(input)) == Features.all() -- [:blocks]
     end
 
     test "is empty for paragraphs of plain text, the formats that are not features, and app nodes" do

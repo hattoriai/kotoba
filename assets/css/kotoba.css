@@ -71,6 +71,8 @@
   --kotoba-embed-height: 24rem;
   --kotoba-embed-radius: calc(var(--kotoba-radius) + 4px);
   --kotoba-embed-layer: 60;
+  /* The margin of the block handles (the blocks feature). */
+  --kotoba-block-gutter: 3.25rem;
 }
 
 .kotoba {
@@ -707,6 +709,131 @@ div.kotoba-unknown {
   display: block;
   margin: 0 0 var(--kotoba-space);
   padding: var(--kotoba-space);
+}
+
+/* Block handles (the blocks feature): a margin for them on the left of
+   the blocks, a grip and a + beside the block under the pointer, a line
+   where a dragged block lands, and the block's menu. */
+
+.kotoba-has-blocks .kotoba-editable {
+  padding-left: var(--kotoba-block-gutter);
+}
+
+.kotoba-has-blocks .kotoba-placeholder {
+  padding-left: var(--kotoba-block-gutter);
+}
+
+.kotoba-block-handle {
+  position: absolute;
+  z-index: 5;
+  display: flex;
+  gap: 1px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.kotoba-block-handle[hidden],
+.kotoba-block-drop[hidden],
+.kotoba-block-menu[hidden] {
+  display: none;
+}
+
+.kotoba-block-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.375rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--kotoba-radius) - 2px);
+  background: transparent;
+  color: var(--kotoba-muted);
+  cursor: pointer;
+  --kotoba-icon-size: 16px;
+}
+
+.kotoba-block-button:hover,
+.kotoba-block-grip[aria-expanded="true"] {
+  background: var(--kotoba-surface);
+  color: var(--kotoba-text);
+}
+
+.kotoba-block-grip {
+  cursor: grab;
+  touch-action: none;
+}
+
+.kotoba-block-dragging,
+.kotoba-block-dragging .kotoba-block-grip {
+  cursor: grabbing;
+}
+
+.kotoba-block-drop {
+  position: absolute;
+  z-index: 5;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--kotoba-accent);
+  pointer-events: none;
+}
+
+.kotoba-block-menu {
+  position: absolute;
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  min-width: 12rem;
+  max-height: 22rem;
+  overflow-y: auto;
+  padding: calc(var(--kotoba-space) / 2);
+  border: 1px solid var(--kotoba-border);
+  border-radius: var(--kotoba-radius);
+  background: var(--kotoba-background);
+  box-shadow: var(--kotoba-shadow);
+}
+
+.kotoba-block-menu [role="group"] {
+  display: flex;
+  flex-direction: column;
+}
+
+.kotoba-block-menu-label {
+  padding: calc(var(--kotoba-space) / 2) var(--kotoba-space) 0;
+  color: var(--kotoba-muted);
+  font-size: var(--kotoba-small);
+}
+
+.kotoba-block-menu-separator {
+  margin: calc(var(--kotoba-space) / 2) 0;
+  border-top: 1px solid var(--kotoba-border);
+}
+
+.kotoba-block-menu-item {
+  padding: calc(var(--kotoba-space) / 2) var(--kotoba-space);
+  border: 0;
+  border-radius: calc(var(--kotoba-radius) - 2px);
+  background: transparent;
+  color: var(--kotoba-text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
+
+.kotoba-block-menu-item:hover,
+.kotoba-block-menu-item:focus-visible {
+  outline: none;
+  background: var(--kotoba-surface);
+}
+
+.kotoba-block-menu-item[aria-checked="true"] {
+  font-weight: 600;
+}
+
+/* aria-checked says it to assistive technology. */
+.kotoba-block-menu-item[aria-checked="true"]::after {
+  content: " ✓";
+  content: " ✓" / "";
 }
 
 /* Prompt menu and link form */

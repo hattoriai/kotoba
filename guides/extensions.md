@@ -85,6 +85,7 @@ The development server has this extension, with its Elixir half, in
 | `nodes` | Node classes. A type cannot be the type of a built-in node (of any feature), of a node module's node, or of an earlier extension's node. |
 | `markdown` | Markdown shortcuts: transformers of `@lexical/markdown`. A shortcut whose `dependencies` the editor does not have is left out. |
 | `toolbar` | Toolbar controls, below. |
+| `blocks` | What the block handles (the `blocks` feature) do with the extension's nodes, below. |
 | `register(editor, context)` | Registers commands, node transforms and listeners. It returns its cleanup, a function (`mergeRegister` from `utils` joins several). |
 
 `context` has the editor's `id`, the hook `element`, `announce(message)`,
@@ -120,6 +121,26 @@ History group. In a custom toolbar, place one by its command:
   <:button command="callout:toggle" label="Callout"><.icon name="hero-information-circle" /></:button>
 </.kotoba_toolbar>
 ```
+
+### Blocks
+
+With the `blocks` feature (see the [Editing features](features.md)
+guide), every top-level block has a handle and a menu. An extension says
+how a block of its node takes part:
+
+```javascript
+blocks: [{ type: "callout", label: "Callout", create: () => new CalloutNode() }],
+```
+
+| Key | |
+| --- | --- |
+| `type` | Required. The node type. |
+| `label` | The words of the item in the menu's Turn into. |
+| `create()` | Makes an empty block of the type. With `label`, Turn into offers it, and turns a block of the type into the others: its text moves into the new block. |
+| `handle` | `false`: a block of the type has no handle (a node that handles itself). |
+
+A block of a type with no `create` has a handle, and its menu has
+Duplicate, Delete and Copy a link, with no Turn into.
 
 ## Serve the module and give it to the editor
 

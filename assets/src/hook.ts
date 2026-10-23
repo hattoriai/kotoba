@@ -13,7 +13,7 @@
 //   * `data-placeholder` - the text to show when the editor is empty.
 //   * `data-nodes` - comma-separated URLs of app node modules.
 //   * `data-features` - comma-separated built-in features of the editor
-//     (see features.ts); every feature when there is none.
+//     (see features.ts); every feature but `blocks` when there is none.
 //   * `data-extensions` - comma-separated URLs of app extension modules
 //     (see extensions.ts).
 //   * `data-prompts` - JSON: trigger character → prompt name.
@@ -97,6 +97,7 @@ import {
   type KotobaExtension,
 } from "./extensions";
 import { type Feature, builtInExtensions, parseFeatures } from "./features";
+import { attachBlockHandles } from "./blocks";
 import { attachCaptionField } from "./caption";
 import { createColorMenu, type ColorMenu } from "./colors";
 import { createLinkForm, type LinkForm } from "./link";
@@ -567,6 +568,20 @@ class Instance {
     if (features.has("attachments")) {
       this.floating.push(
         attachCaptionField(editor, { host: surface, root: this.el, idPrefix: this.id, announce: this.announce }),
+      );
+    }
+
+    if (features.has("blocks")) {
+      this.floating.push(
+        attachBlockHandles(editor, {
+          host: surface,
+          root: this.el,
+          editable,
+          idPrefix: this.id,
+          features,
+          blocks: extensions.flatMap((extension) => extension.blocks ?? []),
+          announce: this.announce,
+        }),
       );
     }
 

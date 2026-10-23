@@ -4,7 +4,9 @@ defmodule Kotoba.Features do
   the features of a field.
 
   `Kotoba.Components.kotoba/1` takes a `features` list: the editor has
-  those features, and no other. With no list, it has every feature.
+  those features, and no other. With no list, it has every feature but
+  `blocks`, which an editor has only when its list names it
+  (`features={Kotoba.Features.all()}` gives every one).
 
       <.kotoba field={@form[:comment]} features={~w(bold italic links lists mentions)} />
 
@@ -31,6 +33,7 @@ defmodule Kotoba.Features do
   | `images` | images from a URL, as Markdown has them | `image` |
   | `footnotes` | footnotes and their references | `footnotedefinition`, `footnotereference` |
   | `embeds` | live things of the app's own, as a canvas (with `Kotoba.Embeds`) | `embed` |
+  | `blocks` | a handle beside each block: drag it to move the block, click it for the block's menu (only when listed) | none |
 
   Paragraphs, line breaks, tabs, undo and redo are always there. The case
   formats (`lowercase`, `uppercase`, `capitalize`) are not features: the
@@ -80,7 +83,8 @@ defmodule Kotoba.Features do
     :mentions,
     :images,
     :footnotes,
-    :embeds
+    :embeds,
+    :blocks
   ]
 
   @requires %{check_lists: :lists}
@@ -140,6 +144,7 @@ defmodule Kotoba.Features do
           | :images
           | :footnotes
           | :embeds
+          | :blocks
 
   @doc """
   Returns the features, in order.

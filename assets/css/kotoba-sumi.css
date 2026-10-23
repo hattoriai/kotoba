@@ -140,6 +140,7 @@
   --kotoba-embed-height: 24rem;
   --kotoba-embed-radius: calc(var(--radius-box, var(--sumi-radius, 0.25rem)) + 4px);
   --kotoba-embed-layer: 60;
+  --kotoba-block-gutter: 3.25rem;
 
   /* Code highlighting */
   --kotoba-token-comment: var(--sumi-text-muted, var(--sumi-muted, var(--kotoba-sumi-muted)));

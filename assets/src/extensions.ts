@@ -12,6 +12,7 @@
 //       nodes: [CalloutNode],
 //       markdown: [CALLOUT_SHORTCUT],
 //       toolbar: [{ command: "insert", label: "Callout", run: (editor) => ... }],
+//       blocks: [{ type: "callout", label: "Callout", create: () => new CalloutNode() }],
 //       register(editor, context) { return editor.registerCommand(...) },
 //     })
 //
@@ -36,7 +37,7 @@ import { registerMarkdownShortcuts, type Transformer } from "@lexical/markdown";
 import * as selection from "@lexical/selection";
 import * as utils from "@lexical/utils";
 import * as lexical from "lexical";
-import type { Klass, LexicalEditor, LexicalNode } from "lexical";
+import type { ElementNode, Klass, LexicalEditor, LexicalNode } from "lexical";
 
 import { isNodeClass } from "./nodes/custom";
 
@@ -60,6 +61,25 @@ export interface ToolbarControl {
   isVisible?(): boolean;
   /** Whether the button can act now (`aria-disabled` when not), read from the editor state. */
   isEnabled?(): boolean;
+}
+
+/**
+ * A block of an extension's node, for the block handles (the `blocks`
+ * feature, see blocks.ts). Every top-level block has a handle; this says
+ * how a block of the node's type takes part in the block menu.
+ */
+export interface BlockSpec {
+  /** The node type. */
+  type: string;
+  /**
+   * The words of the menu's Turn into item. With `create`, the menu turns a
+   * block into this one, and turns a block of this type into the others.
+   */
+  label?: string;
+  /** Makes an empty block of this type: the text of the block moves into it. */
+  create?(): ElementNode;
+  /** `false`: a block of this type has no handle (the node handles itself). */
+  handle?: boolean;
 }
 
 /** What `register` gets besides the editor. */
@@ -87,6 +107,8 @@ export interface KotobaExtension {
   /** Markdown shortcuts (transformers of `@lexical/markdown`). */
   markdown?: readonly Transformer[];
   toolbar?: readonly ToolbarControl[];
+  /** What the block handles do with the extension's nodes (the `blocks` feature). */
+  blocks?: readonly BlockSpec[];
   /** Registers the extension's behaviour. Returns its cleanup. */
   register?(editor: LexicalEditor, context: ExtensionContext): (() => void) | void;
 }
@@ -161,7 +183,22 @@ export function checkExtension(value: unknown, source: string): KotobaExtension 
     toolbar.push(control as unknown as ToolbarControl);
   }
 
-  return { ...(value as unknown as KotobaExtension), toolbar };
+  const blocks: BlockSpec[] = [];
+  for (const block of Array.isArray(value.blocks) ? value.blocks : []) {
+    if (
+      !isObject(block) ||
+      typeof block.type !== "string" ||
+      (block.label !== undefined && (typeof block.label !== "string" || block.label.trim() === "")) ||
+      (block.create !== undefined && typeof block.create !== "function") ||
+      (block.handle !== undefined && typeof block.handle !== "boolean")
+    ) {
+      console.error(`Kotoba: the extension "${name}" has a block without a valid type, label, create and handle`);
+      continue;
+    }
+    blocks.push(block as unknown as BlockSpec);
+  }
+
+  return { ...(value as unknown as KotobaExtension), toolbar, blocks };
 }
 
 /** Loads the app's extension modules. */
