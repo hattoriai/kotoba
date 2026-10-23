@@ -281,6 +281,7 @@ gives it the editor's verbs, however it reaches your app:
 | `link_text` | makes quoted text, or the selection, a link |
 | `add_block` | a paragraph, a heading or a quote, after a block |
 | `move_block` | moves a block after another one, as a block handle does: a list with its items |
+| `suggest_text` | suggests text after a block, for the person to accept or reject (an Issho stream, shown by `Kotoba.Issho.suggestions/4`) |
 | `copy_text`, `paste_text` | copies with its formatting, pastes in any document of the room |
 
 Text is quoted, not counted, so the agent says what it means. Its

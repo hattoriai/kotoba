@@ -282,6 +282,12 @@ defmodule Kotoba.Live do
     * `:format` - `:markdown` (the default) or `:text`. Markdown has only
       the formats and blocks of the editor's features.
     * `:label` - the name of the suggestion, for example `"Rewrite"`.
+    * `:block` - the block the text goes after (`at: :after`) or at the end
+      of (`:caret`, `:selection`), in place of the selection: its number
+      (1 for the first top-level block), or its id in a shared document.
+      The `kotoba:assist` event's `"place"` has both (`%{"block" => 3,
+      "id" => ...}`). A block that is not there gives the end of the
+      document. For a stream that resumes, see `stream_resume/5`.
     * `:display` - `:panel` (the default): the text streams in a panel under
       the editable area; `:inline`: it streams in the text, where it goes
       (after the caret, after the selection it replaces, or in a block
@@ -291,37 +297,72 @@ defmodule Kotoba.Live do
   """
   @spec stream_start(Socket.t(), String.t(), String.t(), keyword()) :: Socket.t()
   def stream_start(socket, id, ref, opts \\ []) when is_binary(id) and is_binary(ref) do
-    at = Keyword.get(opts, :at, :selection)
-    format = Keyword.get(opts, :format, :markdown)
-
-    unless at in @stream_targets,
-      do:
-        raise(
-          ArgumentError,
-          "stream :at must be one of #{inspect(@stream_targets)}, got: #{inspect(at)}"
-        )
-
-    unless format in @stream_formats,
-      do:
-        raise(
-          ArgumentError,
-          "stream :format must be one of #{inspect(@stream_formats)}, got: #{inspect(format)}"
-        )
-
-    display = Keyword.get(opts, :display, :panel)
-
-    unless display in [:panel, :inline],
-      do:
-        raise(
-          ArgumentError,
-          "stream :display must be :panel or :inline, got: #{inspect(display)}"
-        )
-
-    fields = %{ref: ref, op: "start", at: Atom.to_string(at), format: Atom.to_string(format)}
-    fields = if display == :inline, do: Map.put(fields, :display, "inline"), else: fields
-    fields = if label = opts[:label], do: Map.put(fields, :label, to_string(label)), else: fields
-    push_event(socket, "kotoba:stream", payload(id, fields))
+    push_event(socket, "kotoba:stream", payload(id, start_fields(ref, opts)))
   end
+
+  @doc """
+  Starts a suggestion in the middle of its stream: with `text`, the text so
+  far, shown at once. `stream_chunk/4` and `stream_end/3` go on from there.
+  It takes the options of `stream_start/4`.
+
+  It is for a stream that goes on while the person is on another page:
+  the app's process keeps the text and broadcasts each chunk, and a
+  LiveView that mounts resumes it and subscribes. Give it `:block` (from
+  the request's `"place"`), as the selection of the request is gone with
+  the page. The Suggestions guide has the recipe, "A stream that outlives
+  the page".
+
+      Kotoba.Live.stream_resume(socket, "post-body", ref, text, at: :after, block: place["id"] || place["block"])
+  """
+  @spec stream_resume(Socket.t(), String.t(), String.t(), String.t(), keyword()) :: Socket.t()
+  def stream_resume(socket, id, ref, text, opts \\ [])
+      when is_binary(id) and is_binary(ref) and is_binary(text) do
+    push_event(
+      socket,
+      "kotoba:stream",
+      payload(id, Map.put(start_fields(ref, opts), :text, text))
+    )
+  end
+
+  defp start_fields(ref, opts) do
+    at = one_of!(opts, :at, :selection, @stream_targets, "one of #{inspect(@stream_targets)}")
+
+    format =
+      one_of!(opts, :format, :markdown, @stream_formats, "one of #{inspect(@stream_formats)}")
+
+    display = one_of!(opts, :display, :panel, [:panel, :inline], ":panel or :inline")
+
+    %{ref: ref, op: "start", at: Atom.to_string(at), format: Atom.to_string(format)}
+    |> put_some(:display, display == :inline && "inline")
+    |> put_some(:label, opts[:label] && to_string(opts[:label]))
+    |> put_some(:block, block!(opts))
+  end
+
+  defp one_of!(opts, key, default, values, expected) do
+    value = Keyword.get(opts, key, default)
+
+    if value in values,
+      do: value,
+      else:
+        raise(ArgumentError, "stream #{inspect(key)} must be #{expected}, got: #{inspect(value)}")
+  end
+
+  defp block!(opts) do
+    case Keyword.get(opts, :block) do
+      nil ->
+        nil
+
+      block when (is_integer(block) and block >= 1) or (is_binary(block) and block != "") ->
+        block
+
+      block ->
+        raise ArgumentError,
+              "stream :block must be a block number (1 or more) or a block id, got: #{inspect(block)}"
+    end
+  end
+
+  defp put_some(fields, _key, value) when value in [nil, false], do: fields
+  defp put_some(fields, key, value), do: Map.put(fields, key, value)
 
   @doc """
   Adds text to the suggestion `ref` of the editor `id`. The chunks can cut

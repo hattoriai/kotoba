@@ -9,6 +9,20 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `Kotoba.Live.stream_resume/5`: a suggestion that starts in the middle of
+  its stream, with the text so far, for an answer that goes on in the
+  app's process while the person is on another page. `stream_start/4` and
+  `stream_resume/5` take `:block`, the block the text goes after (its
+  number, or its id in a shared document); `kotoba:assist` has the
+  request's `"place"`, and `kotoba:suggestion` has `"gone" => true` when
+  the editor went away. The Suggestions guide's recipe, "A stream that
+  outlives the page", keeps the answer in a GenServer and resumes it.
+- `Kotoba.Issho.suggestions/4`: Issho's streams (Issho 0.4,
+  `Issho.Streams`) as suggestions in a LiveView's shared editors, at the
+  block of their place, picked up where they got to when the page comes
+  back, and closed on Accept, Reject or Stop. Agents suggest text with
+  `suggest_text` (`Kotoba.Issho.tools/0`).
+
 - Inline suggestions: `Kotoba.Live.stream_start/4` with `display: :inline`
   streams the suggestion in the text, where it goes (after the caret,
   after the selection it replaces, or in a block below), tinted, with its

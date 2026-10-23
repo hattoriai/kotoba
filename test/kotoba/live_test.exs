@@ -303,6 +303,20 @@ defmodule Kotoba.LiveTest do
       send(view.pid, {:stream, :stream_start, ["r3", [display: :inline]]})
       assert_push_event(view, "kotoba:stream", %{ref: "r3", op: "start", display: "inline"})
 
+      # A stream that resumes: its text so far, after a block that the server names.
+      send(view.pid, {:stream, :stream_resume, ["r4", "So **far**", [at: :after, block: 2]]})
+
+      assert_push_event(view, "kotoba:stream", %{
+        ref: "r4",
+        op: "start",
+        at: "after",
+        text: "So **far**",
+        block: 2
+      })
+
+      send(view.pid, {:stream, :stream_start, ["r5", [block: "node-7"]]})
+      assert_push_event(view, "kotoba:stream", %{ref: "r5", op: "start", block: "node-7"})
+
       send(view.pid, {:stream, :stream_chunk, ["r2", "Hello **wo"]})
       assert_push_event(view, "kotoba:stream", %{ref: "r2", op: "chunk", text: "Hello **wo"})
 
@@ -313,7 +327,7 @@ defmodule Kotoba.LiveTest do
       assert_push_event(view, "kotoba:stream", %{ref: "r1", op: "cancel"})
     end
 
-    test "refuse a target, a format or a display that is not one" do
+    test "refuse a target, a format, a display or a block that is not one" do
       socket = %Phoenix.LiveView.Socket{}
 
       assert_raise ArgumentError, ~r/:at must be one of/, fn ->
@@ -326,6 +340,10 @@ defmodule Kotoba.LiveTest do
 
       assert_raise ArgumentError, ~r/:display must be :panel or :inline/, fn ->
         Kotoba.Live.stream_start(socket, @editor, "r", display: :overlay)
+      end
+
+      assert_raise ArgumentError, ~r/:block must be a block number/, fn ->
+        Kotoba.Live.stream_resume(socket, @editor, "r", "text", block: 0)
       end
     end
 

@@ -42,11 +42,13 @@
 //   * `kotoba:change` `{v, id, doc}` - the document envelope, debounced,
 //     only when `data-change` is "true".
 //   * `kotoba:prompt` `{v, id, prompt, query}` - a prompt query.
-//   * `kotoba:assist` `{v, id, ref, action, text}` - a request for a
-//     suggestion, only with `data-assist`.
-//   * `kotoba:suggestion` `{v, id, ref, action}` - the person accepted,
-//     rejected or stopped a suggestion (`action` is "accept", "reject" or
-//     "stop"), only with `data-assist`.
+//   * `kotoba:assist` `{v, id, ref, action, text, place?}` - a request for a
+//     suggestion, only with `data-assist`; `place` is the block of the
+//     selection (`{block, id?}`).
+//   * `kotoba:suggestion` `{v, id, ref, action, gone?}` - the person
+//     accepted, rejected or stopped a suggestion (`action` is "accept",
+//     "reject" or "stop"; `gone: true` when the editor went away), only
+//     with `data-assist`.
 //
 // It handles these server events (a payload with an `id` other than the
 // hook element's id is for another editor, and is ignored):
@@ -61,8 +63,8 @@
 //   * `focus` `{}`
 //   * `kotoba:prompt_results` `{prompt, query?, items: [{id, label, hint?, text?, attrs?}], error?}`
 //   * `kotoba:stream` `{ref, op, ...}` - a suggestion: `op` is "start"
-//     (with `at`, `format`, `label` and `display`), "chunk" (with `text`),
-//     "end" or "cancel".
+//     (with `at`, `format`, `label`, `display`, and `text` and `block` for
+//     a stream that resumes), "chunk" (with `text`), "end" or "cancel".
 //
 // A change of `data-readonly` in a LiveView patch also sets the read-only
 // state, and a change of `data-change` turns the pushes on or off.
@@ -481,6 +483,8 @@ class Instance {
       push:
         assist === null ? null : (event, payload) => this.push(event, { ...payload, v: PROTOCOL_VERSION, id: this.id }),
       announce: this.announce,
+      keyOf: (id) => this.collaboration?.keyOf(id) ?? null,
+      idOf: (key) => this.collaboration?.idOf(key) ?? null,
     });
 
     if (features.has("links")) {

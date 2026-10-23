@@ -1374,6 +1374,185 @@ defmodule KotobaDev.InsertLive do
     do: {:noreply, KotobaDev.Assist.next(socket, id, ref, action, rest)}
 end
 
+defmodule KotobaDev.Writer do
+  @moduledoc """
+  The recipe of the Suggestions guide, "A stream that outlives the page":
+  a fake model that writes a long answer (four characters every 40 ms) in
+  a process of the app's, not of the LiveView. It keeps the text so far and
+  broadcasts each chunk on `KotobaDev.PubSub`, so that a LiveView that
+  mounts while it writes resumes it. It goes on while no page is open, and
+  waits a minute after its end for the person to come back and accept it.
+
+  Its key is the app's: here the page's `?key=` (a user and a document in
+  an app), so that one person's answer never shows to another.
+  """
+  use GenServer, restart: :temporary
+
+  @answer "## Summary\n\n" <>
+            String.duplicate("The plan holds, and the **next step** is clear. ", 8)
+  @wait :timer.minutes(1)
+
+  def topic(key), do: "writer:" <> key
+
+  @doc "Starts the answer of `ref` for `key`, asked at `place` (the request's)."
+  def start(key, ref, place) do
+    DynamicSupervisor.start_child(
+      KotobaDev.Writers,
+      {__MODULE__, %{key: key, ref: ref, place: place}}
+    )
+  end
+
+  @doc "The answer of `key`, if one is writing or waits to be accepted."
+  def lookup(key) do
+    case Registry.lookup(KotobaDev.WriterRegistry, key) do
+      [{pid, _}] -> {:ok, GenServer.call(pid, :state)}
+      [] -> :none
+    end
+  catch
+    :exit, _reason -> :none
+  end
+
+  @doc "Stops the answer of `key`: the person accepted, rejected or stopped it."
+  def stop(key) do
+    case Registry.lookup(KotobaDev.WriterRegistry, key) do
+      [{pid, _}] -> GenServer.stop(pid)
+      [] -> :ok
+    end
+  catch
+    :exit, _reason -> :ok
+  end
+
+  def start_link(%{key: key} = args),
+    do:
+      GenServer.start_link(__MODULE__, args,
+        name: {:via, Registry, {KotobaDev.WriterRegistry, key}}
+      )
+
+  @impl true
+  def init(args) do
+    Process.send_after(self(), :write, 40)
+    {:ok, Map.merge(args, %{text: "", rest: @answer, done: false})}
+  end
+
+  @impl true
+  def handle_call(:state, _from, state),
+    do: {:reply, Map.take(state, [:ref, :place, :text, :done]), state}
+
+  @impl true
+  def handle_info(:write, %{rest: ""} = state) do
+    Phoenix.PubSub.broadcast(KotobaDev.PubSub, topic(state.key), {:writer, state.ref, :end})
+    Process.send_after(self(), :expire, @wait)
+    {:noreply, %{state | done: true}}
+  end
+
+  def handle_info(:write, state) do
+    {chunk, rest} = String.split_at(state.rest, 4)
+
+    Phoenix.PubSub.broadcast(
+      KotobaDev.PubSub,
+      topic(state.key),
+      {:writer, state.ref, {:chunk, chunk}}
+    )
+
+    Process.send_after(self(), :write, 40)
+    {:noreply, %{state | text: state.text <> chunk, rest: rest}}
+  end
+
+  def handle_info(:expire, state), do: {:stop, :normal, state}
+end
+
+defmodule KotobaDev.ResumeLive do
+  @moduledoc """
+  A suggestion that outlives the page: Summarize asks `KotobaDev.Writer`;
+  leave the page while it writes, come back (`?key=` the same), and the
+  answer is further on, still streaming or waiting to be accepted.
+  """
+  use Phoenix.LiveView
+
+  import Kotoba.Components
+
+  @editor "resume_editor"
+  @document "Meeting notes\n\nWe agreed on the plan for the launch."
+
+  @impl true
+  def mount(params, _session, socket) do
+    key = Map.get(params, "key", "demo")
+
+    socket =
+      assign(socket,
+        key: key,
+        form: to_form(%{"body" => Kotoba.Content.from_markdown(@document)}, as: :resume)
+      )
+
+    {:ok, if(connected?(socket), do: resume(socket), else: socket)}
+  end
+
+  # Subscribes to the person's answers, and resumes the one that writes or
+  # waits: its text so far, after the block it was asked at.
+  defp resume(socket) do
+    Phoenix.PubSub.subscribe(KotobaDev.PubSub, KotobaDev.Writer.topic(socket.assigns.key))
+
+    case KotobaDev.Writer.lookup(socket.assigns.key) do
+      {:ok, answer} ->
+        socket =
+          Kotoba.Live.stream_resume(socket, @editor, answer.ref, answer.text,
+            at: :after,
+            block: block(answer.place),
+            label: "Summary"
+          )
+
+        if answer.done, do: Kotoba.Live.stream_end(socket, @editor, answer.ref), else: socket
+
+      :none ->
+        socket
+    end
+  end
+
+  # The request's place: the shared id in a shared document, else the number.
+  defp block(%{"id" => id}), do: id
+  defp block(%{"block" => n}), do: n
+  defp block(_place), do: nil
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <h1>A stream that outlives the page</h1>
+    <.form for={@form} id="resume-form">
+      <.kotoba
+        field={@form[:body]}
+        id="resume_editor"
+        label="Notes"
+        assist={[summarize: "Summarize"]}
+      />
+    </.form>
+    <.link navigate="/blocks" id="leave">Go to another page</.link>
+    """
+  end
+
+  @impl true
+  def handle_event("kotoba:assist", %{"ref" => ref} = params, socket) do
+    KotobaDev.Writer.stop(socket.assigns.key)
+    {:ok, _pid} = KotobaDev.Writer.start(socket.assigns.key, ref, params["place"])
+    {:noreply, Kotoba.Live.stream_start(socket, @editor, ref, at: :after, label: "Summary")}
+  end
+
+  # An editor that went away (the person left the page) does not stop the
+  # answer: it waits for them. Accept, Reject and Stop do.
+  def handle_event("kotoba:suggestion", %{"gone" => true}, socket), do: {:noreply, socket}
+
+  def handle_event("kotoba:suggestion", _params, socket) do
+    KotobaDev.Writer.stop(socket.assigns.key)
+    {:noreply, socket}
+  end
+
+  @impl true
+  def handle_info({:writer, ref, {:chunk, text}}, socket),
+    do: {:noreply, Kotoba.Live.stream_chunk(socket, @editor, ref, text)}
+
+  def handle_info({:writer, ref, :end}, socket),
+    do: {:noreply, Kotoba.Live.stream_end(socket, @editor, ref)}
+end
+
 defmodule KotobaDev.Collaboration do
   @moduledoc false
   # The Issho policy. Demo only: production authorization consults the
@@ -1425,18 +1604,21 @@ defmodule KotobaDev.CollabLive do
       follow: params["follow"] != "false"
     ]
 
-    {:ok,
-     assign(socket,
-       document_id: id,
-       user: user,
-       role: role,
-       issho: issho,
-       # ?blocks=true: the block handles, with every feature.
-       features: if(params["blocks"] == "true", do: Kotoba.Features.all()),
-       form: to_form(%{"body" => nil}, as: :shared),
-       saved: nil,
-       assist_refs: MapSet.new()
-     )}
+    socket =
+      assign(socket,
+        document_id: id,
+        user: user,
+        role: role,
+        issho: issho,
+        # ?blocks=true: the block handles, with every feature.
+        features: if(params["blocks"] == "true", do: Kotoba.Features.all()),
+        form: to_form(%{"body" => nil}, as: :shared),
+        saved: nil,
+        assist_refs: MapSet.new()
+      )
+
+    # Issho's streams for this person, as suggestions in the editor.
+    {:ok, Kotoba.Issho.suggestions(socket, user, %{"shared_editor" => issho})}
   end
 
   def render(assigns) do
@@ -1444,7 +1626,7 @@ defmodule KotobaDev.CollabLive do
     <h1>Shared document</h1>
     <p>Open this document in another tab with a different <code>?name=</code> to collaborate.</p>
     <.form for={@form} id="collab-form" phx-submit="save">
-      <.kotoba field={@form[:body]} id="shared_editor" label="Shared document" issho={@issho} user={@user} nodes={["/assets/nodes/tag.js"]} features={@features} />
+      <.kotoba field={@form[:body]} id="shared_editor" label="Shared document" issho={@issho} user={@user} nodes={["/assets/nodes/tag.js"]} features={@features} assist={[summarize: "Summarize"]} />
       <button type="submit" id="collab-save">Publish accepted revision</button>
     </.form>
     <button id="collab-insert" phx-click="insert">Insert tag</button>
@@ -1482,6 +1664,33 @@ defmodule KotobaDev.CollabLive do
 
   def handle_event("kotoba:suggestion", %{"ref" => ref, "action" => action}, socket),
     do: {:noreply, if(action == "accept", do: socket, else: KotobaDev.Assist.stop(socket, ref))}
+
+  # Summarize writes an Issho stream for this person, after the block of the
+  # request, in a task of its own: the page shows it with
+  # Kotoba.Issho.suggestions/4, and finds it again after going away.
+  def handle_event("kotoba:assist", %{"place" => %{"id" => block}}, socket) do
+    %{user: user, document_id: document} = socket.assigns
+    place = %{"doc" => document, "at" => %{"node" => block}}
+
+    Task.start(fn ->
+      {:ok, stream} =
+        Issho.Streams.start(KotobaDev.Issho, Issho.Policy.room(document),
+          kind: "summary",
+          for: user,
+          place: place,
+          meta: %{"label" => "Summary"}
+        )
+
+      for chunk <- ["Resumed ", "after ", "its ", "block"] do
+        Process.sleep(300)
+        :ok = Issho.Streams.append(stream, chunk)
+      end
+
+      Issho.Streams.finish(stream)
+    end)
+
+    {:noreply, socket}
+  end
 
   def handle_info({:assist_chunk, id, ref, action, rest}, socket),
     do: {:noreply, KotobaDev.Assist.next(socket, id, ref, action, rest)}
@@ -1752,6 +1961,7 @@ defmodule KotobaDev.Router do
     live("/extensions", KotobaDev.ExtensionsLive)
     live("/blocks", KotobaDev.BlocksLive)
     live("/insert", KotobaDev.InsertLive)
+    live("/resume", KotobaDev.ResumeLive)
     live("/embeds", KotobaDev.EmbedsLive)
     live("/collab", KotobaDev.CollabLive)
     live("/collab/many", KotobaDev.ManyCollabLive)
@@ -1810,6 +2020,8 @@ Task.async(fn ->
     Supervisor.start_link(
       [
         {Phoenix.PubSub, name: KotobaDev.PubSub},
+        {Registry, keys: :unique, name: KotobaDev.WriterRegistry},
+        {DynamicSupervisor, name: KotobaDev.Writers},
         {Kotoba.Collab.Store.Memory, name: KotobaDev.CollabStore},
         {Issho,
          name: KotobaDev.Issho,

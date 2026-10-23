@@ -30,6 +30,15 @@
 // A caret in the middle of a word shows it below the block: the text node
 // is not split, so the document does not change.
 //
+// A stream can start with text (`Kotoba.Live.stream_resume/5`: a stream
+// that the app went on with while the person was on another page), and at
+// a block the server names (`block`: its number, 1 for the first, or its
+// id in a shared document): the text goes after it, or at its end. A block
+// that is not found gives the end of the document, as a lost selection
+// does. A request (`kotoba:assist`) says its block in `place`, so that the
+// app can keep it for a return. When the editor goes (the person leaves
+// the page), it says `stop` with `gone: true`.
+//
 // Markdown is read with the editor's own Markdown shortcuts, so a
 // suggestion has only the formats and blocks of the editor's features.
 //
@@ -45,11 +54,13 @@ import {
   $createLineBreakNode,
   $createParagraphNode,
   $createTextNode,
+  $createRangeSelection,
   $getNodeByKey,
   $getRoot,
   $getSelection,
   $isElementNode,
   $isRangeSelection,
+  $isRootNode,
   $isRootOrShadowRoot,
   $isTextNode,
   $setSelection,
@@ -88,6 +99,10 @@ export interface StreamStart {
   format?: unknown;
   label?: unknown;
   display?: unknown;
+  /** The text so far, of a stream that resumes. */
+  text?: unknown;
+  /** The block it goes after (its number, or its id in a shared document). */
+  block?: unknown;
 }
 
 export interface Suggestions {
@@ -117,6 +132,9 @@ interface SuggestionOptions {
   /** Pushes an event to the app; `null` for an editor with no assist, which pushes nothing. */
   push: ((event: string, payload: Record<string, unknown>) => void) | null;
   announce(message: string): void;
+  /** In a shared editor: the node of a shared id, and the shared id of a node. */
+  keyOf?(id: string): string | null;
+  idOf?(key: string): string | null;
 }
 
 type State = "streaming" | "done" | "stopped";
@@ -462,8 +480,43 @@ export function createSuggestions(editor: LexicalEditor, options: SuggestionOpti
     placeInline();
   };
 
-  const notify = (ref: string, action: "accept" | "reject" | "stop"): void => {
-    options.push?.("kotoba:suggestion", { ref, action });
+  const notify = (ref: string, action: "accept" | "reject" | "stop", detail: Record<string, unknown> = {}): void => {
+    options.push?.("kotoba:suggestion", { ...detail, ref, action });
+  };
+
+  // The selection at the end of the block that the server names, or `null`.
+  const $blockTarget = (block: unknown): RangeSelection | null => {
+    let node: LexicalNode | null = null;
+    if (typeof block === "number" && Number.isInteger(block) && block >= 1) {
+      node = $getRoot().getChildAtIndex(block - 1);
+    } else if (typeof block === "string" && block !== "") {
+      const key = options.keyOf?.(block) ?? null;
+      const found = key === null ? null : $getNodeByKey(key);
+      node = found === null || $isRootNode(found) ? null : $findMatchingParent(found, (candidate) => $isRootNode(candidate.getParent()));
+    }
+    if (!$isElementNode(node)) return null;
+    const last = node.getLastDescendant();
+    const selection = $createRangeSelection();
+    if ($isTextNode(last)) {
+      selection.anchor.set(last.getKey(), last.getTextContentSize(), "text");
+      selection.focus.set(last.getKey(), last.getTextContentSize(), "text");
+    } else {
+      const parent = last === null ? node : $isElementNode(last) ? last : last.getParentOrThrow();
+      selection.anchor.set(parent.getKey(), parent.getChildrenSize(), "element");
+      selection.focus.set(parent.getKey(), parent.getChildrenSize(), "element");
+    }
+    return selection;
+  };
+
+  // The block of a request's selection, for the app to keep: its number, and
+  // its id in a shared editor.
+  const $place = (target: RangeSelection | null): Record<string, unknown> | null => {
+    if (target === null || !$isValid(target)) return null;
+    const focus = target.focus.getNode();
+    const block = $isRootNode(focus) ? null : $findMatchingParent(focus, (node) => $isRootNode(node.getParent()));
+    if (block === null) return null;
+    const id = options.idOf?.(block.getKey()) ?? null;
+    return id === null ? { block: block.getIndexWithinParent() + 1 } : { block: block.getIndexWithinParent() + 1, id };
   };
 
   // Closes the suggestion. An inline one's pending node goes in an update
@@ -618,7 +671,8 @@ export function createSuggestions(editor: LexicalEditor, options: SuggestionOpti
     if (options.push === null) return null;
     const ref = newRef();
     requested.set(ref, { target: kept.target });
-    options.push("kotoba:assist", { ...detail, ref, action, text: kept.text });
+    const place = editor.getEditorState().read(() => $place(kept.target));
+    options.push("kotoba:assist", { ...detail, ref, action, text: kept.text, ...(place === null ? {} : { place }) });
     options.announce("Asked for a suggestion");
     return ref;
   };
@@ -745,13 +799,14 @@ export function createSuggestions(editor: LexicalEditor, options: SuggestionOpti
       }
       const asked = requested.get(ref);
       requested.delete(ref);
+      const named = start.block === undefined ? null : editor.getEditorState().read(() => $blockTarget(start.block));
       active = {
         ref,
         at: readTarget(start.at),
         format: readFormat(start.format),
         display: readDisplay(start.display),
-        target: asked !== undefined ? asked.target : readSelection().target,
-        text: "",
+        target: named ?? (start.block !== undefined ? null : asked !== undefined ? asked.target : readSelection().target),
+        text: typeof start.text === "string" ? start.text : "",
         state: "streaming",
       };
       showInline(active.display === "inline");
@@ -794,7 +849,7 @@ export function createSuggestions(editor: LexicalEditor, options: SuggestionOpti
     },
 
     dispose() {
-      if (active !== null && active.state === "streaming") notify(active.ref, "stop");
+      if (active !== null && active.state === "streaming") notify(active.ref, "stop", { gone: true });
       close();
       unregister();
       window.removeEventListener("resize", onResize);

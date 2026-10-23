@@ -149,11 +149,15 @@ The editor then pushes `kotoba:suggestion` with the `ref` and an
   over it, or started another stream;
 * `"stop"`: the person stopped it while it streamed, or the editor did (a
   new document, another stream, 30 seconds with no chunk, or the editor
-  was removed from the page).
+  was removed from the page: then with `"gone" => true`).
 
 Stop the work on `"stop"` and `"reject"`: the editor ignores the chunks
 that come after. What had come stays in the panel, and the person can
 still accept it.
+
+`kotoba:assist` also has `"place"`, the block of the selection:
+`%{"block" => 2}` (its number, 1 for the first), with `"id"` in a shared
+document. Keep it to put an answer back after the page comes back (below).
 
 Both events have the editor's `id`, and go to the editor's `phx-target`
 when it has one, as the other events do (see
@@ -350,6 +354,191 @@ Some things to know:
 * A chunk of text is a push to the browser. With a model that sends many
   small chunks, you can join them for 50 ms before a push; the editor
   renders at most once a frame anyway.
+
+## A stream that outlives the page
+
+The stream lives with the LiveView: when the person goes to another page
+while an answer streams, the editor goes, and the work linked to the
+LiveView goes with it. For a long answer (a draft, a summary of a long
+document), the app can keep the work in a process of its own, and let a
+LiveView that mounts pick it up in the middle: the person comes back and
+finds the answer further on, still streaming, or waiting to be accepted.
+
+Kotoba gives the part only the editor can do: `Kotoba.Live.stream_resume/5`
+opens the suggestion with the text so far, at once, and `stream_chunk/4`
+and `stream_end/3` go on from there. The rest is your app's, with what it
+has: a process that keeps the text and broadcasts each chunk on your
+`Phoenix.PubSub`, under a key of yours (the user and the document), so
+that one person's answer never shows to another. Nothing of it runs in an
+app that does not need it.
+
+The writer, under a `DynamicSupervisor` and a `Registry` of your app's
+supervision tree:
+
+```elixir
+defmodule MyApp.Writer do
+  use GenServer, restart: :temporary
+
+  def topic(key), do: "writer:" <> key
+
+  def start(key, ref, place, prompt),
+    do: DynamicSupervisor.start_child(MyApp.Writers, {__MODULE__, %{key: key, ref: ref, place: place, prompt: prompt}})
+
+  # The answer that writes, or waits to be accepted: its ref, place, text and whether it ended.
+  def lookup(key) do
+    case Registry.lookup(MyApp.WriterRegistry, key) do
+      [{pid, _}] -> {:ok, GenServer.call(pid, :state)}
+      [] -> :none
+    end
+  catch
+    :exit, _ -> :none
+  end
+
+  def stop(key) do
+    with [{pid, _}] <- Registry.lookup(MyApp.WriterRegistry, key), do: GenServer.stop(pid)
+  catch
+    :exit, _ -> :ok
+  end
+
+  def start_link(%{key: key} = args),
+    do: GenServer.start_link(__MODULE__, args, name: {:via, Registry, {MyApp.WriterRegistry, key}})
+
+  @impl true
+  def init(args) do
+    writer = self()
+    # The model's chunks come to this process (see "A language model" above).
+    Task.start_link(fn ->
+      MyApp.Model.stream(args.prompt, &send(writer, {:chunk, &1}))
+      send(writer, :done)
+    end)
+    {:ok, Map.merge(args, %{text: "", done: false})}
+  end
+
+  @impl true
+  def handle_call(:state, _from, state), do: {:reply, Map.take(state, [:ref, :place, :text, :done]), state}
+
+  @impl true
+  def handle_info({:chunk, chunk}, state) do
+    Phoenix.PubSub.broadcast(MyApp.PubSub, topic(state.key), {:writer, state.ref, {:chunk, chunk}})
+    {:noreply, %{state | text: state.text <> chunk}}
+  end
+
+  def handle_info(:done, state) do
+    Phoenix.PubSub.broadcast(MyApp.PubSub, topic(state.key), {:writer, state.ref, :end})
+    # The answer waits ten minutes to be accepted.
+    Process.send_after(self(), :expire, :timer.minutes(10))
+    {:noreply, %{state | done: true}}
+  end
+
+  def handle_info(:expire, state), do: {:stop, :normal, state}
+end
+```
+
+The LiveView subscribes when it mounts, and resumes the answer there is:
+
+```elixir
+def mount(_params, _session, socket) do
+  key = "#{socket.assigns.current_user.id}:#{socket.assigns.post.id}"
+  socket = assign(socket, key: key)
+  {:ok, if(connected?(socket), do: resume(socket), else: socket)}
+end
+
+defp resume(socket) do
+  Phoenix.PubSub.subscribe(MyApp.PubSub, MyApp.Writer.topic(socket.assigns.key))
+
+  case MyApp.Writer.lookup(socket.assigns.key) do
+    {:ok, answer} ->
+      socket =
+        Kotoba.Live.stream_resume(socket, "post-body", answer.ref, answer.text,
+          at: :after,
+          block: answer.place["id"] || answer.place["block"],
+          label: "Summary"
+        )
+
+      if answer.done, do: Kotoba.Live.stream_end(socket, "post-body", answer.ref), else: socket
+
+    :none ->
+      socket
+  end
+end
+
+def handle_event("kotoba:assist", %{"ref" => ref, "text" => text} = params, socket) do
+  MyApp.Writer.stop(socket.assigns.key)
+  {:ok, _} = MyApp.Writer.start(socket.assigns.key, ref, params["place"] || %{}, text)
+  {:noreply, Kotoba.Live.stream_start(socket, "post-body", ref, at: :after, label: "Summary")}
+end
+
+# An editor that went away does not stop the answer; Accept, Reject and Stop do.
+def handle_event("kotoba:suggestion", %{"gone" => true}, socket), do: {:noreply, socket}
+def handle_event("kotoba:suggestion", _params, socket) do
+  MyApp.Writer.stop(socket.assigns.key)
+  {:noreply, socket}
+end
+
+def handle_info({:writer, ref, {:chunk, text}}, socket),
+  do: {:noreply, Kotoba.Live.stream_chunk(socket, "post-body", ref, text)}
+
+def handle_info({:writer, ref, :end}, socket),
+  do: {:noreply, Kotoba.Live.stream_end(socket, "post-body", ref)}
+```
+
+What to choose for your app:
+
+* **Where it goes.** The selection of the request is gone with the page,
+  so the answer goes after the block of the request's `"place"`: its id
+  in a shared document, which stays the same however the text changes;
+  its number otherwise, which is right when the document is the one that
+  was saved, and drifts when the blocks before it changed meanwhile. A
+  block that is not found gives the end of the document.
+* **How long it lives.** Until the person accepts, rejects or stops it,
+  and for a while after its end (ten minutes above). Stop it too when no
+  one has come back for a long time, or when the user signs out.
+* **Who sees it.** Only the LiveViews of the key: the user and the
+  document. Two tabs of the same person both resume it.
+* **Inline or in the panel**, as any stream (`display:`).
+
+The development server has it at `/resume`: ask for a summary, go to
+another page, and come back.
+
+### In a shared document, with Issho
+
+An app with shared editors has all of this already: Issho keeps streams
+(`Issho.Streams`), written by any process of your app or by an agent, for
+a person or the room, at a place of a document, and gives each page what
+they hold so far when it comes. `Kotoba.Issho.suggestions/4` shows them as
+suggestions in the LiveView's shared editors, closes a stream on Accept,
+Reject and Stop, and drops one closed in another tab, with no writer of
+your own:
+
+```elixir
+on_mount Issho.Live
+
+def mount(_params, _session, socket) do
+  issho = [instance: MyApp.Issho, document: "notebook:7/intro"]
+  {:ok, Kotoba.Issho.suggestions(socket, socket.assigns.current_user, %{"intro_editor" => issho})}
+end
+
+def handle_event("kotoba:assist", %{"text" => text, "place" => %{"id" => block}}, socket) do
+  user = socket.assigns.current_user
+
+  Task.start(fn ->
+    {:ok, stream} =
+      Issho.Streams.start(MyApp.Issho, "notebook:7",
+        kind: "summary",
+        for: user,
+        place: %{"doc" => "notebook:7/intro", "at" => %{"node" => block}}
+      )
+
+    MyApp.Model.stream(text, &Issho.Streams.append(stream, &1))
+    Issho.Streams.finish(stream)
+  end)
+
+  {:noreply, socket}
+end
+```
+
+An agent with `Kotoba.Issho.tools/0` suggests text the same way, with
+`suggest_text`: the person sees it written, and takes it or leaves it.
 
 ## The keyboard and assistive technology
 

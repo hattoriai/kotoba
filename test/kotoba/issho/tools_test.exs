@@ -281,6 +281,27 @@ defmodule Kotoba.Issho.ToolsTest do
              call(client, "move_block", %{"document" => document, "block" => 2, "after" => 1})
   end
 
+  test "suggests text after a block: an Issho stream the person takes or leaves",
+       %{client: client, instance: instance, document: document, ada: ada} do
+    assert {:ok, %{"suggested" => 11, "stream" => id}} =
+             call(client, "suggest_text", %{
+               "document" => document,
+               "block" => 1,
+               "text" => "A **draft**",
+               "label" => "Draft"
+             })
+
+    assert {:ok, stream} = Issho.Streams.get(instance, id)
+    assert %{state: :finished, content: "A **draft**", kind: "suggestion"} = stream
+    assert %{"label" => "Draft"} = stream.meta
+    assert %{"doc" => ^document, "at" => %{"anchor" => _, "focus" => _}} = stream.place
+    # Nothing of it in the document until the person accepts it.
+    refute html(ada, document) =~ "draft"
+
+    assert {:error, "The document has no block 9: it has 2."} =
+             call(client, "suggest_text", %{"document" => document, "block" => 9, "text" => "x"})
+  end
+
   test "an app's own model uses the same tools, through its API, with no MCP",
        %{instance: instance, document: document, ada: ada} do
     tools = Issho.Tools.room() ++ Kotoba.Issho.tools()
