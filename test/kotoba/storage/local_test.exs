@@ -2,6 +2,8 @@ defmodule Kotoba.Storage.LocalTest do
   # The root is application config.
   use ExUnit.Case, async: false
 
+  import ExUnit.CaptureLog
+
   alias Kotoba.Storage.Local
 
   setup do
@@ -10,7 +12,10 @@ defmodule Kotoba.Storage.LocalTest do
     File.write!(source, "file body")
     Application.put_env(:kotoba, Kotoba.Storage.Local, root: root, url_prefix: "/files/")
 
+    :persistent_term.put({Local, :warned}, true)
+
     on_exit(fn ->
+      :persistent_term.erase({Local, :warned})
       Application.delete_env(:kotoba, Kotoba.Storage.Local)
       File.rm_rf!(root)
       File.rm(source)
@@ -20,7 +25,7 @@ defmodule Kotoba.Storage.LocalTest do
   end
 
   test "put/3 copies the file under the key and returns its URL", %{root: root, source: source} do
-    key = Kotoba.Storage.key("notes.txt", "text/plain")
+    key = Storehouse.key("notes.txt", "text/plain")
 
     assert {:ok, url} = Local.put(key, source, %{name: "notes.txt"})
     assert url == "/files/" <> key
@@ -62,5 +67,15 @@ defmodule Kotoba.Storage.LocalTest do
   test "root/0 raises without a configured root" do
     Application.delete_env(:kotoba, Kotoba.Storage.Local)
     assert_raise ArgumentError, ~r/needs a root directory/, fn -> Local.root() end
+  end
+
+  test "is deprecated: its first file logs a warning, once", %{source: source} do
+    :persistent_term.erase({Local, :warned})
+
+    log = capture_log(fn -> {:ok, _url} = Local.put("2026/09/y.txt", source, %{}) end)
+    assert log =~ "Kotoba.Storage.Local is deprecated, and removed in Kotoba 1.0"
+    assert log =~ "Storehouse.Local"
+
+    assert capture_log(fn -> {:ok, _url} = Local.put("2026/09/z.txt", source, %{}) end) == ""
   end
 end

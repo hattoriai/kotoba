@@ -7,6 +7,49 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Uploads keep their files with [Storehouse](https://hexdocs.pm/storehouse),
+  Kotoba's storage taken out into a library of its own: each file is
+  checked by its bytes (`Kotoba.Attachments.describe/2` is
+  `Storehouse.Check`'s, and reads a JPEG's EXIF orientation), stored under
+  a new key, and served by `Storehouse.Local.Plug`. Uploads go to
+  Storehouse's store, `config :storehouse, adapter: ...`: the local disk
+  (`Storehouse.Local`), S3 and the stores that speak its API
+  (`Storehouse.S3`: R2, MinIO, Tigris, LocalStack), or one of the app's.
+  An app that keeps other files with Storehouse keeps Kotoba's in the
+  same store. `mix kotoba.install` configures Storehouse.
+- Storehouse is an optional dependency: `Kotoba.Live.consume_uploads/4`,
+  `Kotoba.Attachments` and `Kotoba.Storage` are there when the app has
+  `{:storehouse, "~> 0.1"}` in its deps. An editor without uploads needs
+  nothing.
+
+### Deprecated
+
+- `Kotoba.Storage.Local`, `Kotoba.Storage.Local.Plug`,
+  `config :kotoba, storage: ...`, and `Kotoba.Storage`'s `key/2`,
+  `safe_name/2` and `valid_key?/1`. They still work, with deprecation
+  warnings, and are removed in Kotoba 1.0.
+
+### Upgrading
+
+An app with uploads:
+
+1. Adds `{:storehouse, "~> 0.1"}` to its deps.
+2. Replaces `config :kotoba, Kotoba.Storage.Local, ...` with
+   `config :storehouse, Storehouse.Local, ...`, with the same `root`, and
+   `url_prefix: "/uploads/kotoba"` (the old default, unless it gave
+   another), so that the URLs in its documents stay valid.
+3. Removes `config :kotoba, storage: Kotoba.Storage.Local`. A store of its
+   own goes in `config :storehouse, adapter: MyApp.Store`, with
+   `@behaviour Storehouse.Adapter` in place of `@behaviour Kotoba.Storage`
+   (the callbacks are the same).
+4. Replaces `Kotoba.Storage.Local.Plug` with `Storehouse.Local.Plug`, and
+   `Kotoba.Storage`'s `key/2` with `Storehouse.key/2`.
+
+Until it does, step 1 is the only one it needs: the rest works as it did,
+and says what to change.
+
 ### Added
 
 - `Kotoba.Live.stream_resume/5`: a suggestion that starts in the middle of

@@ -51,9 +51,9 @@ the config, is cached as an unknown node. See the
 
 ## Direct uploads to a cloud store are not supported
 
-LiveView's `external:` uploads are not supported. Each file comes to the
-LiveView, Kotoba checks its bytes, and the storage adapter then sends it
-to the store. See the [Uploads](uploads.md) guide.
+LiveView's `external:` uploads are not supported by the editor yet. Each
+file comes to the LiveView, Storehouse checks its bytes, and then sends
+it to the store. See the [Uploads](uploads.md) guide.
 
 ## Two short selection races of Lexical
 

@@ -389,29 +389,37 @@ defmodule Kotoba.Install.Edits do
   @spec config_block(atom() | String.t()) :: String.t()
   def config_block(app \\ :my_app) do
     """
-    # Kotoba stores the files of the editor's uploads with this adapter.
-    # Give it a directory in the :prod block of config/runtime.exs, an
-    # absolute path outside the release:
+    # Kotoba keeps the files of the editor's uploads with Storehouse
+    # ({:storehouse, "~> 0.1"} in your deps), on the local disk here. Give
+    # it a directory in the :prod block of config/runtime.exs, an absolute
+    # path outside the release:
     #
     #     if config_env() == :prod do
-    #       config :kotoba, Kotoba.Storage.Local,
-    #         root: System.get_env("KOTOBA_UPLOADS", "/var/lib/#{app}/uploads"),
-    #         url_prefix: "/uploads/kotoba"
+    #       config :storehouse, Storehouse.Local,
+    #         root: System.get_env("UPLOADS", "/var/lib/#{app}/uploads")
     #     end
     #
     # and one for development in config/dev.exs:
     #
-    #     config :kotoba, Kotoba.Storage.Local, root: Path.expand("../tmp/uploads", __DIR__)
-    config :kotoba, storage: Kotoba.Storage.Local
+    #     config :storehouse, Storehouse.Local, root: Path.expand("../tmp/uploads", __DIR__)
+    #
+    # For S3 (and R2, MinIO, LocalStack): https://hexdocs.pm/storehouse/stores.html
+    config :storehouse, adapter: Storehouse.Local
     """
   end
 
-  # A `config :kotoba, ...` keyword list (not `config :kotoba, Module, ...`)
-  # with a `storage:` key.
+  # A `config :storehouse, ...` keyword list with an `adapter:` key, or the
+  # `storage:` key of a `config :kotoba, ...` one (Kotoba 0.7 and before).
   defp storage_configured?(source) do
-    ~r/^config\s+:kotoba\s*,(?!\s*[A-Z])[^\n]*(?:\n[ \t]+[^\n]*)*/m
+    configured?(source, "storehouse", "adapter") or configured?(source, "kotoba", "storage")
+  end
+
+  # A `config :app, ...` keyword list (not `config :app, Module, ...`) with
+  # the key.
+  defp configured?(source, app, key) do
+    ~r/^config\s+:#{app}\s*,(?!\s*[A-Z])[^\n]*(?:\n[ \t]+[^\n]*)*/m
     |> Regex.scan(source)
-    |> Enum.any?(fn [statement] -> Regex.match?(~r/(?<![\w_])storage:/, statement) end)
+    |> Enum.any?(fn [statement] -> Regex.match?(~r/(?<![\w_])#{key}:/, statement) end)
   end
 
   @doc false

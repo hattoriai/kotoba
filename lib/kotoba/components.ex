@@ -238,6 +238,8 @@ defmodule Kotoba.Components do
           "<.kotoba collab={...}> was removed in Kotoba 0.7: give it issho={[instance: MyApp.Issho, document: id]} and user={@user}; see the Upgrading guide"
         )
 
+    check_uploads!(assigns.uploads)
+
     %FormField{} = field = assigns.field
     input_id = field.id
     id = assigns.id || "#{field.id}_editor"
@@ -328,6 +330,15 @@ defmodule Kotoba.Components do
       </div>
     </div>
     """
+  end
+
+  # Uploads (`uploads`) keep their files with Storehouse, an optional
+  # dependency: an editor given them without it says so.
+  if Code.ensure_loaded?(Storehouse) do
+    defp check_uploads!(_uploads), do: :ok
+  else
+    defp check_uploads!(nil), do: :ok
+    defp check_uploads!(_uploads), do: Kotoba.Live.missing_storehouse!()
   end
 
   # LiveView patches only the data attributes of a `phx-update="ignore"`

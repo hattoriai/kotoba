@@ -58,18 +58,19 @@ defmodule Mix.Tasks.Kotoba.InstallTest do
     assert read(root, "assets/css/app.css") =~
              "/* @import \"../../deps/kotoba/priv/static/kotoba-sumi.css\"; */"
 
-    assert read(root, "config/config.exs") =~ "config :kotoba, storage: Kotoba.Storage.Local"
+    assert read(root, "config/config.exs") =~ "config :storehouse, adapter: Storehouse.Local"
 
     for {_fixture, path} <- @files, do: assert(output =~ "* updating #{path}")
     assert output =~ "+   hooks: {...colocatedHooks, Kotoba},"
     assert output =~ "NODE_PATH"
-    assert output =~ ~s|root: System.get_env("KOTOBA_UPLOADS", "/var/lib/kotoba/uploads")|
+    assert output =~ ~s|root: System.get_env("UPLOADS", "/var/lib/kotoba/uploads")|
+    assert output =~ ~s|{:storehouse, "~> 0.1"}|
     assert output =~ "if config_env() == :prod do"
 
     assert output =~
-             ~S|config :kotoba, Kotoba.Storage.Local, root: Path.expand("../tmp/uploads", __DIR__)|
+             ~S|config :storehouse, Storehouse.Local, root: Path.expand("../tmp/uploads", __DIR__)|
 
-    assert output =~ ~s(forward "/uploads/kotoba", Kotoba.Storage.Local.Plug, at: "/")
+    assert output =~ "plug Storehouse.Local.Plug"
   end
 
   test "a second run changes nothing and says so", %{root: root} do
@@ -90,7 +91,7 @@ defmodule Mix.Tasks.Kotoba.InstallTest do
     assert snapshot(root) == before
     assert output =~ "* would update assets/js/app.js"
     assert output =~ "--- config/config.exs"
-    assert output =~ "+ config :kotoba, storage: Kotoba.Storage.Local"
+    assert output =~ "+ config :storehouse, adapter: Storehouse.Local"
     assert output =~ ~s(+ @import "../../deps/kotoba/priv/static/kotoba.css";)
   end
 

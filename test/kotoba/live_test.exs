@@ -15,10 +15,10 @@ defmodule Kotoba.LiveTest do
 
   setup do
     root = Path.join(System.tmp_dir!(), "kotoba-live-#{System.unique_integer([:positive])}")
-    Application.put_env(:kotoba, Kotoba.Storage.Local, root: root, url_prefix: "/files")
+    Application.put_env(:storehouse, Storehouse.Local, root: root, url_prefix: "/files")
 
     on_exit(fn ->
-      Application.delete_env(:kotoba, Kotoba.Storage.Local)
+      Application.delete_env(:storehouse, Storehouse.Local)
       File.rm_rf!(root)
     end)
 
@@ -457,7 +457,7 @@ defmodule Kotoba.LiveTest do
     for {storage, reason, deleted?} <- [
           {"failing", ":disk_full", false},
           {"unsafe", "unsafe_url", true},
-          {"broken", "invalid_storage_result", true}
+          {"broken", "invalid_store_result", true}
         ] do
       test "logs and removes the marker when the #{storage} storage gives no valid attachment" do
         Process.register(self(), :kotoba_storage_test)

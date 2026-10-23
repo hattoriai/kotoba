@@ -62,16 +62,14 @@ defmodule Kotoba.Live do
 
   require Logger
 
-  import Phoenix.LiveView,
-    only: [push_event: 3, cancel_upload: 3, consume_uploaded_entry: 3, start_async: 3]
+  import Phoenix.LiveView, only: [push_event: 3, start_async: 3]
 
-  alias Kotoba.{Attachments, Content, Document, Prompts, Storage}
-  alias Phoenix.LiveView.{Socket, UploadConfig, UploadEntry}
+  alias Kotoba.{Content, Document, Prompts}
+  alias Phoenix.LiveView.Socket
 
   @v 1
 
   # The private key of the entries that `consume_uploads/4` has consumed.
-  @consumed :kotoba_consumed_uploads
 
   @doc """
   Answers a `kotoba:prompt` event: runs the search of the prompt with the
@@ -402,122 +400,155 @@ defmodule Kotoba.Live do
     push_event(socket, "remove_marker", payload(id, %{ref: ref}))
   end
 
-  @doc """
-  Stores the finished uploads of `upload_name` and puts an attachment node
-  for each in the editor `editor_id`.
+  if Code.ensure_loaded?(Storehouse) do
+    alias Kotoba.{Attachments, Storage}
+    alias Phoenix.LiveView
+    alias Phoenix.LiveView.{UploadConfig, UploadEntry}
 
-  For each entry:
+    @consumed :kotoba_consumed_uploads
 
-    * An entry that is done is consumed (`Phoenix.LiveView.consume_uploaded_entry/3`).
-      Its file is checked (`Kotoba.Attachments.describe/2`), stored under a
-      new key (`Kotoba.Storage.key/2`, with the extension of the checked
-      type) through the storage adapter, and an attachment node with the
-      URL from the adapter is pushed with `insert_node/4` (with the entry's
-      `ref`, so it takes the place of that file's marker). When the check
-      fails, or the adapter gives an error or a result that does not make
-      a valid attachment (a URL that is not a safe link, say), a warning is
-      logged and the marker is removed with `remove_marker/3`.
-    * An entry with an error (too large, a type that is not accepted) is
-      cancelled, and its marker is removed. Read `upload_errors/2` before
-      this call to show the error.
-    * An entry still in progress is left alone.
+    @doc """
+    Stores the finished uploads of `upload_name` and puts an attachment node
+    for each in the editor `editor_id`. It needs
+    [Storehouse](https://hexdocs.pm/storehouse) in the app's deps
+    (`{:storehouse, "~> 0.1"}`).
 
-  An entry is consumed once: a call before LiveView has dropped an entry
-  that an earlier call consumed leaves it alone. So the function can run
-  in the progress callback and in the form's change handler, with files
-  that finish at different times.
+    For each entry:
 
-  ## Options
+      * An entry that is done is consumed (`Phoenix.LiveView.consume_uploaded_entry/3`).
+        Its file is checked (`Kotoba.Attachments.describe/2`), stored under a
+        new key (`Storehouse.key/2`, with the extension of the checked
+        type) through the storage adapter, and an attachment node with the
+        URL from the adapter is pushed with `insert_node/4` (with the entry's
+        `ref`, so it takes the place of that file's marker). When the check
+        fails, or the adapter gives an error or a result that does not make
+        a valid attachment (a URL that is not a safe link, say), a warning is
+        logged and the marker is removed with `remove_marker/3`.
+      * An entry with an error (too large, a type that is not accepted) is
+        cancelled, and its marker is removed. Read `upload_errors/2` before
+        this call to show the error.
+      * An entry still in progress is left alone.
 
-    * `:storage` - the storage adapter. The default is
-      `Kotoba.Storage.adapter/0`.
-    * `:key` - a function of the upload entry and the checked content
-      type that returns a storage key. The default is
-      `&Kotoba.Storage.key(&1.client_name, &2)`.
-    * `:preview` - a function of the stored attachment
-      (`Kotoba.Nodes.Attachment`) and the path of the uploaded file that
-      returns the URL of a preview image, or `nil`: the first page of a
-      PDF, the poster frame of a video. It runs after the file is stored,
-      while its temporary file is still there; the app renders and stores
-      the image. A result that is not a safe URL, or an exception, gives no
-      preview and logs a warning. See the Uploads guide.
-  """
-  @spec consume_uploads(Socket.t(), atom() | String.t(), String.t(), keyword()) :: Socket.t()
-  def consume_uploads(%Socket{} = socket, upload_name, editor_id, opts \\ [])
-      when is_binary(editor_id) do
-    storage = Keyword.get_lazy(opts, :storage, &Storage.adapter/0)
-    key_fun = Keyword.get(opts, :key, &Storage.key(&1.client_name, &2))
-    preview_fun = Keyword.get(opts, :preview)
-    entries = entries(socket, upload_name)
+    An entry is consumed once: a call before LiveView has dropped an entry
+    that an earlier call consumed leaves it alone. So the function can run
+    in the progress callback and in the form's change handler, with files
+    that finish at different times.
 
-    socket = Enum.reduce(entries.invalid, socket, &drop_invalid(&2, upload_name, editor_id, &1))
+    ## Options
 
-    # LiveView drops a consumed entry only when its upload channel has
-    # closed, a message later. A second call before that (the next file
-    # done, a form change) must not consume it again: its channel is gone,
-    # and the call would crash the LiveView.
-    key = {@consumed, upload_name}
-    consumed = Map.get(socket.private, key, MapSet.new())
-    done = Enum.reject(entries.done, &MapSet.member?(consumed, &1.ref))
+      * `:storage` - the store (a `Storehouse.Adapter`). The default is
+        `Kotoba.Storage.adapter/0`.
+      * `:key` - a function of the upload entry and the checked content
+        type that returns a storage key. The default is
+        `&Storehouse.key(&1.client_name, &2)`.
+      * `:preview` - a function of the stored attachment
+        (`Kotoba.Nodes.Attachment`) and the path of the uploaded file that
+        returns the URL of a preview image, or `nil`: the first page of a
+        PDF, the poster frame of a video. It runs after the file is stored,
+        while its temporary file is still there; the app renders and stores
+        the image. A result that is not a safe URL, or an exception, gives no
+        preview and logs a warning. See the Uploads guide.
+    """
+    @spec consume_uploads(Socket.t(), atom() | String.t(), String.t(), keyword()) :: Socket.t()
+    def consume_uploads(%Socket{} = socket, upload_name, editor_id, opts \\ [])
+        when is_binary(editor_id) do
+      storage = Keyword.get_lazy(opts, :storage, &Storage.adapter/0)
+      key_fun = Keyword.get(opts, :key, &Storehouse.key(&1.client_name, &2))
+      preview_fun = Keyword.get(opts, :preview)
+      entries = entries(socket, upload_name)
 
-    kept =
-      entries.all
-      |> MapSet.new(& &1.ref)
-      |> MapSet.intersection(consumed)
-      |> MapSet.union(MapSet.new(done, & &1.ref))
+      socket = Enum.reduce(entries.invalid, socket, &drop_invalid(&2, upload_name, editor_id, &1))
 
-    socket = %{socket | private: Map.put(socket.private, key, kept)}
+      # LiveView drops a consumed entry only when its upload channel has
+      # closed, a message later. A second call before that (the next file
+      # done, a form change) must not consume it again: its channel is gone,
+      # and the call would crash the LiveView.
+      key = {@consumed, upload_name}
+      consumed = Map.get(socket.private, key, MapSet.new())
+      done = Enum.reject(entries.done, &MapSet.member?(consumed, &1.ref))
 
-    Enum.reduce(done, socket, fn entry, socket ->
-      result =
-        consume_uploaded_entry(socket, entry, &store(&1, entry, storage, key_fun, preview_fun))
+      kept =
+        entries.all
+        |> MapSet.new(& &1.ref)
+        |> MapSet.intersection(consumed)
+        |> MapSet.union(MapSet.new(done, & &1.ref))
 
-      case result do
-        {:ok, attachment} ->
-          insert_node(socket, editor_id, attachment, ref: entry.ref)
+      socket = %{socket | private: Map.put(socket.private, key, kept)}
 
-        {:error, reason} ->
-          Logger.warning(
-            "Kotoba: the upload #{inspect(entry.client_name)} was not stored: #{inspect(reason)}"
+      Enum.reduce(done, socket, fn entry, socket ->
+        result =
+          LiveView.consume_uploaded_entry(
+            socket,
+            entry,
+            &store(&1, entry, storage, key_fun, preview_fun)
           )
 
-          remove_marker(socket, editor_id, entry.ref)
-      end
-    end)
-  end
+        case result do
+          {:ok, attachment} ->
+            insert_node(socket, editor_id, attachment, ref: entry.ref)
 
-  defp entries(socket, upload_name) do
-    case socket.assigns[:uploads] do
-      %{^upload_name => %UploadConfig{} = conf} ->
-        %{
-          all: conf.entries,
-          invalid: Enum.reject(conf.entries, & &1.valid?),
-          done: Enum.filter(conf.entries, &(&1.valid? and &1.done?))
-        }
+          {:error, reason} ->
+            Logger.warning(
+              "Kotoba: the upload #{inspect(entry.client_name)} was not stored: #{inspect(reason)}"
+            )
 
-      _other ->
-        raise ArgumentError, "no upload allowed for #{inspect(upload_name)}"
+            remove_marker(socket, editor_id, entry.ref)
+        end
+      end)
     end
+
+    defp entries(socket, upload_name) do
+      case socket.assigns[:uploads] do
+        %{^upload_name => %UploadConfig{} = conf} ->
+          %{
+            all: conf.entries,
+            invalid: Enum.reject(conf.entries, & &1.valid?),
+            done: Enum.filter(conf.entries, &(&1.valid? and &1.done?))
+          }
+
+        _other ->
+          raise ArgumentError, "no upload allowed for #{inspect(upload_name)}"
+      end
+    end
+
+    defp drop_invalid(socket, upload_name, editor_id, %UploadEntry{ref: ref}) do
+      socket
+      |> LiveView.cancel_upload(upload_name, ref)
+      |> remove_marker(editor_id, ref)
+    end
+
+    # The consume callback always returns {:ok, _}: a file that could not be
+    # stored is still consumed (its temporary file is removed), and the
+    # result says what happened.
+    defp store(%{path: path}, entry, storage, key_fun, preview_fun) do
+      {:ok,
+       Attachments.store(path,
+         name: entry.client_name,
+         content_type: entry.client_type,
+         storage: storage,
+         key: fn _name, content_type -> key_fun.(entry, content_type) end,
+         preview: preview_fun
+       )}
+    end
+  else
+    @doc false
+    # Uploads with no Storehouse in the app's deps: the developer learns
+    # what is missing, not that a function is undefined.
+    def consume_uploads(_socket, _upload_name, _editor_id, _opts \\ []),
+      do: missing_storehouse!()
   end
 
-  defp drop_invalid(socket, upload_name, editor_id, %UploadEntry{ref: ref}) do
-    socket
-    |> cancel_upload(upload_name, ref)
-    |> remove_marker(editor_id, ref)
-  end
+  @doc false
+  @spec missing_storehouse!() :: no_return()
+  def missing_storehouse! do
+    raise ArgumentError, """
+    Kotoba's uploads keep their files with Storehouse, which is not in the \
+    app's deps. Add it to mix.exs, and run mix deps.get:
 
-  # The consume callback always returns {:ok, _}: a file that could not be
-  # stored is still consumed (its temporary file is removed), and the
-  # result says what happened.
-  defp store(%{path: path}, entry, storage, key_fun, preview_fun) do
-    {:ok,
-     Attachments.store(path,
-       name: entry.client_name,
-       content_type: entry.client_type,
-       storage: storage,
-       key: fn _name, content_type -> key_fun.(entry, content_type) end,
-       preview: preview_fun
-     )}
+        {:storehouse, "~> 0.1"}
+
+    An editor without uploads (no `uploads` on <.kotoba>) does not need it.
+    """
   end
 
   defp editor_id(%{"id" => id}) when is_binary(id) and id != "", do: id

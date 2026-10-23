@@ -42,7 +42,7 @@ README has the details) to try every feature in your browser.
 | Tables | insert, rows and columns, header rows and columns, pasted tables |
 | Links | a link form, paste a URL over text, autolinks, allowed schemes; a link card to open, edit or remove the link at the caret |
 | Selection menu | a menu over the selected text, with the toolbar's commands or the app's own buttons, themed with CSS properties |
-| Files | drop, paste or pick images and files; image galleries, reordered from the keyboard; PDFs in the browser's viewer, MP4 and WebM videos; LiveView uploads, a storage adapter with byte ranges |
+| Files | drop, paste or pick images and files; image galleries, reordered from the keyboard; PDFs in the browser's viewer, MP4 and WebM videos; LiveView uploads, kept with [Storehouse](https://hexdocs.pm/storehouse): the local disk, S3, byte ranges |
 | Prompts | `@` mentions, emoji, tags: server searches (async too) or local lists, with queries that have spaces |
 | Suggestions | text streamed from the server (a language model), shown as it comes, then accepted as one undo step or rejected; an Assist menu |
 | Collaboration | shared documents, participant cursors, read-only viewers, per-author undo, offline draft recovery and accepted revisions for form submission; [setup](guides/collaboration.md) |
@@ -83,7 +83,7 @@ mix kotoba.install
 ```
 
 The installer adds the hook to `assets/js/app.js`, the style sheet to
-`assets/css/app.css` and the storage adapter to `config/config.exs`, and
+`assets/css/app.css` and the store of uploads to `config/config.exs`, and
 prints what it changed. Give `--dry-run` to see the changes first. It does
 not add what a file already has, so you can run it again.
 
@@ -110,10 +110,12 @@ want it: Sumi is the design system of Hattori AI, the makers of Kotoba). Put the
 /* @import "../../deps/kotoba/priv/static/kotoba-sumi.css"; */
 ```
 
-Name the storage adapter for uploads in `config/config.exs`:
+For uploads, add [Storehouse](https://hexdocs.pm/storehouse) to your deps
+(`{:storehouse, "~> 0.1"}`; an editor without uploads never needs it), and
+name its store in `config/config.exs`:
 
 ```elixir
-config :kotoba, storage: Kotoba.Storage.Local
+config :storehouse, adapter: Storehouse.Local
 ```
 
 ### `NODE_PATH=deps`
