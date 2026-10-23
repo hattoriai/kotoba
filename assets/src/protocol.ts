@@ -18,6 +18,11 @@ export const LEXICAL_VERSION = "0.51";
 /** Node types that only the editor uses. They never go to the server. */
 export const UPLOAD_MARKER_TYPE = "kotoba-upload";
 export const UNKNOWN_TYPE = "kotoba-unknown";
+/** A suggestion that streams in place (see suggestions.ts). */
+export const PENDING_TYPE = "kotoba-pending";
+
+/** The nodes that stay in this browser: never saved, never shared. */
+export const LOCAL_TYPES: ReadonlySet<string> = new Set([UPLOAD_MARKER_TYPE, PENDING_TYPE]);
 
 export interface JSONNode {
   type: string;
@@ -127,9 +132,10 @@ export function collapseBlankLines(node: JSONNode): JSONNode {
   return { ...node, children };
 }
 
-// Upload markers are dropped; unknown nodes are written as they were read.
+// Upload markers and pending suggestions are dropped; unknown nodes are
+// written as they were read.
 function exportNode(node: SerializedLexicalNode): JSONNode | null {
-  if (node.type === UPLOAD_MARKER_TYPE) return null;
+  if (LOCAL_TYPES.has(node.type)) return null;
 
   const json = node as unknown as JSONNode;
   if (json.type === UNKNOWN_TYPE) return isNode(json.raw) ? json.raw : null;

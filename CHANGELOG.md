@@ -9,6 +9,13 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- Inline suggestions: `Kotoba.Live.stream_start/4` with `display: :inline`
+  streams the suggestion in the text, where it goes (after the caret,
+  after the selection it replaces, or in a block below), tinted, with its
+  status and buttons under it. As in the panel, it is not in the saved
+  document, the undo history or a shared document until the person
+  accepts it, as one undo step. Suggestions guide.
+
 - An insert menu: a prompt with `insert: :command`
   (`{"/", :insert, insert: :command}`) opens on `/` a menu of what the
   field can insert or turn the block into, filtered as the person types:

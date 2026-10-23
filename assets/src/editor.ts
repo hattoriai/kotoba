@@ -63,12 +63,12 @@ import {
 import { findCodeLanguage, registerCodeLanguageAliases } from "./code_languages";
 import { AttachmentNode } from "./nodes/attachment";
 import { GalleryNode } from "./nodes/gallery";
-import { UnknownNode, UploadMarkerNode } from "./nodes/internal";
+import { PendingNode, UnknownNode, UploadMarkerNode } from "./nodes/internal";
 import { FootnoteDefinitionNode, FootnoteReferenceNode } from "./nodes/footnote";
 import { EmbedNode } from "./nodes/embed";
 import { ImageNode } from "./nodes/image";
 import { MentionNode } from "./nodes/mention";
-import { UNKNOWN_TYPE, UPLOAD_MARKER_TYPE } from "./protocol";
+import { PENDING_TYPE, UNKNOWN_TYPE, UPLOAD_MARKER_TYPE } from "./protocol";
 
 // Every import above has run, so the editor's Prism and its grammars are
 // loaded: the aliases join them, and the host page gets its own `Prism` back.
@@ -129,6 +129,7 @@ export const BUILT_IN_NODES: readonly Klass<LexicalNode>[] = [
   EmbedNode,
   UploadMarkerNode,
   UnknownNode,
+  PendingNode,
 ];
 
 /** The node types that Lexical registers on every editor. */
@@ -304,6 +305,7 @@ export function registeredTypes(editor: LexicalEditor): Set<string> {
   const types = new Set(editor._nodes.keys());
   types.delete(UPLOAD_MARKER_TYPE);
   types.delete(UNKNOWN_TYPE);
+  types.delete(PENDING_TYPE);
   return types;
 }
 

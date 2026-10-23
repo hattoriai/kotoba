@@ -19,6 +19,17 @@
 // the person can go on editing meanwhile. When that selection is no longer
 // in the document, the text goes at the end.
 //
+// How it shows (`display`): in the panel ("panel", the default), or in the
+// text ("inline"), where it goes: after the caret, after the selection it
+// replaces (struck, where the browser has CSS highlights), or as a block
+// below. Inline, the suggestion is a pending node (see nodes/internal.ts):
+// not in the saved document, not shared, and not in the undo history (its
+// updates are historic). An undo or a remote change that takes it away puts
+// it back; the person deleting it (typing over it) rejects the suggestion.
+// The panel then holds only the suggestion's status and buttons, under it.
+// A caret in the middle of a word shows it below the block: the text node
+// is not split, so the document does not change.
+//
 // Markdown is read with the editor's own Markdown shortcuts, so a
 // suggestion has only the formats and blocks of the editor's features.
 //
@@ -44,11 +55,13 @@ import {
   $setSelection,
   COMMAND_PRIORITY_HIGH,
   CONTROL_OR_META,
+  HISTORIC_TAG,
   HISTORY_PUSH_TAG,
   KEY_DOWN_COMMAND,
   KEY_ESCAPE_COMMAND,
   isExactShortcutMatch,
   mergeRegister,
+  type EditorState,
   type Klass,
   type LexicalEditor,
   type LexicalNode,
@@ -57,9 +70,12 @@ import {
 
 import { createKotobaEditor } from "./editor";
 import { $domSelection } from "./link";
+import { $createPendingNode, $isPendingNode, setPendingContent, type PendingNode } from "./nodes/internal";
+import { placeOver } from "./selection_menu";
 
 export type SuggestionTarget = "selection" | "caret" | "after" | "end";
 export type SuggestionFormat = "markdown" | "text";
+export type SuggestionDisplay = "panel" | "inline";
 
 /** An action of the Assist menu. */
 export interface AssistAction {
@@ -71,6 +87,7 @@ export interface StreamStart {
   at?: unknown;
   format?: unknown;
   label?: unknown;
+  display?: unknown;
 }
 
 export interface Suggestions {
@@ -108,6 +125,7 @@ interface Active {
   ref: string;
   at: SuggestionTarget;
   format: SuggestionFormat;
+  display: SuggestionDisplay;
   target: RangeSelection | null;
   text: string;
   state: State;
@@ -122,6 +140,15 @@ const readTarget = (value: unknown): SuggestionTarget =>
   typeof value === "string" && TARGETS.has(value) ? (value as SuggestionTarget) : "selection";
 
 const readFormat = (value: unknown): SuggestionFormat => (value === "text" ? "text" : "markdown");
+
+const readDisplay = (value: unknown): SuggestionDisplay => (value === "inline" ? "inline" : "panel");
+
+/** The updates of a pending suggestion: not in the undo history, and not the person's. */
+const PENDING_TAG = "kotoba-pending";
+const PENDING_TAGS = [HISTORIC_TAG, PENDING_TAG];
+
+/** The CSS highlight of the text that an inline suggestion replaces. */
+const REPLACED = "kotoba-replaced";
 
 let refs = 0;
 const newRef = (): string => {
@@ -188,6 +215,87 @@ function $placeSelection(active: Active): { selection: RangeSelection; paragraph
   }
   $setSelection(kept);
   return { selection: kept, paragraph: null };
+}
+
+/** The pending nodes of the document. */
+function $pendingNodes(node: LexicalNode = $getRoot()): PendingNode[] {
+  if ($isPendingNode(node)) return [node];
+  return $isElementNode(node) ? node.getChildren().flatMap((child) => $pendingNodes(child)) : [];
+}
+
+/**
+ * Puts the pending node of an inline suggestion where its text goes: in the
+ * line, at the caret or after the selection, when that is at the edge of a
+ * text (no text node is split), else as a block below the block of the
+ * selection, or at the end of the document.
+ */
+function $placePending(active: Active): PendingNode {
+  const kept = active.target !== null && $isValid(active.target) ? active.target : null;
+  const end = kept === null ? null : kept.isBackward() ? kept.anchor : kept.focus;
+
+  if (end !== null && (active.at === "caret" || active.at === "selection")) {
+    const node = end.getNode();
+    const inline = $createPendingNode(active.ref, true);
+    if (end.type === "text" && $isTextNode(node)) {
+      if (end.offset === node.getTextContentSize()) return node.insertAfter(inline, false) as PendingNode;
+      if (end.offset === 0) return node.insertBefore(inline, false) as PendingNode;
+    } else if ($isElementNode(node) && !$isRootOrShadowRoot(node) && !node.isInline()) {
+      const child = node.getChildAtIndex(end.offset);
+      if (child === null) node.append(inline);
+      else child.insertBefore(inline, false);
+      return inline;
+    }
+  }
+
+  const pending = $createPendingNode(active.ref, false);
+  const block = end === null || active.at === "end" ? null : $topBlock(end.getNode());
+  if (block === null) $getRoot().append(pending);
+  else block.insertAfter(pending, false);
+  return pending;
+}
+
+/**
+ * Puts an inline suggestion's nodes in place of its pending node, after
+ * removing the text it replaces.
+ */
+function $insertAtPending(active: Active, pending: PendingNode, nodes: LexicalNode[]): void {
+  const kept = active.target;
+  if (active.at === "selection" && kept !== null && !kept.isCollapsed() && $isValid(kept)) kept.clone().removeText();
+
+  if (pending.isInline()) {
+    const selection = pending.selectPrevious();
+    pending.remove();
+    if (nodes.length > 0) selection.insertNodes(nodes);
+    return;
+  }
+  const paragraph = $createParagraphNode();
+  pending.replace(paragraph);
+  if (nodes.length === 0) {
+    paragraph.remove();
+    return;
+  }
+  paragraph.select().insertNodes(nodes);
+  if (paragraph.isAttached() && paragraph.isEmpty()) paragraph.remove();
+}
+
+/** The DOM range of a kept selection of text, for the highlight of what it replaces. */
+function domRange(editor: LexicalEditor, selection: RangeSelection): Range | null {
+  const point = (key: string, offset: number): [Node, number] | null => {
+    const element = editor.getElementByKey(key);
+    if (element === null) return null;
+    const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+    const text = walker.nextNode();
+    return text === null ? null : [text, Math.min(offset, text.textContent?.length ?? 0)];
+  };
+  if (selection.anchor.type !== "text" || selection.focus.type !== "text") return null;
+  const [first, last] = selection.isBackward() ? [selection.focus, selection.anchor] : [selection.anchor, selection.focus];
+  const start = point(first.key, first.offset);
+  const end = point(last.key, last.offset);
+  if (start === null || end === null) return null;
+  const range = document.createRange();
+  range.setStart(...start);
+  range.setEnd(...end);
+  return range;
 }
 
 export function createSuggestions(editor: LexicalEditor, options: SuggestionOptions): Suggestions {
@@ -284,6 +392,61 @@ export function createSuggestions(editor: LexicalEditor, options: SuggestionOpti
     if (frame === 0) frame = requestAnimationFrame(renderPreview);
   };
 
+  // Inline: the suggestion's place in the text, and the text it replaces.
+  let pendingKey: string | null = null;
+  let replaced: Range | null = null;
+
+  const highlights = (): Map<string, Highlight> | null =>
+    typeof CSS !== "undefined" && "highlights" in CSS && typeof Highlight !== "undefined"
+      ? (CSS.highlights as unknown as Map<string, Highlight>)
+      : null;
+
+  const setReplaced = (range: Range | null): void => {
+    const registry = highlights();
+    if (registry === null) return;
+    let highlight = registry.get(REPLACED);
+    if (highlight === undefined) {
+      highlight = new Highlight();
+      registry.set(REPLACED, highlight);
+    }
+    if (replaced !== null) highlight.delete(replaced);
+    replaced = range;
+    if (range !== null) highlight.add(range);
+  };
+
+  // The panel holds the content, or lends it to the pending node.
+  const showInline = (inline: boolean): void => {
+    if (inline) {
+      content.setAttribute("aria-label", "Suggestion, not accepted");
+      setPendingContent(editor, content);
+      panel.classList.add("kotoba-suggestion-floating");
+      return;
+    }
+    setPendingContent(editor, null);
+    content.removeAttribute("aria-label");
+    if (content.parentElement !== panel) panel.insertBefore(content, actions);
+    panel.classList.remove("kotoba-suggestion-floating");
+    panel.style.removeProperty("left");
+    panel.style.removeProperty("top");
+    pendingKey = null;
+    setReplaced(null);
+  };
+
+  // Inline, the status and the buttons go under the suggestion, and the
+  // replaced text is struck.
+  const placeInline = (): void => {
+    const current = active;
+    if (current === null || current.display !== "inline" || panel.hidden) return;
+    const element = pendingKey === null ? null : editor.getElementByKey(pendingKey);
+    if (element !== null) placeOver(panel, options.host, element.getBoundingClientRect(), "bottom");
+    const target = current.target;
+    const range =
+      current.at === "selection" && target !== null && !target.isCollapsed()
+        ? editor.getEditorState().read(() => ($isValid(target) ? domRange(editor, target) : null))
+        : null;
+    setReplaced(range);
+  };
+
   const render = (): void => {
     if (active === null) {
       panel.hidden = true;
@@ -296,18 +459,41 @@ export function createSuggestions(editor: LexicalEditor, options: SuggestionOpti
     stop.hidden = !streaming;
     accept.hidden = streaming;
     reject.hidden = streaming;
+    placeInline();
   };
 
   const notify = (ref: string, action: "accept" | "reject" | "stop"): void => {
     options.push?.("kotoba:suggestion", { ref, action });
   };
 
-  const close = (): void => {
+  // Closes the suggestion. An inline one's pending node goes in an update
+  // of its own (not in the history), unless the caller's update takes it
+  // away: Lexical joins the updates of a tick, and their tags, so a historic
+  // one would keep the caller's change out of the history.
+  const close = (removePending = true): void => {
     clearTimeout(idle);
     if (frame !== 0) cancelAnimationFrame(frame);
     frame = 0;
+    const inline = active?.display === "inline";
     active = null;
+    if (inline) {
+      showInline(false);
+      if (removePending) editor.update(() => $pendingNodes().forEach((node) => node.remove()), { tag: PENDING_TAGS });
+    }
     render();
+  };
+
+  // Puts the pending node of an inline suggestion in place (again), and
+  // takes away any other.
+  const placePending = (): void => {
+    const current = active;
+    editor.update(
+      () => {
+        for (const node of $pendingNodes()) node.remove();
+        if (current !== null && current.display === "inline") pendingKey = $placePending(current).getKey();
+      },
+      { tag: PENDING_TAGS, onUpdate: placeInline },
+    );
   };
 
   const armIdle = (): void => {
@@ -327,6 +513,16 @@ export function createSuggestions(editor: LexicalEditor, options: SuggestionOpti
     editor.update(
       () => {
         const nodes = $nodes(current.text, current.format);
+        // Inline, the text goes where it was shown; at the caret or over the
+        // selection when it was shown below (a word is not split).
+        const found = $pendingNodes().find((node) => node.getRef() === current.ref);
+        const below = found !== undefined && !found.isInline() && (current.at === "caret" || current.at === "selection");
+        const shown = below ? undefined : found;
+        for (const node of $pendingNodes()) if (node !== shown) node.remove();
+        if (shown !== undefined) {
+          $insertAtPending(current, shown, nodes);
+          return;
+        }
         if (nodes.length === 0) return;
         const { selection, paragraph } = $placeSelection(current);
         selection.insertNodes(nodes);
@@ -337,17 +533,23 @@ export function createSuggestions(editor: LexicalEditor, options: SuggestionOpti
       { tag: HISTORY_PUSH_TAG },
     );
     notify(current.ref, "accept");
-    close();
+    close(false);
     editor.focus();
     options.announce("Suggestion inserted");
   };
 
-  const doReject = (): void => {
+  // `restore`: the caret goes back to where the suggestion was asked for;
+  // not when the person deleted an inline suggestion, typing over it.
+  const doReject = (restore = true): void => {
     const current = active;
     if (current === null) return;
     const streaming = current.state === "streaming";
     notify(current.ref, streaming ? "stop" : "reject");
     close();
+    if (!restore) {
+      options.announce("Suggestion discarded");
+      return;
+    }
     editor.update(() => {
       if (current.target !== null && $isValid(current.target)) $setSelection(current.target.clone());
     });
@@ -468,7 +670,39 @@ export function createSuggestions(editor: LexicalEditor, options: SuggestionOpti
   menu.addEventListener("focusout", onMenuFocusOut);
   menu.addEventListener("mousedown", onMenuMouseDown);
 
+  // The pending node follows the suggestion: a stale one (an undo brought it
+  // back) goes; an undo, a redo or a remote change that took the live one
+  // away puts it back; the person deleting it rejects the suggestion.
+  const onUpdate = ({ editorState, tags }: { editorState: EditorState; tags: Set<string> }): void => {
+    if (tags.has(PENDING_TAG)) return;
+    const current = active;
+    const want = current !== null && current.display === "inline" ? current.ref : null;
+    const found = editorState.read(() => $pendingNodes().map((node) => ({ key: node.getKey(), ref: node.getRef() })));
+    if (found.some((node) => node.ref !== want)) {
+      editor.update(
+        () => {
+          for (const node of $pendingNodes()) if (node.getRef() !== want) node.remove();
+        },
+        { tag: PENDING_TAGS },
+      );
+    }
+    if (want === null) return;
+    const mine = found.find((node) => node.ref === want);
+    if (mine !== undefined) {
+      pendingKey = mine.key;
+      placeInline();
+    } else if (tags.has(HISTORIC_TAG) || tags.has("kotoba-collab") || tags.has("kotoba-remote")) {
+      placePending();
+    } else {
+      doReject(false);
+    }
+  };
+
+  const onResize = (): void => placeInline();
+  window.addEventListener("resize", onResize);
+
   const unregister = mergeRegister(
+    editor.registerUpdateListener(onUpdate),
     editor.registerCommand(
       KEY_DOWN_COMMAND,
       (event: KeyboardEvent) => {
@@ -515,10 +749,13 @@ export function createSuggestions(editor: LexicalEditor, options: SuggestionOpti
         ref,
         at: readTarget(start.at),
         format: readFormat(start.format),
+        display: readDisplay(start.display),
         target: asked !== undefined ? asked.target : readSelection().target,
         text: "",
         state: "streaming",
       };
+      showInline(active.display === "inline");
+      placePending();
       title.textContent = typeof start.label === "string" && start.label.trim() !== "" ? start.label : "Suggestion";
       panel.setAttribute("aria-label", title.textContent);
       render();
@@ -560,6 +797,7 @@ export function createSuggestions(editor: LexicalEditor, options: SuggestionOpti
       if (active !== null && active.state === "streaming") notify(active.ref, "stop");
       close();
       unregister();
+      window.removeEventListener("resize", onResize);
       preview.setRootElement(null);
       panel.removeEventListener("click", onPanelClick);
       panel.removeEventListener("keydown", onPanelKeyDown);

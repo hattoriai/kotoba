@@ -407,6 +407,8 @@ defmodule KotobaDev.EditorLive do
        invalid: false,
        changes: 0,
        push_changes: params["change"] != nil,
+       # ?inline=true: the suggestions stream in the text, not in the panel.
+       display: if(params["inline"] == "true", do: :inline, else: :panel),
        menu: params["menu"],
        blank_lines: if(params["blank_lines"] == "collapse", do: :collapse, else: :keep),
        validated: 0,
@@ -604,14 +606,20 @@ defmodule KotobaDev.EditorLive do
 
   # A suggestion that the person asked for with the Assist menu.
   def handle_event("kotoba:assist", %{"ref" => ref, "action" => action, "text" => text}, socket),
-    do: {:noreply, KotobaDev.Assist.start(socket, @editor, ref, action, text)}
+    do:
+      {:noreply,
+       KotobaDev.Assist.start(socket, @editor, ref, action, text, display: socket.assigns.display)}
 
   # A suggestion that the server starts by itself, at the end.
   def handle_event("stream_summary", _params, socket) do
     ref = Kotoba.Live.stream_ref()
 
     socket =
-      KotobaDev.Assist.start(socket, @editor, ref, "continue", "", at: :end, label: "Summary")
+      KotobaDev.Assist.start(socket, @editor, ref, "continue", "",
+        at: :end,
+        label: "Summary",
+        display: socket.assigns.display
+      )
 
     {:noreply, socket}
   end
@@ -1426,7 +1434,8 @@ defmodule KotobaDev.CollabLive do
        # ?blocks=true: the block handles, with every feature.
        features: if(params["blocks"] == "true", do: Kotoba.Features.all()),
        form: to_form(%{"body" => nil}, as: :shared),
-       saved: nil
+       saved: nil,
+       assist_refs: MapSet.new()
      )}
   end
 
@@ -1440,6 +1449,7 @@ defmodule KotobaDev.CollabLive do
     </.form>
     <button id="collab-insert" phx-click="insert">Insert tag</button>
     <button id="collab-attach" phx-click="attach">Insert image</button>
+    <button id="collab-summary" phx-click="summary">Stream a summary in the text</button>
     <.kotoba_content :if={@saved} content={@saved} id="collab-saved" />
     <p :if={@saved} id="collab-saved-text">{@saved.text}</p>
     """
@@ -1459,6 +1469,22 @@ defmodule KotobaDev.CollabLive do
     do:
       {:noreply,
        Kotoba.Live.insert_node(socket, "shared_editor", %KotobaDev.Nodes.Tag{label: "shared"})}
+
+  # A suggestion in the text: only this person sees it, until they accept it.
+  def handle_event("summary", _params, socket),
+    do:
+      {:noreply,
+       KotobaDev.Assist.start(socket, "shared_editor", Kotoba.Live.stream_ref(), "continue", "",
+         at: :end,
+         label: "Summary",
+         display: :inline
+       )}
+
+  def handle_event("kotoba:suggestion", %{"ref" => ref, "action" => action}, socket),
+    do: {:noreply, if(action == "accept", do: socket, else: KotobaDev.Assist.stop(socket, ref))}
+
+  def handle_info({:assist_chunk, id, ref, action, rest}, socket),
+    do: {:noreply, KotobaDev.Assist.next(socket, id, ref, action, rest)}
 
   # An image attachment, for the shared caption (its file is not stored).
   def handle_event("attach", _params, socket),
