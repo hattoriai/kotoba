@@ -61,8 +61,8 @@ test("Stop ends the answer: it does not come back", async ({ page }) => {
   await expect(panel(page)).toBeHidden();
 });
 
-test("in a shared document, a resumed answer finds its block by its shared id", async ({ page }) => {
-  const id = crypto.randomUUID();
+/** Ada's shared editor, with "First" and "Second", and Summarize asked in "First". */
+async function askInShared(page: Page, id: string): Promise<void> {
   await openEditor(page, `/collab?document=${id}&name=Ada`, "shared_editor");
   await expect(page.locator("#shared_editor [data-collab-status]")).toHaveText("Saved");
   const editable = page.locator("#shared_editor .kotoba-editable");
@@ -72,13 +72,45 @@ test("in a shared document, a resumed answer finds its block by its shared id", 
   await page.keyboard.type("Second");
   await expect(page.locator("#shared_editor [data-collab-status]")).toHaveText("Saved");
 
-  // Asked in the first paragraph: the app answers after the block of that id.
   await editable.getByText("First").click();
   await settle(page);
   await page.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Assist" }).click();
   await page.getByRole("menuitem", { name: "Summarize" }).click();
+}
+
+// The collaboration page: Summarize writes an Issho stream (Issho.Streams)
+// for the person, at the request's block, and the page shows it with
+// Kotoba.Issho.suggestions/4.
+
+test("in a shared document, an Issho stream is a suggestion after its block, found by its shared id", async ({ page }) => {
+  await askInShared(page, crypto.randomUUID());
   const suggestion = page.locator("#shared_editor .kotoba-suggestion");
-  await expect(suggestion.locator(".kotoba-suggestion-content")).toHaveText("Resumed after its block");
+  await expect(suggestion).toHaveAttribute("aria-label", "Summary");
+  await expect(suggestion.locator(".kotoba-suggestion-content")).toHaveText("Resumed after its block", { timeout: 5000 });
+  await expect(suggestion.locator(".kotoba-suggestion-status")).toHaveText("Done");
   await suggestion.getByRole("button", { name: "Accept" }).click();
+  const editable = page.locator("#shared_editor .kotoba-editable");
   await expect(editable.locator(":scope > p")).toHaveText(["First", "Resumed after its block", "Second"]);
+});
+
+test("an Issho stream goes on while the person is away, and is closed when they accept it", async ({ page }) => {
+  const id = crypto.randomUUID();
+  await askInShared(page, id);
+  const suggestion = page.locator("#shared_editor .kotoba-suggestion");
+  await expect(suggestion.locator(".kotoba-suggestion-content")).toContainText("Resumed");
+
+  await page.goto("/blocks");
+  await page.waitForTimeout(1200);
+  await openEditor(page, `/collab?document=${id}&name=Ada`, "shared_editor");
+  await expect(suggestion.locator(".kotoba-suggestion-content")).toHaveText("Resumed after its block", { timeout: 5000 });
+  await expect(suggestion.locator(".kotoba-suggestion-status")).toHaveText("Done");
+  await suggestion.getByRole("button", { name: "Accept" }).click();
+  const editable = page.locator("#shared_editor .kotoba-editable");
+  await expect(editable.locator(":scope > p")).toHaveText(["First", "Resumed after its block", "Second"]);
+
+  // Accepted: Issho closed it, so the next visit has no suggestion.
+  await openEditor(page, `/collab?document=${id}&name=Ada`, "shared_editor");
+  await expect(page.locator("#shared_editor [data-collab-status]")).toHaveText("Saved");
+  await page.waitForTimeout(500);
+  await expect(suggestion).toBeHidden();
 });

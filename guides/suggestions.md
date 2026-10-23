@@ -500,6 +500,46 @@ What to choose for your app:
 The development server has it at `/resume`: ask for a summary, go to
 another page, and come back.
 
+### In a shared document, with Issho
+
+An app with shared editors has all of this already: Issho keeps streams
+(`Issho.Streams`), written by any process of your app or by an agent, for
+a person or the room, at a place of a document, and gives each page what
+they hold so far when it comes. `Kotoba.Issho.suggestions/4` shows them as
+suggestions in the LiveView's shared editors, closes a stream on Accept,
+Reject and Stop, and drops one closed in another tab, with no writer of
+your own:
+
+```elixir
+on_mount Issho.Live
+
+def mount(_params, _session, socket) do
+  issho = [instance: MyApp.Issho, document: "notebook:7/intro"]
+  {:ok, Kotoba.Issho.suggestions(socket, socket.assigns.current_user, %{"intro_editor" => issho})}
+end
+
+def handle_event("kotoba:assist", %{"text" => text, "place" => %{"id" => block}}, socket) do
+  user = socket.assigns.current_user
+
+  Task.start(fn ->
+    {:ok, stream} =
+      Issho.Streams.start(MyApp.Issho, "notebook:7",
+        kind: "summary",
+        for: user,
+        place: %{"doc" => "notebook:7/intro", "at" => %{"node" => block}}
+      )
+
+    MyApp.Model.stream(text, &Issho.Streams.append(stream, &1))
+    Issho.Streams.finish(stream)
+  end)
+
+  {:noreply, socket}
+end
+```
+
+An agent with `Kotoba.Issho.tools/0` suggests text the same way, with
+`suggest_text`: the person sees it written, and takes it or leaves it.
+
 ## The keyboard and assistive technology
 
 * The Assist button has `aria-haspopup="menu"` and `aria-expanded`. Enter,

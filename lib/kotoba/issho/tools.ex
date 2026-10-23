@@ -213,6 +213,30 @@ if Code.ensure_loaded?(Issho.Tool) do
       end
     end
 
+    # Writes text to a stream (Issho.Streams), a few characters at a time
+    # (at the `pace`) when someone sees the agent, so that the person sees
+    # it come; else at once.
+    def write(%__MODULE__{} = doc, stream, text) do
+      per_char =
+        if seen?(doc), do: min(pace(), div(@typing, max(String.length(text), 1))), else: 0
+
+      chunks = if per_char > 0, do: chunks(text), else: [text]
+
+      Enum.reduce_while(chunks, :ok, fn chunk, :ok ->
+        case append(stream, chunk, per_char) do
+          :ok -> {:cont, :ok}
+          error -> {:halt, error}
+        end
+      end)
+    end
+
+    defp append(stream, chunk, per_char) do
+      with :ok <- Issho.Streams.append(stream, chunk) do
+        if per_char > 0, do: Process.sleep(per_char * String.length(chunk))
+        :ok
+      end
+    end
+
     # Types runs of text, each with its own marks (what was copied), at once.
     def type_runs(doc, caret, []), do: {:ok, doc, caret}
 
@@ -596,6 +620,52 @@ if Code.ensure_loaded?(Issho.Tool) do
       state
       |> Text.blocks()
       |> Enum.find_value(fn block -> if Text.within?(state, block.id, top), do: block.n end)
+    end
+  end
+
+  defmodule Kotoba.Issho.Tools.SuggestText do
+    @moduledoc false
+    use Issho.Tool,
+      name: "suggest_text",
+      description: """
+      Suggests text after block `block` (numbered as read_text gives them),
+      for the person you work for: they see it written, as a suggestion,
+      and accept it into the document or reject it. For a draft, a rewrite
+      or a summary that is theirs to take: type_text writes into the
+      document at once. Markdown gives headings, lists, bold and links.
+      """,
+      annotations: []
+
+    arg :document, :string, required: true
+    arg :block, :integer, required: true, min: 1, description: "The block it goes after"
+    arg :text, :string, required: true, max_length: 20_000
+    arg :label, :string, max_length: 60, description: "Its name in the editor: Summary, Rewrite"
+
+    alias Kotoba.Issho.{Text, Tools.Doc}
+
+    @impl true
+    def call(args, ctx) do
+      # To the end of the block, and the suggestion written there, for the
+      # person the agent works for (the room, when it works for no one).
+      with {:ok, doc} <- Doc.open(ctx, args.document),
+           {:ok, caret} <- Text.caret(doc.state, {:end, args.block}),
+           :ok <- Doc.reach(doc, caret),
+           {:ok, stream} <-
+             Issho.Streams.start(ctx.instance, doc.room,
+               kind: "suggestion",
+               for: ctx.opts[:on_behalf_of] || :room,
+               by: Issho.Participant.identity(doc.participant),
+               place: %{"doc" => args.document, "at" => Text.place(caret)},
+               meta: %{"label" => args[:label] || "Suggestion"},
+               on_exit: :finish
+             ),
+           :ok <- Doc.write(doc, stream, args.text),
+           :ok <- Issho.Streams.finish(stream) do
+        {:ok, %{"suggested" => String.length(args.text), "stream" => stream.id}}
+      else
+        {:error, :too_large} -> {:error, "The text is too long for a suggestion."}
+        error -> Doc.error(error)
+      end
     end
   end
 

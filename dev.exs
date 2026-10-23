@@ -1604,18 +1604,21 @@ defmodule KotobaDev.CollabLive do
       follow: params["follow"] != "false"
     ]
 
-    {:ok,
-     assign(socket,
-       document_id: id,
-       user: user,
-       role: role,
-       issho: issho,
-       # ?blocks=true: the block handles, with every feature.
-       features: if(params["blocks"] == "true", do: Kotoba.Features.all()),
-       form: to_form(%{"body" => nil}, as: :shared),
-       saved: nil,
-       assist_refs: MapSet.new()
-     )}
+    socket =
+      assign(socket,
+        document_id: id,
+        user: user,
+        role: role,
+        issho: issho,
+        # ?blocks=true: the block handles, with every feature.
+        features: if(params["blocks"] == "true", do: Kotoba.Features.all()),
+        form: to_form(%{"body" => nil}, as: :shared),
+        saved: nil,
+        assist_refs: MapSet.new()
+      )
+
+    # Issho's streams for this person, as suggestions in the editor.
+    {:ok, Kotoba.Issho.suggestions(socket, user, %{"shared_editor" => issho})}
   end
 
   def render(assigns) do
@@ -1662,18 +1665,32 @@ defmodule KotobaDev.CollabLive do
   def handle_event("kotoba:suggestion", %{"ref" => ref, "action" => action}, socket),
     do: {:noreply, if(action == "accept", do: socket, else: KotobaDev.Assist.stop(socket, ref))}
 
-  # Summarize answers as a stream that resumes would: its text at once,
-  # after the block of the request, named by its id in the shared document.
-  def handle_event("kotoba:assist", %{"ref" => ref, "place" => %{"id" => block}}, socket),
-    do:
-      {:noreply,
-       socket
-       |> Kotoba.Live.stream_resume("shared_editor", ref, "Resumed after its block",
-         at: :after,
-         block: block,
-         label: "Summary"
-       )
-       |> Kotoba.Live.stream_end("shared_editor", ref)}
+  # Summarize writes an Issho stream for this person, after the block of the
+  # request, in a task of its own: the page shows it with
+  # Kotoba.Issho.suggestions/4, and finds it again after going away.
+  def handle_event("kotoba:assist", %{"place" => %{"id" => block}}, socket) do
+    %{user: user, document_id: document} = socket.assigns
+    place = %{"doc" => document, "at" => %{"node" => block}}
+
+    Task.start(fn ->
+      {:ok, stream} =
+        Issho.Streams.start(KotobaDev.Issho, Issho.Policy.room(document),
+          kind: "summary",
+          for: user,
+          place: place,
+          meta: %{"label" => "Summary"}
+        )
+
+      for chunk <- ["Resumed ", "after ", "its ", "block"] do
+        Process.sleep(300)
+        :ok = Issho.Streams.append(stream, chunk)
+      end
+
+      Issho.Streams.finish(stream)
+    end)
+
+    {:noreply, socket}
+  end
 
   def handle_info({:assist_chunk, id, ref, action, rest}, socket),
     do: {:noreply, KotobaDev.Assist.next(socket, id, ref, action, rest)}
