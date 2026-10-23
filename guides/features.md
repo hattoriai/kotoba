@@ -34,6 +34,7 @@ not (`Kotoba.Features`):
 | `images` | images from a URL, in the text | | | `![alt](url)` (pasted) |
 | `footnotes` | footnotes and their references | | | `[^1]` and `[^1]: text` (pasted) |
 | `embeds` | live things of the app's own: a canvas, a grid (with `embeds`, see [Embeds](embeds.md)) | the app's button ("Canvas") | Backspace after one deletes it | a fenced block the app reads (pasted) |
+| `blocks` | a handle beside each block: drag it to move the block, click it for the block's menu (only when listed, see below) | | `Alt+Shift+Up`, `Alt+Shift+Down`, `Cmd/Ctrl+/` | |
 
 Pasted Markdown is not a feature: plain text that reads as Markdown (a
 README, a note from a Markdown app) comes in as rich text, read on the
@@ -60,7 +61,9 @@ keeps them when they come in a pasted text or a stored document.
 
 ## Choose the features of a field
 
-With no `features`, an editor has every feature. Give a list for fewer:
+With no `features`, an editor has every feature but `blocks`, which a
+field has only when its list names it (`features={Kotoba.Features.all()}`
+gives every one). Give a list for fewer:
 
 ```heex
 <.kotoba field={@form[:comment]} id="comment" features={~w(bold italic links lists mentions)} />
@@ -181,6 +184,55 @@ of the toolbar: Gallery groups the image with the images next to it, or
 ungroups its gallery, and Move image left and Move image right (or
 `Alt+Left` and `Alt+Right`) reorder it. See the [Uploads](uploads.md)
 guide.
+
+## Block handles
+
+With `blocks` in its features, the editor has a margin on the left of its
+blocks, as a block editor has. The pointer over a block (a paragraph, a
+heading, a list, a quote, a code block, a table, a gallery, an embed)
+shows two buttons there:
+
+* a grip (⋮⋮). Drag it to move the whole block: a line shows where it
+  lands, and Escape calls the drag off. Click it for the block's menu;
+* a `+`, which adds an empty paragraph below the block, with the caret in
+  it.
+
+The menu has:
+
+* **Turn into**, for a block of text: Paragraph, Heading 1 to 4, Quote,
+  Bulleted list, Numbered list, Check list, Code block and the blocks of
+  the app's extensions (a callout, see the [Extensions](extensions.md)
+  guide), as the editor's features allow: an editor without `headings`
+  offers no heading. The block's own kind is checked. A list turns into
+  paragraphs as a whole, and a quote of paragraphs gives them up first;
+* **Duplicate**, a copy of the block after it;
+* **Delete**;
+* **Copy a link to the block**: the page's URL with a text fragment of the
+  block's first words (`#:~:text=Second%20paragraph`), which scrolls a
+  browser to them on the page where the document is rendered.
+
+From the keyboard, `Alt+Shift+Up` and `Alt+Shift+Down` move the block at
+the caret, with the caret, and `Cmd/Ctrl+/` opens its menu. In the menu,
+the arrow keys, Home and End move between the items, Enter or Space
+chooses one, and Escape closes it and gives the caret back; Tab leaves it.
+The live region says what each command did ("Block moved down", "Turned
+into Heading 2"). The handles are not tab stops, and a read-only editor
+has none.
+
+A table or a list has one handle, for the whole block, and moves as a
+whole: a list item moves its list. A gallery and an embed keep their own
+dragging; only the grip moves the block.
+
+Each change is one undo step. In a shared editor (see
+[Collaboration](collaboration.md)) a move is a move of the block in the
+shared document: another person's caret in it goes with it, and the undo
+of the person who moved it takes it back. An agent moves a block with the
+`move_block` tool.
+
+The handles are `div.kotoba-block-handle` (with `button.kotoba-block-add`
+and `button.kotoba-block-grip`), the line `div.kotoba-block-drop`, and the
+menu `div.kotoba-block-menu`. `--kotoba-block-gutter` is the width of the
+margin (3.25rem).
 
 ## Tables
 

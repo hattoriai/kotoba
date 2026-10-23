@@ -5,6 +5,26 @@ All notable changes to Kotoba are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Block handles, the `blocks` feature (off unless a field lists it):
+  a grip beside each block drags it to another place, and opens its
+  menu (Turn into, Duplicate, Delete, Copy a link to the block); a `+`
+  adds a paragraph below it. `Alt+Shift+Up` and `Alt+Shift+Down` move
+  the block at the caret, and `Cmd/Ctrl+/` opens its menu. Each change
+  is one undo step, and a move in a shared editor is a move of the
+  block. An extension's `blocks` put its nodes in Turn into
+  (Extensions guide).
+- `move_block`, an agent's tool (`Kotoba.Issho.tools/0`): moves a block
+  after another one, as a block handle does.
+
+### Fixed
+
+- The first change after a document loads can be undone, also when no
+  click or caret move came before it.
+
 ## [0.7.0] - 2026-10-22
 
 On Issho 0.3: agents move with Issho's motion, and following is the room's.

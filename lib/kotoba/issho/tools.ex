@@ -558,6 +558,47 @@ if Code.ensure_loaded?(Issho.Tool) do
     end
   end
 
+  defmodule Kotoba.Issho.Tools.MoveBlock do
+    @moduledoc false
+    use Issho.Tool,
+      name: "move_block",
+      description: """
+      Moves a block, as a person drags it by its handle: block `block` goes
+      after block `after` (0 puts it first), numbered as read_text gives
+      them. A list moves with all its items, and a table or a quote as a
+      whole: a list item moves its list.
+      """,
+      annotations: []
+
+    arg :document, :string, required: true
+    arg :block, :integer, required: true, min: 1, description: "The block to move"
+    arg :after, :integer, required: true, min: 0, description: "The block it goes after; 0, first"
+
+    alias Kotoba.Issho.{Text, Tools.Doc}
+
+    @impl true
+    def call(args, ctx) do
+      # To the start of the block, a moment on it, and the move.
+      with {:ok, doc} <- Doc.open(ctx, args.document),
+           {:ok, caret} <- Text.caret(doc.state, {:start, args.block}),
+           :ok <- Doc.reach(doc, caret),
+           :ok <- Doc.hold(doc),
+           {:ok, ops, _state, moved} <- Text.move_block(doc.state, args.block, args.after),
+           {:ok, doc} <- Doc.commit(doc, ops) do
+        {:ok, %{"moved" => args.block, "block" => first_block(doc.state, moved)}}
+      else
+        error -> Doc.error(error)
+      end
+    end
+
+    # The number of the moved block now: of its first block of text.
+    defp first_block(state, top) do
+      state
+      |> Text.blocks()
+      |> Enum.find_value(fn block -> if Text.within?(state, block.id, top), do: block.n end)
+    end
+  end
+
   defmodule Kotoba.Issho.Tools.Copy do
     @moduledoc false
     use Issho.Tool,

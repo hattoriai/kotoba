@@ -159,10 +159,11 @@ if Code.ensure_loaded?(Issho.Binding) do
     @doc ~S"""
     Kotoba's tools for agents (`Issho.Tool`): an agent reads a shared
     document, selects text (the people see its selection), types (they see
-    it written), replaces, deletes, formats, links, adds blocks, copies
-    and pastes, as a person does in the editor, and its changes merge with
-    theirs. Give them to your app's model (`Issho.Tools`), or serve them to
-    MCP clients (`Issho.MCP`), with Issho's room tools:
+    it written), replaces, deletes, formats, links, adds and moves
+    blocks, copies and pastes, as a person does in the editor, and its
+    changes merge with theirs. Give them to your app's model
+    (`Issho.Tools`), or serve them to MCP clients (`Issho.MCP`), with
+    Issho's room tools:
 
         tools = Issho.Tools.room() ++ Kotoba.Issho.tools()
 
@@ -193,6 +194,7 @@ if Code.ensure_loaded?(Issho.Binding) do
         Kotoba.Issho.Tools.Format,
         Kotoba.Issho.Tools.Link,
         Kotoba.Issho.Tools.AddBlock,
+        Kotoba.Issho.Tools.MoveBlock,
         Kotoba.Issho.Tools.Copy,
         Kotoba.Issho.Tools.Paste
       ]

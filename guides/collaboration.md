@@ -280,6 +280,7 @@ gives it the editor's verbs, however it reaches your app:
 | `format_text` | bold, italic, underline, strikethrough, code, highlight, subscript, superscript |
 | `link_text` | makes quoted text, or the selection, a link |
 | `add_block` | a paragraph, a heading or a quote, after a block |
+| `move_block` | moves a block after another one, as a block handle does: a list with its items |
 | `copy_text`, `paste_text` | copies with its formatting, pastes in any document of the room |
 
 Text is quoted, not counted, so the agent says what it means. Its

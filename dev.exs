@@ -1172,6 +1172,75 @@ defmodule KotobaDev.ExtensionsLive do
       {:noreply, Kotoba.Live.push_content(socket, "comment_editor", KotobaDev.Sample.document())}
 end
 
+defmodule KotobaDev.BlocksLive do
+  @moduledoc """
+  The block handles (the `blocks` feature). The first editor has the
+  block features and the example extension (a callout, which Turn into
+  offers); the second has no headings, so its menu offers none; the third
+  has no `blocks`, and no handles.
+  """
+  use Phoenix.LiveView
+
+  import Kotoba.Components
+
+  @sample """
+  # Plan
+
+  First paragraph
+
+  Second paragraph
+
+  - One
+  - Two
+
+  > A quote
+
+  | Language | Year |
+  | --- | --- |
+  | Elixir | 2012 |
+  """
+
+  @features ~w(bold italic links headings quotes lists check_lists code_blocks horizontal_rules tables blocks)
+
+  @impl true
+  def mount(_params, _session, socket) do
+    {:ok,
+     assign(socket,
+       blocks: to_form(%{"body" => Kotoba.Content.from_markdown(@sample)}, as: :blocks),
+       plain:
+         to_form(%{"body" => Kotoba.Content.from_markdown("One\n\nTwo\n\nThree")}, as: :plain),
+       none: to_form(%{"body" => Kotoba.Content.from_markdown("One\n\nTwo")}, as: :none)
+     )}
+  end
+
+  @impl true
+  def render(assigns) do
+    assigns = assign(assigns, :features, @features)
+
+    ~H"""
+    <h1>Blocks</h1>
+    <.form for={@blocks} id="blocks-form">
+      <label id="blocks-label" class="label">Blocks</label>
+      <.kotoba
+        field={@blocks[:body]}
+        id="blocks_editor"
+        label_id="blocks-label"
+        features={@features}
+        extensions={["/assets/nodes/callout.js"]}
+      />
+    </.form>
+    <.form for={@plain} id="plain-form">
+      <label id="plain-label" class="label">No headings</label>
+      <.kotoba field={@plain[:body]} id="plain_editor" label_id="plain-label" features={~w(bold italic lists blocks)} />
+    </.form>
+    <.form for={@none} id="none-form">
+      <label id="none-label" class="label">No blocks</label>
+      <.kotoba field={@none[:body]} id="none_editor" label_id="none-label" features={~w(bold italic lists)} />
+    </.form>
+    """
+  end
+end
+
 defmodule KotobaDev.Collaboration do
   @moduledoc false
   # The Issho policy. Demo only: production authorization consults the
@@ -1229,6 +1298,8 @@ defmodule KotobaDev.CollabLive do
        user: user,
        role: role,
        issho: issho,
+       # ?blocks=true: the block handles, with every feature.
+       features: if(params["blocks"] == "true", do: Kotoba.Features.all()),
        form: to_form(%{"body" => nil}, as: :shared),
        saved: nil
      )}
@@ -1239,7 +1310,7 @@ defmodule KotobaDev.CollabLive do
     <h1>Shared document</h1>
     <p>Open this document in another tab with a different <code>?name=</code> to collaborate.</p>
     <.form for={@form} id="collab-form" phx-submit="save">
-      <.kotoba field={@form[:body]} id="shared_editor" label="Shared document" issho={@issho} user={@user} nodes={["/assets/nodes/tag.js"]} />
+      <.kotoba field={@form[:body]} id="shared_editor" label="Shared document" issho={@issho} user={@user} nodes={["/assets/nodes/tag.js"]} features={@features} />
       <button type="submit" id="collab-save">Publish accepted revision</button>
     </.form>
     <button id="collab-insert" phx-click="insert">Insert tag</button>
@@ -1528,6 +1599,7 @@ defmodule KotobaDev.Router do
     live("/two", KotobaDev.TwoEditorsLive)
     live("/nodes", KotobaDev.NodesLive)
     live("/extensions", KotobaDev.ExtensionsLive)
+    live("/blocks", KotobaDev.BlocksLive)
     live("/embeds", KotobaDev.EmbedsLive)
     live("/collab", KotobaDev.CollabLive)
     live("/collab/many", KotobaDev.ManyCollabLive)

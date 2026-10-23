@@ -8,7 +8,8 @@
 //     callouts, or back into paragraphs;
 //   * a toolbar button that runs the command, pressed in a callout (the
 //     toolbar says "Callout on" or "Callout off");
-//   * the `!!! ` Markdown shortcut.
+//   * the `!!! ` Markdown shortcut;
+//   * the callout as a block of the block handles: Turn into offers it.
 //
 // Kotoba calls the default export once for each editor, with the editor's
 // copies of lexical, @lexical/utils and @lexical/selection: the classes
@@ -89,6 +90,8 @@ export default ({ lexical, utils, selection }) => {
         },
       },
     ],
+
+    blocks: [{type: "dev-callout", label: "Callout", create: () => new CalloutNode()}],
 
     toolbar: [
       {

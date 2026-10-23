@@ -395,6 +395,22 @@ export const unlink: Icon = [
   ["line", { x1: "19", x2: "22", y1: "16", y2: "16" }],
 ];
 
+/** Lucide `grip-vertical`. */
+export const gripVertical: Icon = [
+  ["circle", { cx: "9", cy: "12", r: "1" }],
+  ["circle", { cx: "9", cy: "5", r: "1" }],
+  ["circle", { cx: "9", cy: "19", r: "1" }],
+  ["circle", { cx: "15", cy: "12", r: "1" }],
+  ["circle", { cx: "15", cy: "5", r: "1" }],
+  ["circle", { cx: "15", cy: "19", r: "1" }],
+];
+
+/** Lucide `plus`. */
+export const plus: Icon = [
+  ["path", { d: "M5 12h14" }],
+  ["path", { d: "M12 5v14" }],
+];
+
 const SVG = "http://www.w3.org/2000/svg";
 
 /** Makes the SVG element of an icon. It is hidden from assistive technology. */

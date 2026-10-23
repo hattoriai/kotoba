@@ -646,6 +646,64 @@ defmodule Kotoba.Issho.Text do
     end
   end
 
+  @doc false
+  # Moves the top-level block that holds block `n` (a list with all its
+  # items, a table, a quote) after the top-level block that holds block
+  # `after_n` (0: first), as a block handle does. One `move_node`, so that
+  # the people's carets in it go with it.
+  def move_block(state, n, after_n) do
+    blocks = blocks(state)
+    root = state["root"]
+
+    with {:ok, moving} <- top_of(state, blocks, n),
+         {:ok, target} <- if(after_n == 0, do: {:ok, nil}, else: top_of(state, blocks, after_n)),
+         :ok <- movable(state, root, moving, target, n, after_n) do
+      emits(%{state: state, ops: []}, [
+        %{
+          "op" => "move_node",
+          "id" => moving,
+          "parent" => root,
+          "after" => target,
+          "stamp" => id()
+        }
+      ])
+      |> case do
+        {:ok, acc} -> {:ok, Enum.reverse(acc.ops), acc.state, moving}
+        error -> error
+      end
+    end
+  end
+
+  # The top-level node of block `n`.
+  defp top_of(state, blocks, n) do
+    case Enum.find(blocks, &(&1.n == n)) do
+      nil -> {:error, "The document has no block #{n}: it has #{length(blocks)}."}
+      block -> {:ok, top(state, block.id)}
+    end
+  end
+
+  @doc false
+  # Whether node `id` is `top` or in it.
+  def within?(_state, top, top), do: true
+  def within?(_state, nil, _top), do: false
+  def within?(state, id, top), do: within?(state, state["nodes"][id]["parent"], top)
+
+  defp top(state, id) do
+    parent = state["nodes"][id]["parent"]
+    if parent == state["root"], do: id, else: top(state, parent)
+  end
+
+  defp movable(_state, _root, same, same, n, after_n),
+    do: {:error, "Blocks #{n} and #{after_n} are in the same block: it cannot go after itself."}
+
+  defp movable(state, root, moving, target, n, _after_n) do
+    tops = children(state, root)
+    index = Enum.find_index(tops, &(&1 == moving))
+    previous = if index > 0, do: Enum.at(tops, index - 1)
+
+    if previous == target, do: {:error, "Block #{n} is already there."}, else: :ok
+  end
+
   @element %{"direction" => nil, "format" => "", "indent" => 0, "version" => 1}
 
   defp block_data("paragraph"),

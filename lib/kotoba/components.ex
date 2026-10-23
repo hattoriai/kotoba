@@ -150,7 +150,8 @@ defmodule Kotoba.Components do
 
   attr :features, :list,
     default: nil,
-    doc: "the built-in features of the editor, see `Kotoba.Features`; every feature by default"
+    doc:
+      "the built-in features of the editor, see `Kotoba.Features`; every feature but `blocks` by default"
 
   attr :extensions, :list,
     default: [],

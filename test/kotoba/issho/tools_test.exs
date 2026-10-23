@@ -271,6 +271,16 @@ defmodule Kotoba.Issho.ToolsTest do
              call(client, "link_text", %{"document" => document, "url" => "https://x.io"})
   end
 
+  test "moves a block, as a person drags it", %{client: client, document: document, ada: ada} do
+    assert {:ok, %{"moved" => 2, "block" => 1}} =
+             call(client, "move_block", %{"document" => document, "block" => 2, "after" => 0})
+
+    assert html(ada, document) =~ "<p>Second line</p><p>Read the docs today</p>"
+
+    assert {:error, "Block 2 is already there."} =
+             call(client, "move_block", %{"document" => document, "block" => 2, "after" => 1})
+  end
+
   test "an app's own model uses the same tools, through its API, with no MCP",
        %{instance: instance, document: document, ada: ada} do
     tools = Issho.Tools.room() ++ Kotoba.Issho.tools()

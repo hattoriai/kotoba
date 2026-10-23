@@ -204,8 +204,9 @@ the prompts (`@` people, `:` emoji, `+` tags, `~` a slow search, `!` a
 failing one), uploads to `tmp/uploads`, an app node made with
 `mix kotoba.gen.node` (in `dev/`), buttons that send each server event,
 editors with fewer features and an example extension at `/extensions`,
-and the Sumi theme at `/?theme=sumi`. Set `PORT` for another port. esbuild
-watchers rebuild the bundle and the node modules, and the page reloads.
+the block handles at `/blocks`, and the Sumi theme at `/?theme=sumi`. Set
+`PORT` for another port. esbuild watchers rebuild the bundle and the node
+modules, and the page reloads.
 Restart `mix dev` after a change in `dev/lib`.
 
 ### Tests
