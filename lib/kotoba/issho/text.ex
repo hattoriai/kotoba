@@ -55,18 +55,46 @@ defmodule Kotoba.Issho.Text do
     |> Enum.map(fn {block, n} -> Map.put(block, :n, n) end)
   end
 
-  defp walk(state, id, acc) do
-    acc = if block?(state, id), do: [block(state, id) | acc], else: acc
+  @doc false
+  # The blocks of the document, in order and numbered, without their
+  # characters: what a block is and where.
+  def outline(state) do
+    state
+    |> walk(state["root"], [], &outline_block/2)
+    |> Enum.reverse()
+    |> Enum.with_index(1)
+    |> Enum.map(fn {block, n} -> Map.put(block, :n, n) end)
+  end
+
+  @doc false
+  # The block that node `id` is in (or is), or nil.
+  def block_of(_state, nil), do: nil
+
+  def block_of(state, id) do
+    case state["nodes"][id] do
+      nil -> nil
+      node -> if node["data"]["type"] in @blocks, do: id, else: block_of(state, node["parent"])
+    end
+  end
+
+  @doc false
+  # The text of block `id`, as `read/1` gives it.
+  def block_text(state, id), do: state |> block(id) |> text()
+
+  defp walk(state, id, acc, build \\ &block/2) do
+    acc = if block?(state, id), do: [build.(state, id) | acc], else: acc
 
     state
     |> children(id)
     |> Enum.filter(&(element?(state, &1) and not inline?(state, &1)))
-    |> Enum.reduce(acc, &walk(state, &1, &2))
+    |> Enum.reduce(acc, &walk(state, &1, &2, build))
   end
 
   defp block?(state, id), do: type(state, id) in @blocks
 
-  defp block(state, id) do
+  defp block(state, id), do: Map.put(outline_block(state, id), :chars, chars(state, id, nil))
+
+  defp outline_block(state, id) do
     data = state["nodes"][id]["data"]
 
     %{
@@ -74,8 +102,7 @@ defmodule Kotoba.Issho.Text do
       type: data["type"],
       tag: data["tag"],
       list: if(data["type"] == "listitem", do: list_type(state, id)),
-      checked: data["checked"],
-      chars: chars(state, id, nil)
+      checked: data["checked"]
     }
   end
 
@@ -135,9 +162,11 @@ defmodule Kotoba.Issho.Text do
   defp put_unless(map, _key, value, value), do: map
   defp put_unless(map, key, value, _none), do: Map.put(map, key, value)
 
-  defp kind(%{type: "heading", tag: tag}), do: tag
-  defp kind(%{type: "listitem", list: list}), do: "#{list || "bullet"} item"
-  defp kind(%{type: type}), do: type
+  @doc false
+  # What a block is, as an agent reads it: "paragraph", "h2", "bullet item".
+  def kind(%{type: "heading", tag: tag}), do: tag
+  def kind(%{type: "listitem", list: list}), do: "#{list || "bullet"} item"
+  def kind(%{type: type}), do: type
 
   # Finding
 

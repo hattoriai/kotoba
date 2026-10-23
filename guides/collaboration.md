@@ -15,8 +15,8 @@ canvas, a grid) shares one connection and one list of people.
 Add Issho next to Kotoba:
 
 ```elixir
-{:kotoba, "~> 0.6"},
-{:issho, "~> 0.2"}
+{:kotoba, "~> 0.7"},
+{:issho, "~> 0.4"}
 ```
 
 Enable the optional implementation before connecting the LiveSocket:
@@ -72,7 +72,9 @@ end
 ```
 
 `action` is `:join` (open the document and see who is here), `:read`
-(receive its changes), `:write` (change it) or `:lock`. The identity's
+(receive its changes), `:write` (change it), `:lock`, or one of Issho's
+own: `:comment` (see [Comments](#comments)) and the others of Issho's
+guides. The identity's
 `key` is the `:id` of the user you sign credentials for. `authorize/3`
 runs on join, on every message from the browser, and before each change
 goes out to a browser: a person whose access you take away stops seeing
@@ -376,6 +378,95 @@ The repository's development app serves them at `/mcp`: with `mix dev`
 running and `/collab/notebook` open, connect Claude Code with
 `claude mcp add --transport http kotoba-dev http://localhost:4099/mcp`
 and ask it to edit the notebook (`notebook/one`, `notebook/two`).
+
+## Comments
+
+Issho's comments (`Issho.Components.comments/1`, see Issho's Comments
+guide) take a Kotoba editor as their comment box, in the `:input` slot.
+`Kotoba.Issho.read_comment/1` is its `read`: the comment's words and whom
+they mention, from the box's form params.
+
+```heex
+<Issho.Components.comments id="comments" room={@room} mentionable={@mentionable} read={&Kotoba.Issho.read_comment/1}>
+  <:input :let={input}>
+    <.kotoba
+      field={Kotoba.Issho.comment_field(input, @room, @mentionable)}
+      id={input.id}
+      label="Comment"
+      placeholder={input.placeholder}
+      features={[:mentions]}
+      prompts={Kotoba.Issho.comment_prompts(@room, @mentionable)}
+    />
+  </:input>
+</Issho.Components.comments>
+```
+
+```elixir
+def handle_event("kotoba:prompt", params, socket) do
+  prompts = Kotoba.Issho.comment_prompts(socket.assigns.room, socket.assigns.mentionable)
+  {:noreply, Kotoba.Live.handle_prompt(socket, params, prompts)}
+end
+```
+
+The LiveView is in the room (a shared editor of the room puts it there,
+or `Issho.Live.join/4`), and Issho has a `:store` for its own documents:
+a room's comments are one.
+
+* `comment_prompts/2` is the box's `@`: the room's people, those here
+  first, and `mentionable` (`[%{key: "user:42", name: "Ada"}]`, people
+  who are not here), filtered as the person types. Give the same list to
+  the editor and to `Kotoba.Live.handle_prompt/3`.
+* `read_comment/1` writes a mention as `"@"` and the person's name, as
+  Issho's own box does, and puts their key in the comment's mentions:
+  the panel marks it, and the person hears of it (`"comment.created"`,
+  their inbox).
+* `comment_field/3` is the box's field: a comment's words as a document,
+  so that an edit starts from the comment as it is, its `"@"` and names
+  mentions again.
+
+A comment keeps its words as text, so give the box only `mentions`: bold
+or a link's address would be lost.
+
+## Events
+
+A shared document's changes are events of its room (`Issho.Event`), once
+they are saved, with the document and the change's author:
+
+| Event | Data |
+| --- | --- |
+| `"text.block_added"` | `%{block: id, type: type, n: n}`: a new block, or one back with an undo |
+| `"text.block_removed"` | `%{block: id, type: type}`: a block that went |
+| `"text.changed"` | `%{block: id, type: type, n: n}`: a block whose text changed (not its format only) |
+
+A block is a paragraph, a heading, a quote, a list item or a code block.
+`id` is its node's id, the same however its text changes; `n` its number,
+as `read_text` counts them, after the change; `type` what it is, as
+`read_text` says it: `"paragraph"`, `"h2"`, `"bullet item"`. The text is
+not in the event: the people of a room may not all read each of its
+documents.
+
+An agent waits for them:
+
+```text
+wait_for_events {"room": "notebook:7", "names": ["text.*"]}
+```
+
+and a LiveView hears them:
+
+```elixir
+Issho.Live.subscribe("notebook:7", :self, events: ["text.*"])
+
+def handle_info({Issho.Live, "event", _room, %Issho.Event{name: "text.changed"} = event}, socket) do
+  ...
+end
+
+# The room's other messages, which :self gets too.
+def handle_info({Issho.Live, _event, _key, _payload}, socket), do: {:noreply, socket}
+```
+
+`Kotoba.Issho.events/2` gives them, and `Kotoba.Issho.document/1` puts it
+in the document's spec; `events: false` turns them off. Issho's own
+`"document.changed"` comes for every change, as before.
 
 ## A person's place
 
