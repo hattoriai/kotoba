@@ -57,7 +57,7 @@ defmodule Kotoba.MixProject do
       {:ecto, "~> 3.13"},
       {:esbuild, "~> 0.10", only: :dev, runtime: false},
       # Shared editors (`collab`): Issho is the room, its people and the document's authority.
-      {:issho, "~> 0.4", optional: true},
+      {:issho, "~> 0.4.2", optional: true},
       # MCP for the development app's agents, and their tests.
       {:sake, "~> 0.4", only: [:dev, :test]},
       {:ex_doc, "~> 0.34", only: :dev, runtime: false},
