@@ -411,7 +411,7 @@ defmodule Kotoba.Live do
     Stores the finished uploads of `upload_name` and puts an attachment node
     for each in the editor `editor_id`. It needs
     [Storehouse](https://hexdocs.pm/storehouse) in the app's deps
-    (`{:storehouse, "~> 0.1"}`).
+    (`{:storehouse, "~> 0.2"}`).
 
     For each entry:
 
@@ -545,7 +545,7 @@ defmodule Kotoba.Live do
     Kotoba's uploads keep their files with Storehouse, which is not in the \
     app's deps. Add it to mix.exs, and run mix deps.get:
 
-        {:storehouse, "~> 0.1"}
+        {:storehouse, "~> 0.2"}
 
     An editor without uploads (no `uploads` on <.kotoba>) does not need it.
     """

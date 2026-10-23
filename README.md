@@ -111,7 +111,7 @@ want it: Sumi is the design system of Hattori AI, the makers of Kotoba). Put the
 ```
 
 For uploads, add [Storehouse](https://hexdocs.pm/storehouse) to your deps
-(`{:storehouse, "~> 0.1"}`; an editor without uploads never needs it), and
+(`{:storehouse, "~> 0.2"}`; an editor without uploads never needs it), and
 name its store in `config/config.exs`:
 
 ```elixir

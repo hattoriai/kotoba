@@ -39,7 +39,7 @@ defmodule Kotoba.StorageTest do
   end
 
   test "uploads without Storehouse in the deps say what is missing" do
-    assert_raise ArgumentError, ~r/\{:storehouse, "~> 0.1"\}/, fn ->
+    assert_raise ArgumentError, ~r/\{:storehouse, "~> 0.2"\}/, fn ->
       Kotoba.Live.missing_storehouse!()
     end
   end

@@ -390,7 +390,7 @@ defmodule Kotoba.Install.Edits do
   def config_block(app \\ :my_app) do
     """
     # Kotoba keeps the files of the editor's uploads with Storehouse
-    # ({:storehouse, "~> 0.1"} in your deps), on the local disk here. Give
+    # ({:storehouse, "~> 0.2"} in your deps), on the local disk here. Give
     # it a directory in the :prod block of config/runtime.exs, an absolute
     # path outside the release:
     #
