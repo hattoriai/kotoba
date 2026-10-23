@@ -41,7 +41,8 @@ the callback (`search:`) or a list of items (`items:`):
 | `spaces` | `false` | the query can have spaces, below |
 | `min_length` | `0` | the characters of the query before the first search |
 | `max_length` | `64` | the longest query, up to 200 characters |
-| `insert` | `:mention` | `:mention`, `:text` or `{:node, type}`, below |
+| `insert` | `:mention` | `:mention`, `:text`, `{:node, type}` or `:command`, below |
+| `with_text` | `:below` | an insert menu in a block with text: `:below` or `:turn_into`, below |
 | `async` | `false` | the search runs in a task, below |
 
 ## The menu's name
@@ -144,6 +145,87 @@ end
 When the editor cannot make the node (a type it does not have, or
 attributes that `importJSON` refuses), it logs the error in the console,
 inserts nothing, and says "Could not insert …".
+
+* `insert: :command` makes the prompt an insert menu, next.
+
+## The insert menu
+
+An insert menu is a prompt whose items run a command of the editor:
+typed at the start of a line or after a space, `/` opens a menu of what
+the field can insert or turn the block into, filtered as the person types
+(`/h2`, `/table`, `/board`). A field has one only when it asks for it:
+
+```heex
+<.kotoba field={@form[:body]} prompts={[{"/", :insert, insert: :command, label: "Insert"}]} />
+```
+
+Its items are, by default, the editor's own:
+
+* the built-in items of the field's features (`Kotoba.Prompts.commands/1`),
+  in the Basic group: Text, Heading 1 to 4, Quote, Bulleted list,
+  Numbered list, Check list, Code block, Table and Divider; Image or file
+  (Media) with `uploads`, and Embed (Embeds) with `embeds`, which opens
+  the app's picker. A field without `tables` has no Table;
+* the extensions' items: their blocks with a label (a callout, see the
+  [Extensions](extensions.md) guide) and their insert items.
+
+The order and the groups are the app's: `:builtin` and `:extensions` in
+the prompt's `:items` stand for these, at their place, among the app's
+own items. An app leaves out the built-in items by leaving out
+`:builtin`.
+
+```elixir
+@insert [
+  items: [
+    :builtin,
+    %{id: "board", label: "Board", group: "Embeds", node: %{type: "embed", kind: "board", ref: "new"}},
+    %{id: "signature", label: "Signature", group: "Snippets", text: "— The team", keywords: ["sign"]},
+    :extensions
+  ],
+  insert: :command,
+  label: "Insert"
+]
+
+prompts={[people: &MyApp.People.search/1, {"/", :insert, @insert}]}
+```
+
+An item has one of:
+
+* `:command`: a built-in command (`"paragraph"`, `"h1"` to `"h4"`,
+  `"quote"`, `"bullet"`, `"number"`, `"check"`, `"code-block"`,
+  `"table"`, `"rule"`, `"upload"`, `"embed"`), an extension's block
+  (`"ext:<type>"`) or an extension's insert item
+  (`"<extension>:<command>"`). An app gives the built-in commands its own
+  labels with items of its own: `%{id: "h1", label: "Titre", command:
+  "h1", group: "Texte"}`;
+* `:node`: a node, as a document has it (a map with a `"type"`, at most
+  2048 bytes of JSON): an embed, a node of the app. A block takes the
+  place of an empty paragraph, or goes below the block; an inline node
+  goes at the caret;
+* `:text`: text, at the caret (a snippet, a template line).
+
+and may have a `:group` (a heading over its items, where it changes) and
+`:keywords`, words that find it besides its label: `/title` finds
+Heading 1.
+
+The item runs where the trigger was, after the trigger and the query are
+removed, in one change: one undo step. A block of text turns an empty
+paragraph into it; in a block with text it goes below (`with_text:
+:below`, the default) or the block turns into it (`with_text:
+:turn_into`). The menu leaves out an item whose command or node needs a
+feature, a node type, uploads or embeds that the field does not have,
+and `Kotoba.Content.validate_features/3` still refuses a document with
+another feature.
+
+A `:search` callback gives an insert menu its items from the server, as
+any prompt: `Kotoba.Prompts.filter(Kotoba.Prompts.commands(), query)`
+finds the built-in ones. The extensions' items are only in a menu with
+`:items`.
+
+The Markdown shortcuts stay (`## ` makes a heading): the menu is for the
+people who do not know them. With the `blocks` feature (see the [Editing
+features](features.md) guide), the `+` beside a block opens the menu in
+a new paragraph below it.
 
 ## Slow searches
 

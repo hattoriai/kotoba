@@ -14,8 +14,10 @@
 //     answers with the results; the editor keeps the answers of the menu's
 //     queries, drops an answer to an older query, and gives up on a query
 //     with no answer after a while;
-//   * `insert` is what a result inserts: a mention (the default), text, or a
-//     node of the editor (`nodeType`, from the item's `attrs`).
+//   * `insert` is what a result inserts: a mention (the default), text, a
+//     node of the editor (`nodeType`, from the item's `attrs`), or a
+//     command: the prompt is an insert menu (see insert_menu.ts), whose
+//     items have groups and icons.
 
 import { $isCodeHighlightNode, $isCodeNode } from "@lexical/code-core";
 import {
@@ -38,6 +40,7 @@ import {
   type SerializedLexicalNode,
 } from "lexical";
 
+import type { InsertMenu } from "./insert_menu";
 import { position } from "./link";
 import { $createMentionNode } from "./nodes/mention";
 import { isObject } from "./protocol";
@@ -50,16 +53,28 @@ export interface PromptItem {
   text?: string;
   /** The attributes of the node that an `insert: {:node, type}` prompt inserts. */
   attrs?: Record<string, unknown>;
+  /** The command of an insert menu's item (see insert_menu.ts). */
+  command?: string;
+  /** The node that an insert menu's item inserts, as a document has it. */
+  node?: Record<string, unknown>;
+  /** The heading over the item in the menu, where it changes. */
+  group?: string;
+  /** More words that find the item. */
+  keywords?: string[];
 }
 
 export interface PromptConfig {
   spaces: boolean;
   minLength: number;
   maxLength: number;
-  insert: "mention" | "text" | "node";
+  insert: "mention" | "text" | "node" | "command";
   nodeType: string | null;
   /** The items of a local prompt, or `null` for a prompt that the server answers. */
   items: PromptItem[] | null;
+  /** An insert menu: what a block command does in a block with text. */
+  withText: "below" | "turn_into";
+  /** An insert menu: where the extensions' items go in `items`, or `null` for nowhere. */
+  extensionsAt: number | null;
 }
 
 interface Match {
@@ -89,6 +104,8 @@ interface PromptOptions {
   configs?: ReadonlyMap<string, PromptConfig>;
   request(prompt: string, query: string): void;
   announce(message: string): void;
+  /** The commands of the insert menus (`insert: :command` prompts). Without it, they are left out. */
+  insertMenu?: InsertMenu;
 }
 
 const MAX_QUERY = 64;
@@ -106,6 +123,8 @@ export const DEFAULT_CONFIG: PromptConfig = {
   insert: "mention",
   nodeType: null,
   items: null,
+  withText: "below",
+  extensionsAt: null,
 };
 
 function parseObject(json: string | undefined, attribute: string): Record<string, unknown> | null {
@@ -150,7 +169,8 @@ export function parseConfigs(json: string | undefined): Map<string, PromptConfig
   for (const [prompt, value] of Object.entries(parseObject(json, "data-prompt-config") ?? {})) {
     if (!isObject(value)) continue;
     const maxLength = integerIn(value.maxLength, 1, MAX_QUERY_LIMIT, MAX_QUERY);
-    const insert = value.insert === "text" || value.insert === "node" ? value.insert : "mention";
+    const insert =
+      value.insert === "text" || value.insert === "node" || value.insert === "command" ? value.insert : "mention";
     const nodeType = typeof value.nodeType === "string" && value.nodeType !== "" ? value.nodeType : null;
     if (insert === "node" && nodeType === null) {
       console.error(`Kotoba: the prompt "${prompt}" inserts a node with no type`);
@@ -163,6 +183,11 @@ export function parseConfigs(json: string | undefined): Map<string, PromptConfig
       insert,
       nodeType,
       items: Array.isArray(value.items) ? readItems(value.items, MAX_LOCAL_ITEMS) : null,
+      withText: value.withText === "turn_into" ? "turn_into" : "below",
+      extensionsAt:
+        insert === "command" && typeof value.extensionsAt === "number"
+          ? integerIn(value.extensionsAt, 0, MAX_LOCAL_ITEMS, 0)
+          : null,
     });
   }
   return configs;
@@ -175,12 +200,16 @@ export function readItems(items: unknown, max = MAX_ITEMS): PromptItem[] {
 
   for (const item of items) {
     if (!isObject(item)) continue;
-    const { id, label, hint, text, attrs } = item;
+    const { id, label, hint, text, attrs, command, node, group, keywords } = item;
     if ((typeof id !== "string" && typeof id !== "number") || typeof label !== "string") continue;
     const read: PromptItem = { id: String(id), label };
     if (typeof hint === "string") read.hint = hint;
     if (typeof text === "string" && text !== "") read.text = text;
     if (isObject(attrs)) read.attrs = attrs;
+    if (typeof command === "string" && command !== "") read.command = command;
+    if (isObject(node) && typeof node.type === "string") read.node = node;
+    if (typeof group === "string" && group !== "") read.group = group;
+    if (Array.isArray(keywords)) read.keywords = keywords.filter((word): word is string => typeof word === "string");
     valid.push(read);
     if (valid.length === max) break;
   }
@@ -193,14 +222,15 @@ const words = (text: string): string[] => fold(text).split(/[^\p{L}\p{N}]+/u).fi
 
 /**
  * Filters the items of a local prompt, as `Kotoba.Prompts.filter/2` does:
- * each word of the query must start a word of the label or the hint. The
+ * each word of the query must start a word of the label, the hint or the
+ * keywords. The
  * items whose label starts with the query come first.
  */
 export function filterItems(items: readonly PromptItem[], query: string): PromptItem[] {
   const wanted = words(query);
   const folded = fold(query);
   const matches = items.filter((item) => {
-    const haystack = words(`${item.label} ${item.hint ?? ""}`);
+    const haystack = words(`${item.label} ${item.hint ?? ""} ${(item.keywords ?? []).join(" ")}`);
     return wanted.every((word) => haystack.some((candidate) => candidate.startsWith(word)));
   });
   const first = matches.filter((item) => fold(item.label).startsWith(folded));
@@ -251,6 +281,28 @@ export const searchTerm = (query: string): string => query.replace(/\s+$/u, "");
 
 export function createPrompts(editor: LexicalEditor, options: PromptOptions): Prompts {
   const configOf = (prompt: string): PromptConfig => options.configs?.get(prompt) ?? DEFAULT_CONFIG;
+  const insertMenu = options.insertMenu;
+
+  // The items that a prompt offers: an insert menu's with the extensions'
+  // at their place, and only the ones that the editor can run.
+  const offered = (config: PromptConfig, items: PromptItem[]): PromptItem[] => {
+    if (config.insert !== "command") return items;
+    if (insertMenu === undefined) return [];
+    const all =
+      config.extensionsAt === null
+        ? items
+        : [...items.slice(0, config.extensionsAt), ...insertMenu.items, ...items.slice(config.extensionsAt)];
+    return all.filter((item) => insertMenu.allows(item));
+  };
+  const localItems = new Map<string, PromptItem[]>();
+  const localOf = (prompt: string, config: PromptConfig): PromptItem[] => {
+    let items = localItems.get(prompt);
+    if (items === undefined) {
+      items = offered(config, config.items ?? []);
+      localItems.set(prompt, items);
+    }
+    return items;
+  };
 
   const menu = document.createElement("div");
   menu.className = "kotoba-menu";
@@ -300,28 +352,37 @@ export function createPrompts(editor: LexicalEditor, options: PromptOptions): Pr
     }
 
     listbox.setAttribute("aria-label", options.labels.get(match.prompt) ?? `${match.prompt} suggestions`);
-    listbox.replaceChildren(
-      ...items.map((item, index) => {
-        const option = document.createElement("li");
-        option.id = optionId(index);
-        option.className = "kotoba-menu-option";
-        option.setAttribute("role", "option");
-        option.setAttribute("aria-selected", String(index === active));
+    const command = configOf(match.prompt).insert === "command";
+    const rows = items.map((item, index) => {
+      const option = document.createElement("li");
+      option.id = optionId(index);
+      option.className = "kotoba-menu-option";
+      option.setAttribute("role", "option");
+      option.setAttribute("aria-selected", String(index === active));
+      option.dataset.index = String(index);
 
-        const label = document.createElement("span");
-        label.className = "kotoba-menu-label";
-        label.textContent = item.label;
-        option.append(label);
+      const icon = command ? insertMenu?.icon(item) ?? null : null;
+      if (icon !== null) {
+        const box = document.createElement("span");
+        box.className = "kotoba-menu-icon";
+        box.append(icon);
+        option.append(box);
+      }
 
-        if (item.hint !== undefined) {
-          const hint = document.createElement("span");
-          hint.className = "kotoba-menu-hint";
-          hint.textContent = item.hint;
-          option.append(hint);
-        }
-        return option;
-      }),
-    );
+      const label = document.createElement("span");
+      label.className = "kotoba-menu-label";
+      label.textContent = item.label;
+      option.append(label);
+
+      if (item.hint !== undefined) {
+        const hint = document.createElement("span");
+        hint.className = "kotoba-menu-hint";
+        hint.textContent = item.hint;
+        option.append(hint);
+      }
+      return option;
+    });
+    listbox.replaceChildren(...(command ? grouped(rows) : rows));
 
     status.textContent = statusText();
     status.hidden = status.textContent === "";
@@ -337,6 +398,40 @@ export function createPrompts(editor: LexicalEditor, options: PromptOptions): Pr
     } else {
       editable.removeAttribute("aria-activedescendant");
     }
+  };
+
+  // The options of an insert menu, in groups: a heading where the group of
+  // the items changes.
+  const grouped = (all: HTMLElement[]): HTMLElement[] => {
+    const children: HTMLElement[] = [];
+    let list: HTMLElement | null = null;
+    let current: string | undefined;
+    all.forEach((option, index) => {
+      const group = items[index]?.group;
+      if (list === null || group !== current) {
+        current = group;
+        if (group === undefined) {
+          list = listbox;
+        } else {
+          const element = document.createElement("li");
+          element.setAttribute("role", "group");
+          const heading = document.createElement("div");
+          heading.id = `${options.idPrefix}-group-${index}`;
+          heading.className = "kotoba-menu-group";
+          heading.setAttribute("role", "presentation");
+          heading.textContent = group;
+          element.setAttribute("aria-labelledby", heading.id);
+          list = document.createElement("ul");
+          list.setAttribute("role", "none");
+          list.className = "kotoba-menu-group-list";
+          element.append(heading, list);
+          children.push(element);
+        }
+      }
+      if (list === listbox) children.push(option);
+      else list.append(option);
+    });
+    return children;
   };
 
   const announceResults = (): void => {
@@ -370,7 +465,7 @@ export function createPrompts(editor: LexicalEditor, options: PromptOptions): Pr
       return;
     }
     if (config.items !== null) {
-      items = filterItems(config.items, term);
+      items = filterItems(localOf(next.prompt, config), term);
       state = "idle";
       announceResults();
       return;
@@ -412,7 +507,13 @@ export function createPrompts(editor: LexicalEditor, options: PromptOptions): Pr
       if (!$isTextNode(node)) return;
 
       let created: LexicalNode;
-      if (config.insert === "text") {
+      if (config.insert === "command") {
+        // The trigger and the query go, and the command runs where they were.
+        node.select(current.start, current.end).removeText();
+        const said = insertMenu?.$run(item, config.withText) ?? null;
+        if (said !== null) options.announce(said);
+        return;
+      } else if (config.insert === "text") {
         node.select(current.start, current.end).insertText(`${item.text ?? item.label} `);
         options.announce(`Inserted ${item.label}`);
         return;
@@ -468,8 +569,8 @@ export function createPrompts(editor: LexicalEditor, options: PromptOptions): Pr
   const onMenuClick = (event: MouseEvent): void => {
     const option = (event.target as Element | null)?.closest<HTMLElement>("[role=option]");
     if (!option) return;
-    const index = Array.from(listbox.children).indexOf(option);
-    if (index >= 0) select(index);
+    const index = Number.parseInt(option.dataset.index ?? "", 10);
+    if (Number.isInteger(index) && index >= 0) select(index);
   };
 
   menu.addEventListener("mousedown", onMenuMouseDown);
@@ -516,7 +617,7 @@ export function createPrompts(editor: LexicalEditor, options: PromptOptions): Pr
     receive(prompt: string, results: unknown, query?: unknown, error?: unknown) {
       if (match === null || match.prompt !== prompt || configOf(prompt).items !== null) return;
       const failed = error === true;
-      const read = readItems(results);
+      const read = offered(configOf(prompt), readItems(results));
       // An answer to another query of the menu is kept for later, and does
       // not change the results.
       if (typeof query === "string") {

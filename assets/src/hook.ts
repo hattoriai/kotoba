@@ -99,6 +99,7 @@ import {
 import { type Feature, builtInExtensions, parseFeatures } from "./features";
 import { attachBlockHandles } from "./blocks";
 import { attachCaptionField } from "./caption";
+import { createInsertMenu } from "./insert_menu";
 import { createColorMenu, type ColorMenu } from "./colors";
 import { createLinkForm, type LinkForm } from "./link";
 import { parseLinkSchemes } from "./links";
@@ -571,6 +572,15 @@ class Instance {
       );
     }
 
+    // The prompts: a mention, text or node prompt needs `mentions`; an insert
+    // menu (an `insert: :command` prompt) does not.
+    const { promptConfigs } = this.config;
+    const isMenu = (prompt: string): boolean => promptConfigs.get(prompt)?.insert === "command";
+    const triggers = new Map(
+      [...this.config.prompts].filter(([, prompt]) => features.has("mentions") || isMenu(prompt)),
+    );
+    const menuTrigger = [...triggers].find(([, prompt]) => isMenu(prompt))?.[0] ?? null;
+
     if (features.has("blocks")) {
       this.floating.push(
         attachBlockHandles(editor, {
@@ -580,21 +590,36 @@ class Instance {
           idPrefix: this.id,
           features,
           blocks: extensions.flatMap((extension) => extension.blocks ?? []),
+          insertTrigger: menuTrigger,
           announce: this.announce,
         }),
       );
     }
 
-    if (this.config.prompts.size > 0 && features.has("mentions")) {
+    if (triggers.size > 0) {
+      const uploads = this.uploads;
       this.prompts = createPrompts(editor, {
         host: surface,
         editable,
         idPrefix: this.id,
-        triggers: this.config.prompts,
+        triggers,
         labels: this.config.promptLabels,
-        configs: this.config.promptConfigs,
+        configs: promptConfigs,
         request: (prompt, query) => this.push("kotoba:prompt", { v: PROTOCOL_VERSION, id: this.id, prompt, query }),
         announce: this.announce,
+        insertMenu:
+          menuTrigger === null
+            ? undefined
+            : createInsertMenu(editor, {
+                features,
+                extensions,
+                types: registeredTypes(editor),
+                uploads: uploads.enabled,
+                embeds: embedButton !== undefined,
+                openUpload: () => uploads.open(),
+                openEmbed: () => this.pushEmbeds({ action: "picker" }),
+                announce: this.announce,
+              }),
       });
     }
 

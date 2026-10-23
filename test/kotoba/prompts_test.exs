@@ -300,4 +300,94 @@ defmodule Kotoba.PromptsTest do
       assert Prompts.item(%{id: 1, label: "a", attrs: %{pid: self()}}) == [%{id: "1", label: "a"}]
     end
   end
+
+  describe "the insert menu" do
+    test "an insert: :command prompt has the editor's own items, expanded for the field" do
+      context = [features: [:bold, :headings, :tables], uploads: false, embeds: false]
+
+      assert %{"insert" => %{insert: "command", items: items, extensionsAt: 6}} =
+               Prompts.config([{"/", :insert, insert: :command}], context)
+
+      assert Enum.map(items, & &1.command) == ~w(paragraph h1 h2 h3 h4 table)
+
+      assert %{id: "h1", label: "Heading 1", group: "Basic", keywords: ["h1" | _]} =
+               Enum.at(items, 1)
+    end
+
+    test "the app orders the items, and may leave out the built-in ones" do
+      board = %{
+        id: "board",
+        label: "Board",
+        group: "Embeds",
+        node: %{type: "embed", kind: "board"}
+      }
+
+      prompts = [
+        {"/", :insert,
+         [items: [board, :extensions, :builtin], insert: :command, with_text: :turn_into]}
+      ]
+
+      assert %{"insert" => %{items: [first | rest], extensionsAt: 1, withText: "turn_into"}} =
+               Prompts.config(prompts, features: [:lists])
+
+      assert first == %{
+               id: "board",
+               label: "Board",
+               group: "Embeds",
+               node: %{"type" => "embed", "kind" => "board"}
+             }
+
+      assert Enum.map(rest, & &1.command) == ~w(paragraph bullet number)
+
+      assert %{"insert" => %{items: [_board]}} =
+               Prompts.config([{"/", :insert, [items: [board], insert: :command]}])
+    end
+
+    test "commands/1 follows the features, the uploads and the embeds" do
+      commands = &Enum.map(Prompts.commands(&1), fn item -> item.command end)
+      assert "upload" not in commands.([])
+      assert "upload" in commands.(uploads: true)
+      assert "upload" not in commands.(uploads: true, features: [:bold])
+      assert "embed" in commands.(embeds: true)
+      assert commands.(features: []) == ["paragraph"]
+      assert Enum.map(Prompts.filter(Prompts.commands(), "title"), & &1.id) == ["h1"]
+    end
+
+    test "refuses the editor's items or :with_text in another prompt" do
+      assert_raise ArgumentError, ~r/:builtin and :extensions/, fn ->
+        Prompts.specs([{"/", :x, [items: [:builtin]]}])
+      end
+
+      assert_raise ArgumentError, ~r/:with_text/, fn ->
+        Prompts.specs([{"/", :x, [items: [], with_text: :below]}])
+      end
+
+      assert_raise ArgumentError, ~r/:with_text/, fn ->
+        Prompts.specs([{"/", :x, [insert: :command, with_text: :above]}])
+      end
+    end
+
+    test "an item keeps a valid command, node, group and keywords" do
+      assert Prompts.item(%{
+               id: "a",
+               label: "A",
+               command: "callout:note",
+               node: %{"type" => "dev-tag", label: "x"},
+               group: "Mine",
+               keywords: ["one", 2, ""]
+             }) == [
+               %{
+                 id: "a",
+                 label: "A",
+                 command: "callout:note",
+                 node: %{"type" => "dev-tag", "label" => "x"},
+                 group: "Mine",
+                 keywords: ["one"]
+               }
+             ]
+
+      assert Prompts.item(%{id: "a", label: "A", command: "Not a command", node: %{label: "x"}}) ==
+               [%{id: "a", label: "A"}]
+    end
+  end
 end

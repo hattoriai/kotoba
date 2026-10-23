@@ -216,6 +216,22 @@ defmodule Kotoba.ComponentsTest do
       end
     end
 
+    test "an insert menu has the built-in items of the field's features" do
+      commands = fn assigns ->
+        assigns
+        |> Keyword.merge(field: field(nil), prompts: [{"/", :insert, insert: :command}])
+        |> html()
+        |> attr("[phx-hook]", "data-prompt-config")
+        |> JSON.decode!()
+        |> get_in(["insert", "items"])
+        |> Enum.map(& &1["command"])
+      end
+
+      assert commands.(features: [:lists]) == ~w(paragraph bullet number)
+      assert "embed" in commands.(embeds: true)
+      assert "embed" not in commands.(embeds: true, features: [:lists])
+    end
+
     test "renders the features and the extension URLs" do
       html = html(field: field(nil))
       assert attr(html, "[phx-hook]", "data-features") == nil

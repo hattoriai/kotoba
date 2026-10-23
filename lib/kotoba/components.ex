@@ -242,6 +242,16 @@ defmodule Kotoba.Components do
     input_id = field.id
     id = assigns.id || "#{field.id}_editor"
 
+    feature_list =
+      if assigns.features, do: Features.names!(assigns.features), else: Features.all()
+
+    # An insert menu offers the built-in items of the field's features.
+    prompt_context = [
+      features: feature_list,
+      uploads: assigns.uploads != nil,
+      embeds: assigns.embeds == true
+    ]
+
     assigns =
       assign(assigns,
         id: id,
@@ -252,13 +262,12 @@ defmodule Kotoba.Components do
         node_urls: node_urls(assigns.nodes),
         triggers: json_map(Prompts.triggers(assigns.prompts)),
         prompt_labels: json_map(Prompts.labels(assigns.prompts)),
-        prompt_config: json_map(Prompts.config(assigns.prompts)),
+        prompt_config: json_map(Prompts.config(assigns.prompts, prompt_context)),
         assist: assist_actions(assigns.assist),
         selection_menu: selection_menu(assigns.selection_menu),
         code_languages: code_languages(assigns.code_languages),
         features: assigns.features && Enum.join(Features.names!(assigns.features), ","),
-        feature_list:
-          if(assigns.features, do: Features.names!(assigns.features), else: Features.all()),
+        feature_list: feature_list,
         extension_urls: extension_urls(assigns.extensions),
         link_schemes: Enum.join(Sanitizer.allowed_schemes(), ","),
         aria_label: aria_label(assigns, field),

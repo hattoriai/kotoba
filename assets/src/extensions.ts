@@ -13,6 +13,7 @@
 //       markdown: [CALLOUT_SHORTCUT],
 //       toolbar: [{ command: "insert", label: "Callout", run: (editor) => ... }],
 //       blocks: [{ type: "callout", label: "Callout", create: () => new CalloutNode() }],
+//       insert: [{ command: "note", label: "Note", run: (editor) => ... }],
 //       register(editor, context) { return editor.registerCommand(...) },
 //     })
 //
@@ -63,6 +64,21 @@ export interface ToolbarControl {
   isEnabled?(): boolean;
 }
 
+/** An item of the insert menu (an `insert: :command` prompt), from an extension. */
+export interface InsertControl {
+  /** The command, unique in the extension: the menu knows it as `<extension>:<command>`. */
+  command: string;
+  label: string;
+  /** The menu's group (a heading over its items); the default is the extension's name. */
+  group?: string;
+  /** More words that find it. */
+  keywords?: readonly string[];
+  /** The icon: an element for the item. */
+  icon?: () => Element;
+  /** Runs the command, in an update of the editor, with the caret where the trigger was. */
+  run(editor: LexicalEditor): void;
+}
+
 /**
  * A block of an extension's node, for the block handles (the `blocks`
  * feature, see blocks.ts). Every top-level block has a handle; this says
@@ -109,6 +125,8 @@ export interface KotobaExtension {
   toolbar?: readonly ToolbarControl[];
   /** What the block handles do with the extension's nodes (the `blocks` feature). */
   blocks?: readonly BlockSpec[];
+  /** Items of the insert menu. A block with a label and `create` is one already. */
+  insert?: readonly InsertControl[];
   /** Registers the extension's behaviour. Returns its cleanup. */
   register?(editor: LexicalEditor, context: ExtensionContext): (() => void) | void;
 }
@@ -198,7 +216,26 @@ export function checkExtension(value: unknown, source: string): KotobaExtension 
     blocks.push(block as unknown as BlockSpec);
   }
 
-  return { ...(value as unknown as KotobaExtension), toolbar, blocks };
+  const insert: InsertControl[] = [];
+  const inserts = new Set<string>();
+  for (const item of Array.isArray(value.insert) ? value.insert : []) {
+    if (
+      !isObject(item) ||
+      typeof item.command !== "string" ||
+      !NAME.test(item.command) ||
+      typeof item.label !== "string" ||
+      item.label.trim() === "" ||
+      typeof item.run !== "function" ||
+      inserts.has(item.command)
+    ) {
+      console.error(`Kotoba: the extension "${name}" has an insert item without a valid command, label and run`);
+      continue;
+    }
+    inserts.add(item.command);
+    insert.push(item as unknown as InsertControl);
+  }
+
+  return { ...(value as unknown as KotobaExtension), toolbar, blocks, insert };
 }
 
 /** Loads the app's extension modules. */

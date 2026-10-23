@@ -880,6 +880,37 @@ div.kotoba-unknown {
   color: var(--kotoba-accent-text);
 }
 
+/* The insert menu: its items in groups, with icons. */
+.kotoba-menu-list [role="group"] {
+  display: block;
+}
+
+.kotoba-menu-group {
+  padding: calc(var(--kotoba-space) / 2) var(--kotoba-space) calc(var(--kotoba-space) / 4);
+  color: var(--kotoba-muted);
+  font-size: var(--kotoba-small);
+}
+
+.kotoba-menu-group-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.kotoba-menu-option:has(.kotoba-menu-icon) {
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.kotoba-menu-option:has(.kotoba-menu-icon) .kotoba-menu-hint {
+  margin-left: auto;
+}
+
+.kotoba-menu-icon {
+  display: inline-flex;
+  flex: none;
+}
+
 .kotoba-menu-hint {
   opacity: 0.75;
   font-size: var(--kotoba-small);

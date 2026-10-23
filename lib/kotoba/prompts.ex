@@ -39,8 +39,13 @@ defmodule Kotoba.Prompts do
     * `:max_length` - the longest query, 1 to 200 characters (default 64).
       A longer one closes the menu.
     * `:insert` - what a result inserts: `:mention` (the default), `:text`
-      (the item's `:text`, or its label), or `{:node, type}`: a node of the
-      editor of that Lexical type, from the item's `:attrs`.
+      (the item's `:text`, or its label), `{:node, type}`: a node of the
+      editor of that Lexical type, from the item's `:attrs`, or `:command`:
+      the item's command, see "The insert menu" below.
+    * `:with_text` - for an `insert: :command` prompt, what a block command
+      does in a block that has text: `:below` (the default) makes a new
+      block below it, `:turn_into` turns the block into the new one. In an
+      empty paragraph it always turns it into the new block.
     * `:async` - `true` to run the search in a task of the LiveView, so
       that a slow search does not block it. The LiveView then needs a
       `handle_async/3` clause, see `Kotoba.Live.handle_prompt_async/3`. The
@@ -80,6 +85,32 @@ defmodule Kotoba.Prompts do
   to the menu. Control characters (such as a tab or a line break) are
   removed from the id, the label, the hint and the text.
 
+  ## The insert menu
+
+  A prompt with `insert: :command` is an insert menu: its items run a
+  command of the editor on the block of the caret, as one undo step, after
+  the trigger and the query are removed:
+
+      prompts={[{"/", :insert, insert: :command}]}
+
+  Its items are the app's. Two atoms in its `:items` stand for the editor's
+  own, at their place: `:builtin`, the built-in items of the field's
+  features (`commands/1`), and `:extensions`, the insert items of the
+  editor's extensions. With no `:items` and no `:search`, the items are
+  `[:builtin, :extensions]`. An item of an insert menu has one of:
+
+    * `:command` - a built-in command (`commands/1` lists them: "h2",
+      "table", "upload"...), the block of an extension (`"ext:<type>"`), or
+      an extension's insert item (`"<extension>:<command>"`);
+    * `:node` - a node to insert, as a document has it (a map with a
+      `"type"`, at most 2048 bytes in JSON): an embed, a node of the app;
+    * `:text` - text to insert (a snippet).
+
+  and may have a `:group` (the menu shows a heading where the group
+  changes: "Basic", "Media", "Embeds", the app's own) and `:keywords`, more
+  words that find it (`/title` finds Heading 1). The editor leaves out an
+  item whose command or node needs a feature the field does not have.
+
   The component `Kotoba.Components.kotoba/1` sends the triggers, the names,
   the options and the items to the editor; the search callbacks stay in the
   LiveView. `Kotoba.Live.handle_prompt/3` runs them.
@@ -95,7 +126,20 @@ defmodule Kotoba.Prompts do
   @max_name 200
   @max_attrs 2048
   @positional ["@", "#"]
-  @options [:search, :items, :label, :spaces, :min_length, :max_length, :insert, :async]
+  @options [
+    :search,
+    :items,
+    :label,
+    :spaces,
+    :min_length,
+    :max_length,
+    :insert,
+    :with_text,
+    :async
+  ]
+  @markers [:builtin, :extensions]
+  @command ~r/\A[a-z][a-z0-9-]{0,99}(:[A-Za-z][A-Za-z0-9_-]{0,99})?\z/
+  @max_keywords 20
   @node_type ~r/\A[A-Za-z][A-Za-z0-9_-]{0,99}\z/
 
   @typedoc "An item as the editor receives it."
@@ -104,14 +148,18 @@ defmodule Kotoba.Prompts do
           required(:label) => String.t(),
           optional(:hint) => String.t(),
           optional(:text) => String.t(),
-          optional(:attrs) => map()
+          optional(:attrs) => map(),
+          optional(:command) => String.t(),
+          optional(:node) => map(),
+          optional(:group) => String.t(),
+          optional(:keywords) => [String.t()]
         }
 
   @typedoc "A prompt callback."
   @type callback :: (String.t() -> list()) | (String.t(), Phoenix.LiveView.Socket.t() -> list())
 
   @typedoc "What a result inserts."
-  @type insert :: :mention | :text | {:node, String.t()}
+  @type insert :: :mention | :text | {:node, String.t()} | :command
 
   @typedoc "A prompt: a callback, a callback with options, or a keyword list."
   @type spec :: callback() | {callback(), keyword()} | keyword()
@@ -129,12 +177,13 @@ defmodule Kotoba.Prompts do
           trigger: String.t(),
           name: String.t(),
           search: callback(),
-          items: [item()] | nil,
+          items: [item() | :builtin | :extensions] | nil,
           label: String.t() | nil,
           spaces: boolean(),
           min_length: non_neg_integer(),
           max_length: pos_integer(),
           insert: insert(),
+          with_text: :below | :turn_into,
           async: boolean()
         }
 
@@ -237,7 +286,8 @@ defmodule Kotoba.Prompts do
 
     max_length = integer!(prompt, opts, :max_length, @max_query, 1..@max_query_limit)
     async = boolean!(prompt, opts, :async)
-    {search, items} = source!(prompt, opts, async)
+    insert = insert!(prompt, Keyword.get(opts, :insert, :mention))
+    {search, items} = source!(prompt, opts, async, insert)
 
     %{
       search: search,
@@ -246,7 +296,8 @@ defmodule Kotoba.Prompts do
       spaces: boolean!(prompt, opts, :spaces),
       min_length: integer!(prompt, opts, :min_length, 0, 0..max_length),
       max_length: max_length,
-      insert: insert!(prompt, Keyword.get(opts, :insert, :mention)),
+      insert: insert,
+      with_text: with_text!(prompt, opts, insert),
       async: async
     }
   end
@@ -254,11 +305,26 @@ defmodule Kotoba.Prompts do
   defp options!(prompt, _spec),
     do: invalid!(prompt, "a prompt must be a callback, {callback, opts} or options")
 
-  defp source!(prompt, opts, async) do
+  defp source!(prompt, opts, async, insert) do
     case {Keyword.fetch(opts, :search), Keyword.fetch(opts, :items)} do
       {{:ok, fun}, :error} -> {search!(prompt, fun, async), nil}
-      {:error, {:ok, items}} -> local_items!(prompt, items, async)
+      {:error, {:ok, items}} -> local_items!(prompt, items, async, insert)
+      # An insert menu with no items has the editor's own.
+      {:error, :error} when insert == :command -> local_items!(prompt, @markers, async, insert)
       _other -> invalid!(prompt, "a prompt has a :search callback or :items, and not both")
+    end
+  end
+
+  defp with_text!(prompt, opts, insert) do
+    case Keyword.fetch(opts, :with_text) do
+      :error ->
+        :below
+
+      {:ok, value} when value in [:below, :turn_into] and insert == :command ->
+        value
+
+      {:ok, _value} ->
+        invalid!(prompt, ":with_text is :below or :turn_into, with insert: :command")
     end
   end
 
@@ -272,14 +338,28 @@ defmodule Kotoba.Prompts do
     fun
   end
 
-  defp local_items!(prompt, items, async) do
+  defp local_items!(prompt, items, async, insert) do
     unless is_list(items), do: invalid!(prompt, "the items of a prompt must be a list")
     if async, do: invalid!(prompt, "a prompt with :items is not async")
 
-    items =
-      items |> Enum.flat_map(&item/1) |> Enum.uniq_by(& &1.id) |> Enum.take(@max_local_items)
+    if insert != :command and Enum.any?(items, &(&1 in @markers)),
+      do: invalid!(prompt, ":builtin and :extensions are items of an insert: :command prompt")
 
-    {fn query -> filter(items, query) end, items}
+    # The editor's own items (:builtin, :extensions) stay as atoms, once each.
+    items =
+      items
+      |> Enum.flat_map(fn
+        marker when marker in @markers -> [marker]
+        other -> item(other)
+      end)
+      |> Enum.uniq_by(fn
+        marker when is_atom(marker) -> marker
+        item -> item.id
+      end)
+      |> Enum.take(@max_local_items)
+
+    own = Enum.reject(items, &is_atom/1)
+    {fn query -> filter(own, query) end, items}
   end
 
   defp label!(prompt, opts) do
@@ -316,7 +396,7 @@ defmodule Kotoba.Prompts do
     end
   end
 
-  defp insert!(_prompt, insert) when insert in [:mention, :text], do: insert
+  defp insert!(_prompt, insert) when insert in [:mention, :text, :command], do: insert
 
   defp insert!(prompt, {:node, type}) when is_binary(type) do
     if Regex.match?(@node_type, type),
@@ -325,7 +405,7 @@ defmodule Kotoba.Prompts do
   end
 
   defp insert!(prompt, _insert),
-    do: invalid!(prompt, ":insert must be :mention, :text or {:node, type}")
+    do: invalid!(prompt, ":insert must be :mention, :text, {:node, type} or :command")
 
   defp label?(label) when is_binary(label) do
     String.valid?(label) and String.trim(label) != "" and String.length(label) <= @max_name and
@@ -406,31 +486,100 @@ defmodule Kotoba.Prompts do
       }
 
   """
-  @spec config(prompts() | nil) :: %{String.t() => map()}
-  def config(prompts) do
+  @spec config(prompts() | nil, keyword()) :: %{String.t() => map()}
+  def config(prompts, context \\ []) do
     prompts
     |> specs()
-    |> Enum.map(&{&1.name, spec_config(&1)})
+    |> Enum.map(&{&1.name, spec_config(&1, context)})
     |> Enum.reject(fn {_name, config} -> config == %{} end)
     |> Map.new()
   end
 
-  defp spec_config(spec) do
+  defp spec_config(spec, context) do
+    {items, extensions_at} = expand(spec.items, context)
+
     [
       spaces: spec.spaces,
       minLength: spec.min_length != 0 && spec.min_length,
       maxLength: spec.max_length != @max_query && spec.max_length,
       insert: insert_config(spec.insert),
       nodeType: match?({:node, _type}, spec.insert) && elem(spec.insert, 1),
-      items: spec.items
+      withText: spec.with_text == :turn_into && "turn_into",
+      items: items,
+      extensionsAt: extensions_at
     ]
     |> Enum.reject(fn {_key, value} -> value in [false, nil] end)
     |> Map.new()
   end
 
+  # The items of an insert menu: :builtin becomes the built-in items, and
+  # :extensions the place of the extensions' items, which the editor has.
+  defp expand(nil, _context), do: {nil, nil}
+
+  defp expand(items, context) do
+    Enum.reduce(items, {[], nil}, fn
+      :builtin, {acc, at} -> {acc ++ commands(context), at}
+      :extensions, {acc, _at} -> {acc, length(acc)}
+      item, {acc, at} -> {acc ++ [item], at}
+    end)
+  end
+
   defp insert_config(:mention), do: nil
   defp insert_config(:text), do: "text"
   defp insert_config({:node, _type}), do: "node"
+  defp insert_config(:command), do: "command"
+
+  # The built-in items of an insert menu: {command, label, group, feature, keywords}.
+  @commands [
+    {"paragraph", "Text", "Basic", nil, ~w(paragraph plain body)},
+    {"h1", "Heading 1", "Basic", :headings, ~w(h1 title heading)},
+    {"h2", "Heading 2", "Basic", :headings, ~w(h2 subtitle heading)},
+    {"h3", "Heading 3", "Basic", :headings, ~w(h3 heading)},
+    {"h4", "Heading 4", "Basic", :headings, ~w(h4 heading)},
+    {"quote", "Quote", "Basic", :quotes, ~w(blockquote citation)},
+    {"bullet", "Bulleted list", "Basic", :lists, ~w(ul unordered bullets)},
+    {"number", "Numbered list", "Basic", :lists, ~w(ol ordered numbers)},
+    {"check", "Check list", "Basic", :check_lists, ~w(todo tasks checkbox)},
+    {"code-block", "Code block", "Basic", :code_blocks, ~w(pre snippet)},
+    {"table", "Table", "Basic", :tables, ~w(grid rows columns)},
+    {"rule", "Divider", "Basic", :horizontal_rules, ~w(hr horizontal rule line separator)},
+    {"upload", "Image or file", "Media", :attachments,
+     ~w(image photo picture file attachment upload)},
+    {"embed", "Embed", "Embeds", :embeds, ~w(canvas board)}
+  ]
+
+  @doc """
+  Returns the built-in items of an insert menu, for the field's features:
+  the blocks of text (Text, Heading 1 to 4, Quote, the lists, Code block),
+  Table, Divider, Image or file and Embed, each with its `:command`,
+  `:group` and `:keywords`. An item of a feature that the field does not
+  have is left out, Image or file without `uploads: true`, and Embed
+  without `embeds: true`.
+
+  The options: `:features` (every feature but `blocks` by default, see
+  `Kotoba.Features`), `:uploads` and `:embeds` (booleans, `false` by
+  default). `<.kotoba>` gives the field's own.
+
+  ## Examples
+
+      iex> Kotoba.Prompts.commands(features: [:bold, :headings]) |> Enum.map(& &1.command)
+      ["paragraph", "h1", "h2", "h3", "h4"]
+
+  """
+  @spec commands(keyword()) :: [item()]
+  def commands(opts \\ []) do
+    features =
+      opts
+      |> Keyword.get_lazy(:features, fn -> Kotoba.Features.all() end)
+      |> Kotoba.Features.names!()
+
+    for {command, label, group, feature, keywords} <- @commands,
+        feature == nil or feature in features,
+        command != "upload" or Keyword.get(opts, :uploads, false),
+        command != "embed" or Keyword.get(opts, :embeds, false) do
+      %{id: command, label: label, command: command, group: group, keywords: keywords}
+    end
+  end
 
   @doc """
   Finds the prompt with a name, in a prompt list.
@@ -525,7 +674,8 @@ defmodule Kotoba.Prompts do
 
   @doc """
   Filters items for a query as the editor does for an `:items` prompt: each
-  word of the query must start a word of the label or the hint, with no
+  word of the query must start a word of the label, the hint or the
+  keywords, with no
   regard to case or accents. The items whose label starts with the query
   come first.
 
@@ -542,7 +692,11 @@ defmodule Kotoba.Prompts do
 
     items
     |> Enum.filter(fn item ->
-      haystack = words("#{item.label} #{Map.get(item, :hint, "")}")
+      haystack =
+        words(
+          "#{item.label} #{Map.get(item, :hint, "")} #{Enum.join(Map.get(item, :keywords, []), " ")}"
+        )
+
       Enum.all?(words, fn word -> Enum.any?(haystack, &String.starts_with?(&1, word)) end)
     end)
     |> Enum.sort_by(&(not String.starts_with?(fold(&1.label), fold(query))))
@@ -591,6 +745,10 @@ defmodule Kotoba.Prompts do
         |> put_ok(:hint, text(fetch(map, :hint)))
         |> put_ok(:text, text(fetch(map, :text)))
         |> put_ok(:attrs, attrs(fetch(map, :attrs)))
+        |> put_ok(:command, command(fetch(map, :command)))
+        |> put_ok(:node, node_json(fetch(map, :node)))
+        |> put_ok(:group, text(fetch(map, :group)))
+        |> put_ok(:keywords, keywords(fetch(map, :keywords)))
 
       [item]
     else
@@ -636,4 +794,43 @@ defmodule Kotoba.Prompts do
   end
 
   defp attrs(_attrs), do: :error
+
+  defp command(value) when is_binary(value) do
+    if Regex.match?(@command, value), do: {:ok, value}, else: :error
+  end
+
+  defp command(_value), do: :error
+
+  # A node to insert, as a document has it: a map with a Lexical "type".
+  defp node_json(%{} = node) when not is_struct(node) do
+    node = Map.new(node, fn {key, value} -> {to_string(key), value} end)
+
+    with type when is_binary(type) <- node["type"],
+         true <- Regex.match?(@node_type, type),
+         true <- byte_size(JSON.encode!(node)) <= @max_attrs do
+      {:ok, Map.delete(node, "$")}
+    else
+      _other -> :error
+    end
+  rescue
+    _error -> :error
+  end
+
+  defp node_json(_node), do: :error
+
+  defp keywords(list) when is_list(list) do
+    keywords = list |> Enum.flat_map(&keyword/1) |> Enum.take(@max_keywords)
+    if keywords == [], do: :error, else: {:ok, keywords}
+  end
+
+  defp keywords(_list), do: :error
+
+  defp keyword(value) when is_binary(value) do
+    case text(value) do
+      {:ok, word} -> [word]
+      :error -> []
+    end
+  end
+
+  defp keyword(_value), do: []
 end

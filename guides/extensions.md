@@ -86,6 +86,7 @@ The development server has this extension, with its Elixir half, in
 | `markdown` | Markdown shortcuts: transformers of `@lexical/markdown`. A shortcut whose `dependencies` the editor does not have is left out. |
 | `toolbar` | Toolbar controls, below. |
 | `blocks` | What the block handles (the `blocks` feature) do with the extension's nodes, below. |
+| `insert` | Items of the insert menu, below. |
 | `register(editor, context)` | Registers commands, node transforms and listeners. It returns its cleanup, a function (`mergeRegister` from `utils` joins several). |
 
 `context` has the editor's `id`, the hook `element`, `announce(message)`,
@@ -141,6 +142,27 @@ blocks: [{ type: "callout", label: "Callout", create: () => new CalloutNode() }]
 
 A block of a type with no `create` has a handle, and its menu has
 Duplicate, Delete and Copy a link, with no Turn into.
+
+### Insert items
+
+An editor with an insert menu (a prompt with `insert: :command`, see the
+[Prompts](prompts.md) guide) has the extensions' items, where its
+`:items` has `:extensions`. A block with a `label` and a `create` is one
+already: the callout appears as Callout, with no code. Other commands are
+insert items:
+
+```javascript
+insert: [{ command: "note", label: "Note", group: "Callouts", keywords: ["info"], run: (editor) => editor.dispatchCommand(INSERT_NOTE_COMMAND, undefined) }],
+```
+
+| Key | |
+| --- | --- |
+| `command` | Required. Lower case letters, digits and `-`, unique in the extension. The menu knows the item as `<name>:<command>`, for example `callout:note`, and an app's item can name it. |
+| `label` | Required. The item's words in the menu. |
+| `run(editor)` | Required. Runs in an update of the editor, with the caret where the trigger was (the trigger and the query are removed). |
+| `group` | The menu's group; the default is the extension's name. |
+| `keywords` | More words that find the item. |
+| `icon()` | Returns an element (an SVG) for the item. |
 
 ## Serve the module and give it to the editor
 
