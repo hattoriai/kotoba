@@ -312,7 +312,7 @@ defmodule KotobaDev.Layouts do
         <meta name="csrf-token" content={Plug.CSRFProtection.get_csrf_token()} />
         <title>Kotoba development</title>
         <link rel="stylesheet" href="/assets/kotoba.css" />
-        <link rel="stylesheet" href="/vendor/issho-css/issho.css" />
+        <link rel="stylesheet" href="/vendor/issho/issho.css" />
         <link :if={@sumi} rel="stylesheet" href="/assets/kotoba-sumi.css" />
         <style>
           body { font-family: system-ui, sans-serif; margin: 0; background: #fafaf9; color: #1c1917; }
@@ -1614,11 +1614,21 @@ defmodule KotobaDev.CollabLive do
         features: if(params["blocks"] == "true", do: Kotoba.Features.all()),
         form: to_form(%{"body" => nil}, as: :shared),
         saved: nil,
-        assist_refs: MapSet.new()
+        assist_refs: MapSet.new(),
+        room: Issho.Policy.room(id),
+        # Whom a comment may mention besides the people here.
+        mentionable: [%{key: "Linus", name: "Linus"}],
+        events: []
       )
 
     # Issho's streams for this person, as suggestions in the editor.
-    {:ok, Kotoba.Issho.suggestions(socket, user, %{"shared_editor" => issho})}
+    socket = Kotoba.Issho.suggestions(socket, user, %{"shared_editor" => issho})
+
+    # The document's changes, as the room's events (Kotoba.Issho.events/2).
+    if connected?(socket),
+      do: Issho.Live.subscribe(socket.assigns.room, :self, events: ["text.*"])
+
+    {:ok, socket}
   end
 
   def render(assigns) do
@@ -1634,7 +1644,29 @@ defmodule KotobaDev.CollabLive do
     <button id="collab-summary" phx-click="summary">Stream a summary in the text</button>
     <.kotoba_content :if={@saved} content={@saved} id="collab-saved" />
     <p :if={@saved} id="collab-saved-text">{@saved.text}</p>
+    <h2>Changes</h2>
+    <ol id="collab-events" aria-label="Changes">
+      <li :for={event <- @events}>{event.name}: {event.data.type} {event.data[:n]}</li>
+    </ol>
+    <Issho.Components.comments id="comments" room={@room} mentionable={@mentionable} read={&Kotoba.Issho.read_comment/1}>
+      <:input :let={input}>
+        <.kotoba
+          field={Kotoba.Issho.comment_field(input, @room, @mentionable)}
+          id={input.id}
+          label="Comment"
+          placeholder={input.placeholder}
+          features={[:mentions]}
+          prompts={Kotoba.Issho.comment_prompts(@room, @mentionable)}
+        />
+      </:input>
+    </Issho.Components.comments>
     """
+  end
+
+  # The @ of a comment: the room's people, and mentionable.
+  def handle_event("kotoba:prompt", params, socket) do
+    prompts = Kotoba.Issho.comment_prompts(socket.assigns.room, socket.assigns.mentionable)
+    {:noreply, Kotoba.Live.handle_prompt(socket, params, prompts)}
   end
 
   def handle_event("save", %{"kotoba_collab" => %{"shared_editor" => json}}, socket) do
@@ -1694,6 +1726,12 @@ defmodule KotobaDev.CollabLive do
 
   def handle_info({:assist_chunk, id, ref, action, rest}, socket),
     do: {:noreply, KotobaDev.Assist.next(socket, id, ref, action, rest)}
+
+  # The last changes of the document, newest first; the room's other messages.
+  def handle_info({Issho.Live, "event", _room, %Issho.Event{} = event}, socket),
+    do: {:noreply, assign(socket, events: Enum.take([event | socket.assigns.events], 5))}
+
+  def handle_info({Issho.Live, _event, _key, _payload}, socket), do: {:noreply, socket}
 
   # An image attachment, for the shared caption (its file is not stored).
   def handle_event("attach", _params, socket),
@@ -1996,8 +2034,6 @@ defmodule KotobaDev.Endpoint do
   # The node modules, then the editor bundle and its style sheets.
   plug(Plug.Static, at: "/assets/nodes", from: Path.expand("tmp/dev/nodes", __DIR__))
   plug(Plug.Static, at: "/vendor/issho", from: Path.expand("deps/issho/priv/static", __DIR__))
-  # Issho's theme, from its source until a release of Issho with it is on Hex.
-  plug(Plug.Static, at: "/vendor/issho-css", from: Path.expand("deps/issho/priv/static", __DIR__))
   plug(Plug.Static, at: "/assets", from: Path.expand("priv/static", __DIR__))
   plug(Plug.Static, at: "/vendor/phoenix", from: {:phoenix, "priv/static"})
   plug(Plug.Static, at: "/vendor/phoenix_live_view", from: {:phoenix_live_view, "priv/static"})
@@ -2023,11 +2059,14 @@ Task.async(fn ->
         {Registry, keys: :unique, name: KotobaDev.WriterRegistry},
         {DynamicSupervisor, name: KotobaDev.Writers},
         {Kotoba.Collab.Store.Memory, name: KotobaDev.CollabStore},
+        # Issho's own documents: a room's comments.
+        {Issho.Store.Memory, name: KotobaDev.IsshoStore},
         {Issho,
          name: KotobaDev.Issho,
          pubsub: KotobaDev.PubSub,
          endpoint: KotobaDev.Endpoint,
-         policy: KotobaDev.Collaboration},
+         policy: KotobaDev.Collaboration,
+         store: {Issho.Store.Memory, KotobaDev.IsshoStore}},
         KotobaDev.Endpoint
       ],
       strategy: :one_for_one

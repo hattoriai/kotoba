@@ -97,13 +97,15 @@ if Code.ensure_loaded?(Issho.Binding) do
 
     Name it as a document's engine through `document/1`, in your policy;
     change a document from your own code with `change/4`; give agents
-    `tools/0`. A place is a selection (`Kotoba.Issho.Place`).
+    `tools/0`. A place is a selection (`Kotoba.Issho.Place`). A document's
+    changes are events of its room (`events/2`), and a Kotoba editor writes
+    Issho's comments (`read_comment/1`).
     """
 
     use Issho.Binding, engine: Kotoba.Issho.Engine, place: Kotoba.Issho.Place
 
     alias Kotoba.Collab.Document
-    alias Kotoba.Issho.Suggestions
+    alias Kotoba.Issho.{Comments, Events, Suggestions}
 
     @doc """
     What a shared editor's document is, for your policy's `document/2`
@@ -114,17 +116,61 @@ if Code.ensure_loaded?(Issho.Binding) do
 
     Options: `:store` (required), your `Kotoba.Collab.Store` and its
     context; `:policy`, the document's checks (`:features`, `:nodes`,
-    `:validate`), as every accepted transaction must pass them.
+    `:validate`), as every accepted transaction must pass them; `:events`,
+    `false` for a document whose changes make no events of the room (see
+    `events/2`).
     """
     @spec document(keyword()) :: {:ok, map()}
     def document(opts) do
-      {:ok,
-       %{
-         engine: __MODULE__,
-         opts: Keyword.get(opts, :policy, []),
-         store: {Kotoba.Issho.Store, Keyword.fetch!(opts, :store)}
-       }}
+      spec = %{
+        engine: __MODULE__,
+        opts: Keyword.get(opts, :policy, []),
+        store: {Kotoba.Issho.Store, Keyword.fetch!(opts, :store)}
+      }
+
+      if Keyword.get(opts, :events, true),
+        do: {:ok, Map.put(spec, :events, &events/2)},
+        else: {:ok, spec}
     end
+
+    @doc ~S"""
+    The events of a change of a shared document (the spec's `:events`,
+    see `Issho.Documents.open/4`), which `document/1` gives: once the
+    change is saved, they are events of the document's room, with the
+    document and the change's author, for agents (`wait_for_events`) and
+    for LiveViews (`Issho.Live.subscribe/3`'s `:events`).
+
+      * `"text.block_added"`: `%{block: id, type: type, n: n}`, a block
+        that was not there: a new one, or one that came back (an undo).
+      * `"text.block_removed"`: `%{block: id, type: type}`, a block that
+        went.
+      * `"text.changed"`: `%{block: id, type: type, n: n}`, a block whose
+        text changed, and that was there before and after. A change of
+        format only is not one.
+
+    A block is a paragraph, a heading, a quote, a list item or a code
+    block. `id` is its node's id, which stays the same as the text
+    changes; `n` is its number, as `read_text` counts them (from 1), after
+    the change; `type` is what it is, as `read_text` says it
+    (`"paragraph"`, `"h2"`, `"bullet item"`). The text is not in the
+    event, as the room's people may not all read each of its documents.
+
+        Issho.Live.subscribe("notebook:7", :self, events: ["text.*"])
+
+        def handle_info({Issho.Live, "event", _room, %Issho.Event{name: "text.changed"} = event}, socket) do
+          ...
+        end
+
+        # The room's other messages, which :self gets too.
+        def handle_info({Issho.Live, _event, _key, _payload}, socket), do: {:noreply, socket}
+
+    An app with events of its own gives both:
+
+        {:ok, spec} = Kotoba.Issho.document(store: {MyApp.CollabStore, MyApp.Repo})
+        {:ok, %{spec | events: &(Kotoba.Issho.events(&1, &2) ++ MyApp.Notebooks.events(&1, &2))}}
+    """
+    @spec events([map()], map()) :: [{String.t(), map()}]
+    def events(operations, context), do: Events.events(operations, context)
 
     @doc """
     Changes a shared document from your own code (a job, an import),
@@ -208,6 +254,63 @@ if Code.ensure_loaded?(Issho.Binding) do
             Phoenix.LiveView.Socket.t()
     def suggestions(socket, user, editors, opts \\ []),
       do: Suggestions.attach(socket, user, editors, opts)
+
+    @doc ~S"""
+    A Kotoba editor as the comment box of Issho's comments
+    (`Issho.Components.comments/1`): its `read`, for the comment's words
+    and whom they mention from the box's form params. With
+    `comment_prompts/2` and `comment_field/3`:
+
+        <Issho.Components.comments id="comments" room={@room} mentionable={@mentionable} read={&Kotoba.Issho.read_comment/1}>
+          <:input :let={input}>
+            <.kotoba
+              field={Kotoba.Issho.comment_field(input, @room, @mentionable)}
+              id={input.id}
+              label="Comment"
+              placeholder={input.placeholder}
+              features={[:mentions]}
+              prompts={Kotoba.Issho.comment_prompts(@room, @mentionable)}
+            />
+          </:input>
+        </Issho.Components.comments>
+
+        def handle_event("kotoba:prompt", params, socket) do
+          prompts = Kotoba.Issho.comment_prompts(socket.assigns.room, socket.assigns.mentionable)
+          {:noreply, Kotoba.Live.handle_prompt(socket, params, prompts)}
+        end
+
+    A comment keeps its words as text: a mention of the `@` prompt is
+    `"@"` and the person's name in it, as Issho's own comment box writes
+    it, and its key is in the comment's mentions, so the person hears of
+    it (`"comment.created"`, `Issho.Inbox`). Other mentions are their
+    label. Give the box only what text keeps, `[:mentions]`: bold or a
+    link's address would be lost.
+    """
+    @spec read_comment(map()) :: %{body: String.t(), mentions: [String.t()]}
+    def read_comment(params), do: Comments.read(params)
+
+    @doc """
+    The `@` prompt of a comment box (`read_comment/1`): the room's people,
+    those here first, and `mentionable` (`[%{key: "user:42", name: "Ada"}]`,
+    as `Issho.Components.comments/1` has it), filtered as the person
+    types. A mention's id is the person's key. The same list for the
+    editor's `prompts` and for `Kotoba.Live.handle_prompt/3`, in the
+    LiveView that is in the room.
+    """
+    @spec comment_prompts(String.t(), [map()]) :: list()
+    def comment_prompts(room, mentionable \\ []),
+      do: Comments.prompts(room, mentionable)
+
+    @doc """
+    The field of a comment box (`read_comment/1`), from what the `:input`
+    slot of `Issho.Components.comments/1` gives: the comment's words as a
+    document, a paragraph for each line, each `"@"` and name of someone
+    `comment_prompts/2` offers a mention again, so that an edit starts
+    from the comment as it is.
+    """
+    @spec comment_field(map(), String.t(), [map()]) :: Phoenix.HTML.FormField.t()
+    def comment_field(input, room, mentionable \\ []),
+      do: Comments.field(input, room, mentionable)
 
     @doc ~S"""
     Kotoba's tools for agents (`Issho.Tool`): an agent reads a shared

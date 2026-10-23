@@ -126,8 +126,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The collaboration bundle imports Issho, whose bundle and types are in deps/
-      # (built there while Issho comes from its main branch).
+      # The collaboration bundle imports Issho, whose bundle and types are in deps/.
       - uses: erlef/setup-beam@v1
         with:
           version-file: .tool-versions
@@ -143,10 +142,6 @@ jobs:
 
       - run: npm ci
         working-directory: assets
-
-      # Issho from its main branch until Issho 0.4 is on Hex: its bundle and types, built.
-      - run: mix deps.get && mix issho.build
-        working-directory: deps/issho
 
       - run: npm run typecheck
         working-directory: assets
@@ -197,10 +192,6 @@ jobs:
 
       - run: npx playwright install --with-deps ${{ matrix.browser }}
         working-directory: e2e
-
-      # Issho from its main branch until Issho 0.4 is on Hex: its bundle and types, built.
-      - run: mix deps.get && mix issho.build
-        working-directory: deps/issho
 
       # The Playwright web server runs `mix kotoba.build` (the real bundle),
       # builds the dev node modules and starts `mix dev` without watchers.

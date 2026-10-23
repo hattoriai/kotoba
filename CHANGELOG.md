@@ -9,6 +9,8 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- Shared editors need `{:issho, "~> 0.4"}`, from Hex. An editor that is
+  not shared needs nothing.
 - Uploads keep their files with [Storehouse](https://hexdocs.pm/storehouse),
   Kotoba's storage taken out into a library of its own: each file is
   checked by its bytes (`Kotoba.Attachments.describe/2` is
@@ -52,6 +54,19 @@ and says what to change.
 
 ### Added
 
+- A Kotoba editor as the comment box of Issho's comments
+  (`Issho.Components.comments/1`'s `:input` slot): `Kotoba.Issho.read_comment/1`
+  is its `read`, `comment_prompts/2` its `@` of the room's people and
+  `mentionable`, and `comment_field/3` its field, so that an edit starts
+  from the comment as it is. A mention is `"@"` and the person's name in
+  the comment, and their key in its mentions, so they hear of it.
+  Collaboration guide, "Comments".
+- A shared document's changes are events of its room, for agents
+  (`wait_for_events`) and LiveViews (`Issho.Live.subscribe/3`):
+  `"text.block_added"`, `"text.block_removed"` and `"text.changed"`, with
+  the block's id, type and number (`Kotoba.Issho.events/2`).
+  `Kotoba.Issho.document/1` gives them; `events: false` turns them off.
+  Collaboration guide, "Events".
 - `Kotoba.Live.stream_resume/5`: a suggestion that starts in the middle of
   its stream, with the text so far, for an answer that goes on in the
   app's process while the person is on another page. `stream_start/4` and
