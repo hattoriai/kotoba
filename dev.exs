@@ -540,7 +540,7 @@ defmodule KotobaDev.Layouts do
           <nav>
             <a href="/">Editor</a><a href="/two">Two editors</a><a href="/nodes">Nodes</a><a href="/embeds">Embeds</a><a href="/collab">Collaboration</a><a href="/?theme=sumi">Sumi theme</a>
           </nav>
-          <nav aria-label="Sumi's themes">
+          <nav :if={@sumi} aria-label="Sumi's themes">
             Sumi: <a :for={{id, name, _} <- @themes} href={"?sumi=#{id}&sample=palette"} aria-current={@look == id && "page"}>{name}</a>
           </nav>
           {@inner_content}
