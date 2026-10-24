@@ -7,15 +7,22 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-24
+
+Uploads kept with Storehouse; on Issho 0.4: comments written in the
+editor, and a document's changes as events.
+
+### Changed (breaking)
+
+- Shared editors need `{:issho, "~> 0.4.2"}`, from Hex. An editor that is
+  not shared needs nothing.
+
 ### Changed
 
 - Uploads take Storehouse 0.2 (`{:storehouse, "~> 0.2"}`, which
   `mix kotoba.install` adds): its security changes, and requests made with
   Req. A HEIF file is now `image/heic`, by its bytes, not
   `application/octet-stream`.
-
-- Shared editors need `{:issho, "~> 0.4.2"}`, from Hex. An editor that is
-  not shared needs nothing.
 - Uploads keep their files with [Storehouse](https://hexdocs.pm/storehouse),
   Kotoba's storage taken out into a library of its own: each file is
   checked by its bytes (`Kotoba.Attachments.describe/2` is
@@ -28,7 +35,7 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   same store. `mix kotoba.install` configures Storehouse.
 - Storehouse is an optional dependency: `Kotoba.Live.consume_uploads/4`,
   `Kotoba.Attachments` and `Kotoba.Storage` are there when the app has
-  `{:storehouse, "~> 0.1"}` in its deps. An editor without uploads needs
+  `{:storehouse, "~> 0.2"}` in its deps. An editor without uploads needs
   nothing.
 
 ### Deprecated
@@ -40,9 +47,9 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Upgrading
 
-An app with uploads:
+See the Upgrading guide, "To Kotoba 0.8". An app with uploads:
 
-1. Adds `{:storehouse, "~> 0.1"}` to its deps.
+1. Adds `{:storehouse, "~> 0.2"}` to its deps.
 2. Replaces `config :kotoba, Kotoba.Storage.Local, ...` with
    `config :storehouse, Storehouse.Local, ...`, with the same `root`, and
    `url_prefix: "/uploads/kotoba"` (the old default, unless it gave
@@ -749,7 +756,10 @@ The first release.
 - Guides: quickstart, forms, uploads, prompts, custom nodes, theming,
   security, accessibility and known limits.
 
-[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/hattoriai/kotoba/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/hattoriai/kotoba/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/hattoriai/kotoba/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/hattoriai/kotoba/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/hattoriai/kotoba/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/hattoriai/kotoba/compare/v0.2.2...v0.3.0
