@@ -105,10 +105,24 @@ values.
 
 Dark and light: on a page with the Sumi themes, the editor follows them,
 because their colours change with `data-theme`. Without them, the
-built-in palette follows the `data-theme` attribute (`"dark"` or
-`"light"`) first, then `prefers-color-scheme`. The theme is resolved again
+built-in palette follows the `data-theme` attribute (Sumi's dark themes
+`"dark"`, `"smoke"`, `"stone"` and `"lacquer"`, or its light ones
+`"light"`, `"snow"` and `"silk"`) first, then `prefers-color-scheme`. The theme is resolved again
 on every element with a `data-theme` attribute, so a part of the page with
 its own theme gets it.
+
+Each of Sumi's seven themes (Ink, Smoke, Stone and Lacquer; Paper, Snow
+and Silk) has its own accent, and the editor follows it: the links, the
+focus ring, the selection and the code's keywords are the accent. The
+palette's names keep their hue in every theme: `orange` is Sumi's orange
+(ember in Ink and Paper), not the theme's ember. A code token of the
+accent's hue takes another one in that theme (in Smoke, whose accent is
+jade, the strings are orange; in Snow, whose accent is indigo, the
+functions are), and on Smoke's lighter page the red and the purple take
+more of the text, so that every color reads (AA).
+
+The development app (`mix dev`) shows the editor in each:
+`?sumi=smoke&sample=palette`, or the links under its menu.
 
 In an app with daisyUI (a new Phoenix 1.8 app has it), the theme reads the
 app's own daisyUI colours (`--color-base-*`), with the Sumi accent. Kotoba
@@ -139,7 +153,8 @@ The palette has seven names: `red`, `orange`, `yellow`, `green`, `blue`,
 `purple` and `gray`. The editor stores a color as the name, never a CSS
 value, so a theme decides what each one looks like. A text color renders
 as `span.kotoba-color-<name>` and a highlight as `mark.kotoba-highlight-<name>`
-(the default yellow highlight is a plain `mark`). `kotoba.css` has these
+(the default yellow highlight is a plain `mark`, which reads
+`--kotoba-highlight`). `kotoba.css` has these
 classes, the only rules it has for rendered content, and they read the
 `--kotoba-color-<name>` and `--kotoba-highlight-<name>` properties. The
 default text colors are mixed with `--kotoba-text`, so that they read on

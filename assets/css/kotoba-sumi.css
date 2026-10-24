@@ -23,10 +23,16 @@
  *
  * Dark and light: on a page with the Sumi themes, the editor follows them
  * (their colours change with data-theme). Without them, the built-in
- * palette follows the data-theme attribute ("dark" or "light") first, then
- * prefers-color-scheme. The mapping is resolved again on every element
- * with a data-theme attribute, so a part of the page with its own theme
- * gets it.
+ * palette follows the data-theme attribute (Sumi's dark themes "dark",
+ * "smoke", "stone" and "lacquer", or its light ones "light", "snow" and
+ * "silk") first, then prefers-color-scheme. The mapping is resolved again
+ * on every element with a data-theme attribute, so a part of the page with
+ * its own theme gets it.
+ *
+ * Each Sumi theme has its own accent (blade, jade, gold, vermilion,
+ * indigo or lotus pink). The palette's names keep their hue in every one:
+ * orange is Sumi's orange, not the theme's ember. A code token of the
+ * accent's hue takes another one in that theme (below the mapping).
  */
 
 /* The Sumi palette, light. */
@@ -41,11 +47,16 @@
   --kotoba-sumi-info: oklch(55% 0.18 245);
   --kotoba-sumi-success: oklch(55% 0.16 155);
   --kotoba-sumi-error: oklch(55% 0.22 25);
+  /* Ember in Ink and Paper: the orange of the palette in every theme. */
+  --kotoba-sumi-orange: #ff6b3d;
 }
 
-/* The Sumi palette, dark: data-theme="dark", or a dark preference on a page
-   that does not ask for light. */
-[data-theme="dark"] {
+/* The Sumi palette, dark: Sumi's dark themes (Ink, Smoke, Stone, Lacquer),
+   or a dark preference on a page that does not ask for a light one. */
+[data-theme="dark"],
+[data-theme="smoke"],
+[data-theme="stone"],
+[data-theme="lacquer"] {
   --kotoba-sumi-base-100: oklch(12% 0.003 270);
   --kotoba-sumi-base-200: oklch(16% 0.004 270);
   --kotoba-sumi-base-300: oklch(20% 0.005 270);
@@ -58,7 +69,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme="light"], [data-theme="snow"], [data-theme="silk"]) {
     --kotoba-sumi-base-100: oklch(12% 0.003 270);
     --kotoba-sumi-base-200: oklch(16% 0.004 270);
     --kotoba-sumi-base-300: oklch(20% 0.005 270);
@@ -103,14 +114,14 @@
   /* The palette: each hue mixed with the ink, so that it reads on paper and
      on the dark surface; the highlights are faint washes of the same hues. */
   --kotoba-color-red: color-mix(in oklab, var(--color-error, var(--kotoba-sumi-error)) 80%, var(--kotoba-text));
-  --kotoba-color-orange: color-mix(in oklab, var(--color-sumi-ember, #ff6b3d) 70%, var(--kotoba-text));
+  --kotoba-color-orange: color-mix(in oklab, var(--kotoba-sumi-orange) 70%, var(--kotoba-text));
   --kotoba-color-yellow: color-mix(in oklab, var(--color-warning, oklch(75% 0.16 85)) 70%, var(--kotoba-text));
   --kotoba-color-green: color-mix(in oklab, var(--color-success, var(--kotoba-sumi-success)) 80%, var(--kotoba-text));
   --kotoba-color-blue: color-mix(in oklab, var(--color-info, var(--kotoba-sumi-info)) 80%, var(--kotoba-text));
   --kotoba-color-purple: color-mix(in oklab, oklch(55% 0.2 300) 80%, var(--kotoba-text));
   --kotoba-color-gray: var(--sumi-text-muted, var(--sumi-muted, var(--kotoba-sumi-muted)));
   --kotoba-highlight-red: color-mix(in oklab, var(--color-error, var(--kotoba-sumi-error)) 25%, transparent);
-  --kotoba-highlight-orange: color-mix(in oklab, var(--color-sumi-ember, #ff6b3d) 28%, transparent);
+  --kotoba-highlight-orange: color-mix(in oklab, var(--kotoba-sumi-orange) 28%, transparent);
   --kotoba-highlight-yellow: var(--kotoba-highlight);
   --kotoba-highlight-green: color-mix(in oklab, var(--color-success, var(--kotoba-sumi-success)) 25%, transparent);
   --kotoba-highlight-blue: color-mix(in oklab, var(--color-info, var(--kotoba-sumi-info)) 25%, transparent);
@@ -149,9 +160,26 @@
   --kotoba-token-variable: var(--color-base-content, var(--sumi-ink, var(--kotoba-sumi-content)));
   --kotoba-token-keyword: var(--color-sumi-blade, var(--sumi-accent, #e84a1c));
   --kotoba-token-constant: color-mix(in oklab, var(--color-sumi-ember, #ff6b3d) 75%, var(--kotoba-text));
-  --kotoba-token-function: var(--color-info, var(--kotoba-sumi-info));
-  --kotoba-token-string: var(--color-success, var(--kotoba-sumi-success));
+  /* The status colours as text: mixed with the ink, as the palette, for AA
+     on every Sumi page. */
+  --kotoba-token-function: var(--kotoba-color-blue);
+  --kotoba-token-string: var(--kotoba-color-green);
   --kotoba-token-attr: color-mix(in oklab, var(--color-sumi-blade, #e84a1c) 60%, var(--kotoba-text));
-  --kotoba-token-inserted: var(--color-success, var(--kotoba-sumi-success));
-  --kotoba-token-deleted: var(--color-error, var(--kotoba-sumi-error));
+  --kotoba-token-inserted: var(--kotoba-color-green);
+  --kotoba-token-deleted: var(--kotoba-color-red);
+}
+
+/* Sumi's themes. The keyword is the accent; where another token has the
+   accent's hue (Smoke's jade and the string's green, Snow's indigo and the
+   function's blue), it is orange instead, so that the two do not look
+   alike. Smoke's page is the lightest dark: its red and purple take more
+   of the text there, for AA. */
+[data-theme="smoke"] {
+  --kotoba-color-red: color-mix(in oklab, var(--color-error, var(--kotoba-sumi-error)) 65%, var(--kotoba-text));
+  --kotoba-color-purple: color-mix(in oklab, oklch(55% 0.2 300) 60%, var(--kotoba-text));
+  --kotoba-token-string: color-mix(in oklab, var(--kotoba-sumi-orange) 75%, var(--kotoba-text));
+}
+
+[data-theme="snow"] {
+  --kotoba-token-function: color-mix(in oklab, var(--kotoba-sumi-orange) 60%, var(--kotoba-text));
 }

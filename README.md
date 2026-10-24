@@ -208,7 +208,8 @@ failing one), uploads to `tmp/uploads`, an app node made with
 editors with fewer features and an example extension at `/extensions`,
 the block handles at `/blocks`, the insert menu at `/insert`, a stream
 that outlives the page at `/resume`, and the Sumi theme at
-`/?theme=sumi`. Set `PORT` for another port. esbuild watchers rebuild the
+`/?theme=sumi` (each of Sumi's seven themes at `?sumi=<theme>`, with
+`&sample=palette` for every color). Set `PORT` for another port. esbuild watchers rebuild the
 bundle and the node modules, and the page reloads. Restart `mix dev`
 after a change in `dev/lib`.
 

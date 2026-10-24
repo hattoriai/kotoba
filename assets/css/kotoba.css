@@ -378,6 +378,9 @@ span.kotoba-footnote-ref { color: var(--kotoba-accent); cursor: default; }
 /* A highlight in a color of the palette: the editor puts the color on the
    mark, in its style. */
 mark[style*="--kotoba-highlight-"] > .kotoba-highlight { background: transparent; }
+/* The mark itself has no colour, not the browser's yellow and black: the
+   .kotoba-highlight in it, or the colour in its style, paints it. */
+.kotoba-editable mark { background: transparent; color: inherit; }
 
 /* The case formats of rendered content (`Kotoba.Nodes.Text`). */
 .kotoba-lowercase { text-transform: lowercase; }
@@ -1437,6 +1440,7 @@ div.kotoba-unknown {
 .kotoba-content :where(blockquote p:last-child) { margin-bottom: 0; }
 .kotoba-content :where(a) { color: var(--kotoba-accent); text-decoration: underline; text-underline-offset: .16em; }
 .kotoba-content :where(a:hover) { text-decoration-thickness: 2px; }
+.kotoba-content :where(mark) { background: var(--kotoba-highlight); color: inherit; }
 .kotoba-content :where(:not(pre) > code) { font-family: var(--kotoba-font-mono); font-size: .9em; padding: .1em .3em; border-radius: 2px; background: var(--kotoba-surface); }
 .kotoba-content :where(pre) { display: block; max-width: 100%; overflow-x: auto; margin: 1.5em 0; padding: 1em 1.2em; border-radius: var(--kotoba-radius); background: var(--kotoba-surface); font: .9em/1.55 var(--kotoba-font-mono); white-space: pre; }
 .kotoba-content :where(pre code) { font: inherit; }
