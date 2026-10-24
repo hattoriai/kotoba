@@ -15,7 +15,7 @@ canvas, a grid) shares one connection and one list of people.
 Add Issho next to Kotoba:
 
 ```elixir
-{:kotoba, "~> 0.7"},
+{:kotoba, "~> 0.8"},
 {:issho, "~> 0.4.2"}
 ```
 

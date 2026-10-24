@@ -1,5 +1,39 @@
 # Upgrading
 
+## To Kotoba 0.8
+
+Kotoba 0.8 keeps uploads with [Storehouse](https://hex.pm/packages/storehouse),
+and shared editors run on [Issho](https://hex.pm/packages/issho) 0.4. An
+editor with no uploads and no sharing needs nothing.
+
+### What changes
+
+| 0.7 | 0.8 |
+| --- | --- |
+| `{:issho, "~> 0.3"}` | `{:issho, "~> 0.4.2"}`, for a shared editor |
+| Kotoba kept the files (`Kotoba.Storage.Local`) | Storehouse keeps them (`{:storehouse, "~> 0.2"}`), for an editor with uploads |
+| `config :kotoba, Kotoba.Storage.Local, root: ...` | `config :storehouse, Storehouse.Local, root: ..., url_prefix: "/uploads/kotoba"` |
+| `config :kotoba, storage: MyApp.Store`, `@behaviour Kotoba.Storage` | `config :storehouse, adapter: MyApp.Store`, `@behaviour Storehouse.Adapter` (the same callbacks) |
+| `Kotoba.Storage.Local.Plug` | `Storehouse.Local.Plug` |
+| `Kotoba.Storage`'s `key/2` | `Storehouse.key/2` |
+
+The old names still work, with deprecation warnings, and are removed in
+Kotoba 1.0.
+
+### Steps
+
+1. **Update** `{:kotoba, "~> 0.8"}`. For a shared editor,
+   `{:issho, "~> 0.4.2"}`. For uploads, add `{:storehouse, "~> 0.2"}`:
+   without it, an editor with uploads says what is missing.
+2. **Move the store's config** to Storehouse, with the same `root`, and
+   `url_prefix: "/uploads/kotoba"` (the old default, unless you gave
+   another), so that the URLs in your documents stay valid.
+3. **Replace the plug** and `key/2`, as in the table.
+
+Step 1 is the only one that is necessary: the rest works as it did, and
+the warnings say what to change. The Uploads guide, "From Kotoba 0.7", has
+the details.
+
 ## To Kotoba 0.7
 
 Kotoba 0.7 runs on [Issho](https://hex.pm/packages/issho) 0.3, which makes
