@@ -45,4 +45,24 @@ defmodule Kotoba.ThemeTest do
       refute value =~ "blade"
     end
   end
+
+  test "the Sumi palette is dark in Sumi's dark themes, and light in its light ones" do
+    sumi = File.read!(Path.join(@css, "kotoba-sumi.css"))
+
+    for theme <- ~w(dark smoke stone lacquer) do
+      assert sumi =~ ~r/\[data-theme="#{theme}"\][^{]*\{\s*--kotoba-sumi-base-100: oklch\(12%/
+    end
+
+    assert sumi =~
+             ":root:not([data-theme=\"light\"], [data-theme=\"snow\"], [data-theme=\"silk\"]) {"
+  end
+
+  test "the Sumi orange is orange in every theme, not the theme's ember" do
+    sumi = File.read!(Path.join(@css, "kotoba-sumi.css"))
+
+    for property <- ["--kotoba-color-orange", "--kotoba-highlight-orange"] do
+      [value] = Regex.run(~r/^\s*#{property}:([^;]+);/m, sumi, capture: :all_but_first)
+      refute value =~ "ember"
+    end
+  end
 end

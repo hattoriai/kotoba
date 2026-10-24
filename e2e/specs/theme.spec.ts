@@ -24,7 +24,7 @@ async function lightness(page: Page, colour: string): Promise<number> {
   }, colour);
 }
 
-async function setTheme(page: Page, theme: "dark" | "light" | null): Promise<void> {
+async function setTheme(page: Page, theme: string | null): Promise<void> {
   await page.evaluate((value) => {
     if (value) document.documentElement.dataset.theme = value;
     else delete document.documentElement.dataset.theme;
@@ -90,3 +90,51 @@ test("without the Sumi theme, the editor keeps the default colours", async ({ pa
   await expect(page.locator('link[href="/assets/kotoba-sumi.css"]')).toHaveCount(0);
   expect((await editorColours(page)).background).toBe("rgb(255, 255, 255)");
 });
+
+test("the built-in palette is dark in Sumi's dark themes, and light in its light ones", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await openEditor(page, "/?theme=sumi");
+
+  for (const theme of ["dark", "smoke", "stone", "lacquer"]) {
+    await setTheme(page, theme);
+    expect(await lightness(page, (await editorColours(page)).background), theme).toBeLessThan(0.2);
+  }
+  for (const theme of ["light", "snow", "silk"]) {
+    await setTheme(page, theme);
+    expect(await lightness(page, (await editorColours(page)).background), theme).toBeGreaterThan(0.8);
+  }
+});
+
+// The sRGB of a computed colour, from the canvas, over the page.
+async function rgb(page: Page, colour: string): Promise<number[]> {
+  return page.evaluate((value) => {
+    const context = document.createElement("canvas").getContext("2d")!;
+    context.fillStyle = value;
+    context.fillRect(0, 0, 1, 1);
+    return [...context.getImageData(0, 0, 1, 1).data].slice(0, 3);
+  }, colour);
+}
+
+for (const theme of ["dark", "smoke", "stone", "lacquer", "light", "snow", "silk"]) {
+  test(`orange is orange and the default highlight is the theme's, in Sumi's ${theme}`, async ({ page }) => {
+    await page.goto(`/?sumi=${theme}&sample=palette`);
+    const editable = page.locator("#post_body_editor .kotoba-editable");
+    await expect(editable.locator("mark").first()).toBeVisible();
+
+    const orange = await editable
+      .locator('[style*="--kotoba-color-orange"]')
+      .first()
+      .evaluate((e) => getComputedStyle(e).color);
+    const [r, g, b] = await rgb(page, orange);
+    // Orange: red first, then green, then blue, and well apart.
+    expect(r - g, orange).toBeGreaterThan(40);
+    expect(g - b, orange).toBeGreaterThan(20);
+
+    // The plain mark of the default highlight has no colour of its own (not
+    // the browser's yellow); its .kotoba-highlight has the theme's.
+    const mark = editable.locator("mark:not([style])").first();
+    expect(await mark.evaluate((e) => getComputedStyle(e).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
+    const text = await mark.evaluate((e) => getComputedStyle(e).color);
+    expect(text).toBe(await editable.evaluate((e) => getComputedStyle(e).color));
+  });
+}

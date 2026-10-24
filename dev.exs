@@ -196,7 +196,7 @@ defmodule KotobaDev.Prompts do
 end
 
 defmodule KotobaDev.Sample do
-  @moduledoc "The sample document of the Load sample buttons."
+  @moduledoc "The sample documents: the Load sample buttons', and the palette."
 
   # With `code: true`, a code block in "ex", an alias: the editor shows
   # Elixir and keeps "ex". Only the second editor's sample has it: the editor
@@ -243,6 +243,62 @@ defmodule KotobaDev.Sample do
         ])
     }
   end
+
+  @colors ~w(red orange yellow green blue purple gray)
+
+  # The text after the colors: a link, and code with each kind of token.
+  @palette_markdown ~S"""
+  A [link](https://example.com), **bold** and `inline code`.
+
+  ```elixir
+  # A greeting, with each kind of token
+  defmodule Greeter do
+    @default "world"
+    def hello(name \\ @default, times \\ 2) when is_binary(name) do
+      String.duplicate("Hello, #{name}! ", times) <> inspect(:ok, pretty: true)
+    end
+  end
+  ```
+
+  ```diff
+  @@ -1,2 +1,2 @@
+   unchanged line
+  -removed line
+  +added line
+  ```
+
+  ```css
+  .note > a:hover { color: #e84a1c; margin: 0 1rem; }
+  ```
+  """
+
+  @doc """
+  Every color of the palette, as text, as a highlight and both, then a
+  link and code blocks: what `?sample=palette` shows, to see a theme at a
+  glance.
+  """
+  def palette do
+    doc = Kotoba.Content.from_markdown(@palette_markdown).doc
+
+    colors = [
+      element("heading", [text("Palette")], %{"tag" => "h2"}),
+      paragraph(runs(&"color: var(--kotoba-color-#{&1});", 0)),
+      paragraph(
+        runs(&"background-color: var(--kotoba-highlight-#{&1});", 128) ++ [text("default", 128)]
+      ),
+      paragraph(
+        runs(
+          &"color: var(--kotoba-color-#{&1});background-color: var(--kotoba-highlight-#{&1});",
+          128
+        )
+      )
+    ]
+
+    update_in(doc, ["root", "children"], &(colors ++ &1))
+  end
+
+  defp runs(style, format),
+    do: Enum.flat_map(@colors, &[%{text(&1, format) | "style" => style.(&1)}, text(" ")])
 
   defp root(children),
     do: %{
@@ -296,16 +352,141 @@ end
 defmodule KotobaDev.Layouts do
   @moduledoc """
   The root layout: the style sheets, the import map and the LiveSocket.
-  `?theme=sumi` also loads kotoba-sumi.css.
+  `?theme=sumi` also loads kotoba-sumi.css; `?sumi=smoke` (any of Sumi's
+  seven themes) loads it on that theme of Sumi, to see the editor in each
+  (`?sumi=smoke&sample=palette` for every color).
   """
   use Phoenix.Component
 
+  # Sumi's themes, as the editor reads them: the page, the surface, the
+  # line, the text, the muted and the secondary text (the text's opacity),
+  # the accent, ember, the text on the accent, and warning (the yellow).
+  # Sumi's own CSS needs Tailwind, which this app has not; these are its
+  # values. info, success and error are the built-in palette's, which has
+  # Sumi's dark and light values.
+  @sumi_themes [
+    {"dark", "Ink",
+     [
+       "oklch(12% 0.003 270)",
+       "oklch(16% 0.004 270)",
+       "oklch(20% 0.005 270)",
+       "oklch(95% 0.012 85)",
+       0.5,
+       0.6,
+       "#e84a1c",
+       "#ff6b3d",
+       "oklch(12% 0.003 270)",
+       "oklch(72% 0.16 70)"
+     ]},
+    {"smoke", "Smoke",
+     [
+       "oklch(27% 0.005 270)",
+       "oklch(30.5% 0.006 270)",
+       "oklch(34% 0.007 270)",
+       "oklch(92% 0.01 85)",
+       0.62,
+       0.7,
+       "oklch(72% 0.13 168)",
+       "oklch(78% 0.11 168)",
+       "oklch(27% 0.005 270)",
+       "oklch(72% 0.16 70)"
+     ]},
+    {"stone", "Stone",
+     [
+       "oklch(20% 0.006 70)",
+       "oklch(23.5% 0.007 70)",
+       "oklch(27% 0.008 70)",
+       "oklch(95% 0.01 85)",
+       0.52,
+       0.62,
+       "oklch(78% 0.13 82)",
+       "oklch(83% 0.11 85)",
+       "oklch(20% 0.006 70)",
+       "oklch(72% 0.16 70)"
+     ]},
+    {"lacquer", "Lacquer",
+     [
+       "oklch(14% 0.022 25)",
+       "oklch(18% 0.026 25)",
+       "oklch(22% 0.03 25)",
+       "oklch(93% 0.016 75)",
+       0.53,
+       0.6,
+       "oklch(63% 0.21 24)",
+       "oklch(70% 0.17 28)",
+       "oklch(14% 0.022 25)",
+       "oklch(72% 0.16 70)"
+     ]},
+    {"light", "Paper",
+     [
+       "oklch(96% 0.01 85)",
+       "oklch(93% 0.012 85)",
+       "oklch(89% 0.014 80)",
+       "oklch(15% 0.003 270)",
+       0.65,
+       0.7,
+       "#e84a1c",
+       "#ff6b3d",
+       "oklch(12% 0.003 270)",
+       "oklch(68% 0.16 70)"
+     ]},
+    {"snow", "Snow",
+     [
+       "oklch(99.5% 0.001 270)",
+       "oklch(97% 0.003 270)",
+       "oklch(92.5% 0.005 270)",
+       "oklch(20% 0.006 270)",
+       0.65,
+       0.7,
+       "oklch(50% 0.17 262)",
+       "oklch(58% 0.16 262)",
+       "oklch(100% 0 0)",
+       "oklch(68% 0.16 70)"
+     ]},
+    {"silk", "Silk",
+     [
+       "oklch(97.5% 0.012 350)",
+       "oklch(95% 0.016 350)",
+       "oklch(91.5% 0.02 350)",
+       "oklch(22% 0.012 350)",
+       0.65,
+       0.7,
+       "oklch(56% 0.21 358)",
+       "oklch(64% 0.2 358)",
+       "oklch(100% 0 0)",
+       "oklch(68% 0.16 70)"
+     ]}
+  ]
+
+  defp sumi_style(id) do
+    {_, _, [page, surface, line, text, muted, secondary, blade, ember, on_blade, warning]} =
+      List.keyfind(@sumi_themes, id, 0)
+
+    """
+    :root {
+      --color-base-100: #{page}; --color-base-200: #{surface}; --color-base-300: #{line};
+      --color-base-content: #{text}; --color-primary-content: #{on_blade};
+      --sumi-text-muted: oklch(from #{text} l c h / #{muted});
+      --sumi-text-secondary: oklch(from #{text} l c h / #{secondary});
+      --color-sumi-blade: #{blade}; --color-sumi-ember: #{ember}; --color-warning: #{warning};
+    }
+    """
+  end
+
   def root(assigns) do
-    assigns = assign(assigns, :sumi, assigns.conn.params["theme"] == "sumi")
+    look = assigns.conn.params["sumi"]
+    look = if List.keymember?(@sumi_themes, look, 0), do: look
+
+    assigns =
+      assign(assigns,
+        sumi: assigns.conn.params["theme"] == "sumi" or look != nil,
+        look: look,
+        themes: @sumi_themes
+      )
 
     ~H"""
     <!DOCTYPE html>
-    <html lang="en">
+    <html lang="en" data-theme={@look}>
       <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -314,6 +495,7 @@ defmodule KotobaDev.Layouts do
         <link rel="stylesheet" href="/assets/kotoba.css" />
         <link rel="stylesheet" href="/vendor/issho/issho.css" />
         <link :if={@sumi} rel="stylesheet" href="/assets/kotoba-sumi.css" />
+        {@look && Phoenix.HTML.raw("<style>" <> sumi_style(@look) <> "</style>")}
         <style>
           body { font-family: system-ui, sans-serif; margin: 0; background: #fafaf9; color: #1c1917; }
           body.sumi { background: var(--kotoba-background); color: var(--kotoba-text); }
@@ -358,6 +540,9 @@ defmodule KotobaDev.Layouts do
           <nav>
             <a href="/">Editor</a><a href="/two">Two editors</a><a href="/nodes">Nodes</a><a href="/embeds">Embeds</a><a href="/collab">Collaboration</a><a href="/?theme=sumi">Sumi theme</a>
           </nav>
+          <nav :if={@sumi} aria-label="Sumi's themes">
+            Sumi: <a :for={{id, name, _} <- @themes} href={"?sumi=#{id}&sample=palette"} aria-current={@look == id && "page"}>{name}</a>
+          </nav>
           {@inner_content}
         </main>
       </body>
@@ -396,7 +581,12 @@ defmodule KotobaDev.EditorLive do
 
   @impl true
   def mount(params, _session, socket) do
-    body = if params["sample"], do: KotobaDev.Sample.document("Initial")
+    body =
+      case params["sample"] do
+        nil -> nil
+        "palette" -> KotobaDev.Sample.palette()
+        _ -> KotobaDev.Sample.document("Initial")
+      end
 
     {:ok,
      socket

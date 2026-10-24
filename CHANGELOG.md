@@ -7,6 +7,26 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- The Sumi theme follows Sumi's seven themes and their accents. The
+  palette's names keep their hue in each: `orange` is Sumi's orange, not
+  the theme's ember. A code token of the accent's hue is orange instead
+  (Smoke's strings, Snow's functions), and the code's strings, functions,
+  insertions and deletions are the palette's green, blue and red, mixed
+  with the text for AA. `mix dev` shows the editor in each
+  (`?sumi=smoke&sample=palette`). See the Theming guide.
+
+### Fixed
+
+- The Sumi theme gave Sumi's dark themes other than Ink the light
+  palette, and Sumi's light themes other than Paper the dark one on a
+  system in dark mode. Its orange was the theme's ember: jade in Smoke,
+  gold in Stone, vermilion in Lacquer, indigo in Snow and pink in Silk.
+- The default highlight (a plain `mark`) was the browser's yellow with
+  black text, in the editor and in rendered content, in every theme; it
+  is `--kotoba-highlight`.
+
 ## [0.8.0] - 2026-10-24
 
 Uploads kept with Storehouse; on Issho 0.4: comments written in the
