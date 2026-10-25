@@ -212,6 +212,30 @@ function $isValid(selection: RangeSelection): boolean {
   });
 }
 
+/**
+ * A selection that ends at the very start of a later block (a triple
+ * click selects a paragraph to the start of the next) ends at the end of
+ * the block before: what it replaces is the words selected, not the break
+ * after them.
+ */
+function $trimmed(target: RangeSelection): RangeSelection {
+  const range = target.clone();
+  const end = range.isBackward() ? range.anchor : range.focus;
+  const start = range.isBackward() ? range.focus : range.anchor;
+  if (range.isCollapsed() || end.offset !== 0) return range;
+  const endBlock = $topBlock(end.getNode());
+  const startBlock = $topBlock(start.getNode());
+  if (endBlock === null || startBlock === null || endBlock.is(startBlock)) return range;
+  const first = $isElementNode(endBlock) ? endBlock.getFirstDescendant() : endBlock;
+  if (first !== null && !first.is(end.getNode()) && !endBlock.is(end.getNode())) return range;
+  const previous = endBlock.getPreviousSibling();
+  if (previous === null) return range;
+  const last = $isElementNode(previous) ? previous.getLastDescendant() : previous;
+  if ($isTextNode(last)) end.set(last.getKey(), last.getTextContentSize(), "text");
+  else if ($isElementNode(previous)) end.set(previous.getKey(), previous.getChildrenSize(), "element");
+  return range;
+}
+
 function $topBlock(node: LexicalNode): LexicalNode | null {
   if ($isRootOrShadowRoot(node)) return null;
   return $findMatchingParent(node, (candidate) => {
@@ -529,7 +553,7 @@ export function createSuggestions(editor: LexicalEditor, options: SuggestionOpti
     if (block === null) return null;
     const id = options.idOf?.(block.getKey()) ?? null;
     if (id === null) return { block: block.getIndexWithinParent() + 1 };
-    const selection = target.isCollapsed() ? null : options.sharedOf?.(target) ?? null;
+    const selection = target.isCollapsed() ? null : options.sharedOf?.($trimmed(target)) ?? null;
     return { block: block.getIndexWithinParent() + 1, id, ...(selection === null ? {} : { selection }) };
   };
 
@@ -827,12 +851,13 @@ export function createSuggestions(editor: LexicalEditor, options: SuggestionOpti
       const shared = start.selection === undefined ? null : editor.getEditorState().read(() => $sharedTarget(start.selection));
       const named = start.block === undefined ? null : editor.getEditorState().read(() => $blockTarget(start.block));
       const told = start.selection !== undefined || start.block !== undefined;
+      const target = shared ?? named ?? (told ? null : asked !== undefined ? asked.target : readSelection().target);
       active = {
         ref,
         at: readTarget(start.at),
         format: readFormat(start.format),
         display: readDisplay(start.display),
-        target: shared ?? named ?? (told ? null : asked !== undefined ? asked.target : readSelection().target),
+        target: target === null ? null : editor.getEditorState().read(() => ($isValid(target) ? $trimmed(target) : target)),
         text: typeof start.text === "string" ? start.text : "",
         state: "streaming",
       };

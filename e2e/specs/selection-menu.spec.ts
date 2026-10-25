@@ -200,3 +200,18 @@ test("Cmd/Ctrl+click on a link of the editor opens it in a new tab", async ({ pa
   expect(tab.url()).toContain("example.com/kotoba");
   await tab.close();
 });
+
+test("the selection menu gives way to a suggestion, whose buttons are under the text", async ({ page }) => {
+  const editable = await openEditor(page, "/?menu=default");
+  await editable.click();
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Make this clear");
+  await selectBack(page, 5);
+  await expect(menu(page)).toBeVisible();
+
+  await page.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Assist" }).click();
+  await page.getByRole("menuitem", { name: "Rewrite" }).click();
+  await expect(page.locator(".kotoba-suggestion")).toBeVisible();
+  await expect(menu(page)).toBeHidden();
+});
+
