@@ -46,9 +46,9 @@ export const SELECTION_MENU_COMMANDS: readonly string[] = [
 /** The space between a panel and the text, in pixels. */
 const GAP = 8;
 
-/** The panels of the editor that a floating panel gives way to. */
+/** The panels of the editor that a floating panel gives way to (a suggestion, whose buttons are under the text). */
 export const BUSY =
-  ".kotoba-link-form:not([hidden]), .kotoba-color-menu:not([hidden]), .kotoba-menu:not([hidden]), .kotoba-assist-menu:not([hidden]), .kotoba-block-menu:not([hidden])";
+  ".kotoba-link-form:not([hidden]), .kotoba-color-menu:not([hidden]), .kotoba-menu:not([hidden]), .kotoba-assist-menu:not([hidden]), .kotoba-block-menu:not([hidden]), .kotoba-suggestion:not([hidden])";
 
 export interface Floating {
   dispose(): void;

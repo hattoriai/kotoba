@@ -9,6 +9,23 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- A suggestion can replace a selection in a shared document, wherever it
+  comes from. `kotoba:assist`'s `"place"` has the selection as a place of
+  the document (`"selection"`, a `Kotoba.Issho.Place`, for a selection
+  that is not a caret), `Kotoba.Live.stream_start/4` and
+  `stream_resume/5` take it as `:selection` (with `at: :selection`), and
+  `Kotoba.Issho.suggestions/4` replaces the selection of a stream whose
+  place is one, rather than going after its block: an agent's "make this
+  shorter" shortens the words, not adds a paragraph below. It holds on
+  the same words however the text changed, from any tab and after a
+  reload; a selection whose words are gone gives the end of the document.
+- A suggestion's selection that ends at the very start of a later block
+  (a triple-clicked paragraph) ends at the end of the block before: the
+  suggestion replaces the paragraph's words and keeps its break, rather
+  than joining the next paragraph. The selection menu gives way to a
+  suggestion, whose buttons are under the text, as it does to the other
+  panels.
+
 - The Sumi theme follows Sumi's seven themes and their accents. The
   palette's names keep their hue in each: `orange` is Sumi's orange, not
   the theme's ember. A code token of the accent's hue is orange instead

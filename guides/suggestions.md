@@ -158,6 +158,10 @@ still accept it.
 `kotoba:assist` also has `"place"`, the block of the selection:
 `%{"block" => 2}` (its number, 1 for the first), with `"id"` in a shared
 document. Keep it to put an answer back after the page comes back (below).
+In a shared document, a selection that is not a caret is in it too, as a
+place of the document (`"selection"`, a `Kotoba.Issho.Place`): give it as
+`:selection` (`at: :selection`) for an answer that replaces those words,
+from any tab and after a reload.
 
 Both events have the editor's `id`, and go to the editor's `phx-target`
 when it has one, as the other events do (see
@@ -518,15 +522,17 @@ def mount(_params, _session, socket) do
   {:ok, Kotoba.Issho.suggestions(socket, socket.assigns.current_user, %{"intro_editor" => issho})}
 end
 
-def handle_event("kotoba:assist", %{"text" => text, "place" => %{"id" => block}}, socket) do
+def handle_event("kotoba:assist", %{"text" => text, "place" => place}, socket) do
   user = socket.assigns.current_user
+  # In place of the selection, or after its block.
+  at = place["selection"] || %{"node" => place["id"]}
 
   Task.start(fn ->
     {:ok, stream} =
       Issho.Streams.start(MyApp.Issho, "notebook:7",
         kind: "summary",
         for: user,
-        place: %{"doc" => "notebook:7/intro", "at" => %{"node" => block}}
+        place: %{"doc" => "notebook:7/intro", "at" => at}
       )
 
     MyApp.Model.stream(text, &Issho.Streams.append(stream, &1))
@@ -536,6 +542,11 @@ def handle_event("kotoba:assist", %{"text" => text, "place" => %{"id" => block}}
   {:noreply, socket}
 end
 ```
+
+A stream at a selection (a `Kotoba.Issho.Place` whose anchor and focus
+differ) replaces it when the person accepts it, struck through inline
+while it waits; at a block (`%{"node" => id}`) or a caret, it goes after
+the block.
 
 An agent with `Kotoba.Issho.tools/0` suggests text the same way, with
 `suggest_text`: the person sees it written, and takes it or leaves it.

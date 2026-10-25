@@ -114,3 +114,51 @@ test("an Issho stream goes on while the person is away, and is closed when they 
   await page.waitForTimeout(500);
   await expect(suggestion).toBeHidden();
 });
+
+test("in a shared document, an Issho stream at a selection replaces those words", async ({ page }) => {
+  const id = crypto.randomUUID();
+  const editable = await openEditor(page, `/collab?document=${id}&name=Ada`, "shared_editor");
+  await expect(page.locator("#shared_editor [data-collab-status]")).toHaveText("Saved");
+  await editable.click();
+  await page.keyboard.type("First many many words");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Second");
+  await expect(page.locator("#shared_editor [data-collab-status]")).toHaveText("Saved");
+
+  // "many many words" selected, from its end.
+  await editable.getByText("First many many words").click();
+  await page.keyboard.press("End");
+  for (let i = 0; i < "many many words".length; i++) await page.keyboard.press("Shift+ArrowLeft");
+  await settle(page);
+  await page.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Assist" }).click();
+  await page.getByRole("menuitem", { name: "Shorten" }).click();
+
+  const suggestion = page.locator("#shared_editor .kotoba-suggestion");
+  await expect(suggestion).toHaveAttribute("aria-label", "Shorter");
+  await expect(suggestion.locator(".kotoba-suggestion-content")).toHaveText("few words", { timeout: 5000 });
+  await expect(suggestion.locator(".kotoba-suggestion-status")).toHaveText("Done");
+  await suggestion.getByRole("button", { name: "Accept" }).click();
+  await expect(editable.locator(":scope > p")).toHaveText(["First few words", "Second"]);
+});
+
+test("a triple-clicked paragraph is replaced, its break kept", async ({ page }) => {
+  const id = crypto.randomUUID();
+  const editable = await openEditor(page, `/collab?document=${id}&name=Ada`, "shared_editor");
+  await expect(page.locator("#shared_editor [data-collab-status]")).toHaveText("Saved");
+  await editable.click();
+  await page.keyboard.type("First many many words");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("Second");
+  await expect(page.locator("#shared_editor [data-collab-status]")).toHaveText("Saved");
+
+  // A triple click selects the paragraph to the start of the next one.
+  await editable.getByText("First many many words").click({ clickCount: 3 });
+  await settle(page);
+  await page.getByRole("toolbar", { name: "Formatting" }).getByRole("button", { name: "Assist" }).click();
+  await page.getByRole("menuitem", { name: "Shorten" }).click();
+
+  const suggestion = page.locator("#shared_editor .kotoba-suggestion");
+  await expect(suggestion.locator(".kotoba-suggestion-status")).toHaveText("Done", { timeout: 5000 });
+  await suggestion.getByRole("button", { name: "Accept" }).click();
+  await expect(editable.locator(":scope > p")).toHaveText(["few words", "Second"]);
+});

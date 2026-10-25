@@ -103,6 +103,8 @@ export interface StreamStart {
   text?: unknown;
   /** The block it goes after (its number, or its id in a shared document). */
   block?: unknown;
+  /** In a shared document: the selection it replaces (`Kotoba.Issho.Place`). */
+  selection?: unknown;
 }
 
 export interface Suggestions {
@@ -135,6 +137,15 @@ interface SuggestionOptions {
   /** In a shared editor: the node of a shared id, and the shared id of a node. */
   keyOf?(id: string): string | null;
   idOf?(key: string): string | null;
+  /** In a shared editor: a range as a shared selection, and back (in a read). */
+  sharedOf?(range: RangeSelection): unknown;
+  rangeOf?(shared: unknown): { anchor: Point; focus: Point } | null;
+}
+
+interface Point {
+  key: string;
+  offset: number;
+  type: "text" | "element";
 }
 
 type State = "streaming" | "done" | "stopped";
@@ -199,6 +210,30 @@ function $isValid(selection: RangeSelection): boolean {
     if (point.type === "text") return $isTextNode(node) && point.offset <= node.getTextContentSize();
     return $isElementNode(node) && point.offset <= node.getChildrenSize();
   });
+}
+
+/**
+ * A selection that ends at the very start of a later block (a triple
+ * click selects a paragraph to the start of the next) ends at the end of
+ * the block before: what it replaces is the words selected, not the break
+ * after them.
+ */
+function $trimmed(target: RangeSelection): RangeSelection {
+  const range = target.clone();
+  const end = range.isBackward() ? range.anchor : range.focus;
+  const start = range.isBackward() ? range.focus : range.anchor;
+  if (range.isCollapsed() || end.offset !== 0) return range;
+  const endBlock = $topBlock(end.getNode());
+  const startBlock = $topBlock(start.getNode());
+  if (endBlock === null || startBlock === null || endBlock.is(startBlock)) return range;
+  const first = $isElementNode(endBlock) ? endBlock.getFirstDescendant() : endBlock;
+  if (first !== null && !first.is(end.getNode()) && !endBlock.is(end.getNode())) return range;
+  const previous = endBlock.getPreviousSibling();
+  if (previous === null) return range;
+  const last = $isElementNode(previous) ? previous.getLastDescendant() : previous;
+  if ($isTextNode(last)) end.set(last.getKey(), last.getTextContentSize(), "text");
+  else if ($isElementNode(previous)) end.set(previous.getKey(), previous.getChildrenSize(), "element");
+  return range;
 }
 
 function $topBlock(node: LexicalNode): LexicalNode | null {
@@ -509,14 +544,27 @@ export function createSuggestions(editor: LexicalEditor, options: SuggestionOpti
   };
 
   // The block of a request's selection, for the app to keep: its number, and
-  // its id in a shared editor.
+  // its id in a shared editor; and there, the selection itself, as a place
+  // of the document (`Kotoba.Issho.Place`), for a suggestion that replaces it.
   const $place = (target: RangeSelection | null): Record<string, unknown> | null => {
     if (target === null || !$isValid(target)) return null;
     const focus = target.focus.getNode();
     const block = $isRootNode(focus) ? null : $findMatchingParent(focus, (node) => $isRootNode(node.getParent()));
     if (block === null) return null;
     const id = options.idOf?.(block.getKey()) ?? null;
-    return id === null ? { block: block.getIndexWithinParent() + 1 } : { block: block.getIndexWithinParent() + 1, id };
+    if (id === null) return { block: block.getIndexWithinParent() + 1 };
+    const selection = target.isCollapsed() ? null : options.sharedOf?.($trimmed(target)) ?? null;
+    return { block: block.getIndexWithinParent() + 1, id, ...(selection === null ? {} : { selection }) };
+  };
+
+  // The range of a shared selection, when its words are still there.
+  const $sharedTarget = (shared: unknown): RangeSelection | null => {
+    const points = options.rangeOf?.(shared) ?? null;
+    if (points === null) return null;
+    const range = $createRangeSelection();
+    range.anchor.set(points.anchor.key, points.anchor.offset, points.anchor.type);
+    range.focus.set(points.focus.key, points.focus.offset, points.focus.type);
+    return $isValid(range) ? range : null;
   };
 
   // Closes the suggestion. An inline one's pending node goes in an update
@@ -799,13 +847,17 @@ export function createSuggestions(editor: LexicalEditor, options: SuggestionOpti
       }
       const asked = requested.get(ref);
       requested.delete(ref);
+      // A selection the server names (a shared one), else a block, else the request's or the editor's.
+      const shared = start.selection === undefined ? null : editor.getEditorState().read(() => $sharedTarget(start.selection));
       const named = start.block === undefined ? null : editor.getEditorState().read(() => $blockTarget(start.block));
+      const told = start.selection !== undefined || start.block !== undefined;
+      const target = shared ?? named ?? (told ? null : asked !== undefined ? asked.target : readSelection().target);
       active = {
         ref,
         at: readTarget(start.at),
         format: readFormat(start.format),
         display: readDisplay(start.display),
-        target: named ?? (start.block !== undefined ? null : asked !== undefined ? asked.target : readSelection().target),
+        target: target === null ? null : editor.getEditorState().read(() => ($isValid(target) ? $trimmed(target) : target)),
         text: typeof start.text === "string" ? start.text : "",
         state: "streaming",
       };

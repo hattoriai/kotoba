@@ -286,6 +286,12 @@ defmodule Kotoba.Live do
       The `kotoba:assist` event's `"place"` has both (`%{"block" => 3,
       "id" => ...}`). A block that is not there gives the end of the
       document. For a stream that resumes, see `stream_resume/5`.
+    * `:selection` - in a shared editor, the selection the text replaces
+      (`at: :selection`), as a place of the document (`Kotoba.Issho.Place`):
+      the `kotoba:assist` event's `"place"` has it (`"selection"`), and so
+      does a person's place in the room. It holds on the same words
+      however the text around it changed, from any tab, after a reload; a
+      selection whose words are gone gives the end of the document.
     * `:display` - `:panel` (the default): the text streams in a panel under
       the editable area; `:inline`: it streams in the text, where it goes
       (after the caret, after the selection it replaces, or in a block
@@ -334,6 +340,22 @@ defmodule Kotoba.Live do
     |> put_some(:display, display == :inline && "inline")
     |> put_some(:label, opts[:label] && to_string(opts[:label]))
     |> put_some(:block, block!(opts))
+    |> put_some(:selection, selection!(opts))
+  end
+
+  defp selection!(opts) do
+    case Keyword.get(opts, :selection) do
+      nil ->
+        nil
+
+      %{"anchor" => %{"node" => anchor}, "focus" => %{"node" => focus}} = selection
+      when is_binary(anchor) and is_binary(focus) ->
+        selection
+
+      other ->
+        raise ArgumentError,
+              "stream :selection must be a Kotoba place (%{\"anchor\" => ..., \"focus\" => ...}), got: #{inspect(other)}"
+    end
   end
 
   defp one_of!(opts, key, default, values, expected) do
