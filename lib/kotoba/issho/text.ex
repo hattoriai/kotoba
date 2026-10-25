@@ -247,6 +247,29 @@ defmodule Kotoba.Issho.Text do
 
   def place(%{block: block, index: index}), do: place(%{block: block, from: index, to: index})
 
+  @label 60
+
+  @doc false
+  # A place's label: the first words of the selected text, on one line, at
+  # most 60 characters; nil for a caret or a selection of no words. Issho
+  # cleans it again, so it is only for people to read: the place is "at".
+  def label(%{block: _, from: from, to: to} = range) when to > from do
+    words =
+      range
+      |> selected()
+      |> Enum.map_join(& &1.text)
+      |> String.split()
+      |> Enum.join(" ")
+
+    cond do
+      words == "" -> nil
+      String.length(words) > @label -> String.slice(words, 0, @label - 1) <> "…"
+      true -> words
+    end
+  end
+
+  def label(_caret), do: nil
+
   defp point(%{chars: chars, id: id}, index) do
     case {Enum.at(chars, index - 1), Enum.at(chars, index)} do
       {%{atom: atom, buffer: buffer}, _} when index > 0 and not is_nil(atom) ->
