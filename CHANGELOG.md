@@ -16,6 +16,10 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   insertions and deletions are the palette's green, blue and red, mixed
   with the text for AA. `mix dev` shows the editor in each
   (`?sumi=smoke&sample=palette`). See the Theming guide.
+- A shared editor's place says what is selected: its `"label"` is the
+  first words of the selected text (a caret has none), for a person's
+  selection and an agent's (Issho's labels, hattoriai/issho#32). Issho
+  shows it to agents and in its panels; an Issho before labels ignores it.
 
 ### Fixed
 

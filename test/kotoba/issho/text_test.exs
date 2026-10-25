@@ -55,6 +55,21 @@ defmodule Kotoba.Issho.TextTest do
     assert {:ok, %{from: 6, to: 11}} = Text.from_place(state, place)
   end
 
+  test "a range's label is its first words, on one line; a caret has none" do
+    state = state("Hello **bold**   world\n\n#{String.duplicate("word ", 20)}")
+    {:ok, range} = Text.find(state, "bold   world")
+    assert Text.label(range) == "bold world"
+    assert Text.label(%{block: range.block, index: 6}) == nil
+    assert Text.label(%{range | to: range.from}) == nil
+
+    {:ok, long} = Text.find(state, String.duplicate("word ", 19) <> "word")
+
+    assert Text.label(long) ==
+             String.duplicate("word ", 12) |> String.slice(0, 59) |> Kernel.<>("…")
+
+    assert String.length(Text.label(long)) == 60
+  end
+
   test "types text after a quote, with its formatting, and new lines make blocks" do
     state = state("Hello **bold** end")
     {:ok, range} = Text.find(state, "bold")

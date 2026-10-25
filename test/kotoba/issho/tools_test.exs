@@ -9,6 +9,7 @@ defmodule Kotoba.Issho.ToolsTest do
   alias Kotoba.Collab.{Document, Store}
   alias Kotoba.Content
   alias Kotoba.Issho.Text
+  alias Kotoba.Issho.Tools.Doc
 
   defmodule MCP do
     @moduledoc false
@@ -94,6 +95,43 @@ defmodule Kotoba.Issho.ToolsTest do
                }
              }
            ] = Map.values(states)
+  end
+
+  test "its place says what is selected, in a label; a caret's has none", %{
+    client: client,
+    document: document,
+    ada: ada
+  } do
+    {:ok, _} = call(client, "select_text", %{"document" => document, "text" => "the docs"})
+    {:ok, %{"state" => state}} = Participant.read(ada, document)
+    {:ok, range} = Text.find(state, "the docs")
+    doc = %Doc{document: document}
+
+    assert %{"doc" => ^document, "at" => _, "label" => "the docs"} =
+             Doc.place(doc, range)
+
+    refute Map.has_key?(
+             Doc.place(doc, %{block: range.block, index: 5}),
+             "label"
+           )
+
+    # An Issho with labels shows it to the room; one before them drops it.
+    if Code.ensure_loaded?(Issho.Place) and function_exported?(Issho.Place, :label, 1) do
+      labels =
+        for {Participant, ^ada, "aware", %{"states" => states}} <- messages(),
+            %{"state" => %{"place" => %{"label" => label}}} <- Map.values(states),
+            do: label
+
+      assert List.last(labels) == "the docs"
+    end
+  end
+
+  defp messages(acc \\ []) do
+    receive do
+      message -> messages([message | acc])
+    after
+      100 -> Enum.reverse(acc)
+    end
   end
 
   test "selects, then links and formats the selection", %{

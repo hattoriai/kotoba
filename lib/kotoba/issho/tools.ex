@@ -44,9 +44,18 @@ if Code.ensure_loaded?(Issho.Tool) do
     end
 
     # Shows the others the agent's selection, or caret.
-    def point(%__MODULE__{} = doc, range_or_caret) do
+    def point(%__MODULE__{} = doc, range_or_caret),
+      do: Participant.place(doc.participant, place(doc, range_or_caret))
+
+    # A selection, or caret, as a place of the document: with the selected
+    # text's first words as its label (Issho before labels ignores it).
+    def place(%__MODULE__{} = doc, range_or_caret) do
       place = %{"doc" => doc.document, "at" => Text.place(range_or_caret)}
-      Participant.place(doc.participant, place)
+
+      case Text.label(range_or_caret) do
+        nil -> place
+        label -> Map.put(place, "label", label)
+      end
     end
 
     # How an agent moves in a document (`config :kotoba, Kotoba.Issho`):
@@ -71,8 +80,8 @@ if Code.ensure_loaded?(Issho.Tool) do
         else:
           Issho.Motion.drag(
             doc.participant,
-            target(doc, %{block: range.block, index: range.from}),
-            target(doc, range),
+            place(doc, %{block: range.block, index: range.from}),
+            place(doc, range),
             travel: travel?()
           )
     end
@@ -80,11 +89,8 @@ if Code.ensure_loaded?(Issho.Tool) do
     def reach(%__MODULE__{} = doc, caret) do
       if there?(doc, caret),
         do: :ok,
-        else: Issho.Motion.go(doc.participant, target(doc, caret), travel: travel?())
+        else: Issho.Motion.go(doc.participant, place(doc, caret), travel: travel?())
     end
-
-    defp target(doc, range_or_caret),
-      do: %{"doc" => doc.document, "at" => Text.place(range_or_caret)}
 
     # There already: its selection is the target, and its last gesture went
     # to this document (not, since, to an element of the page).

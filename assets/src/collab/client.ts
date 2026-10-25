@@ -320,9 +320,23 @@ class Client implements Collaboration {
       if (signature === this.lastAwareness) return;
       this.lastAwareness = signature;
       const current = this.room.awareness.state?.place as { doc?: string } | null | undefined;
-      if (selection) this.room.aware({ place: { doc: id, at: selection as never } });
+      if (selection) this.room.aware({ place: { doc: id, at: selection as never, ...this.label() } });
       else if (!current || current.doc === id) this.room.aware({ place: null });
     }, 40);
+  }
+
+  // A place's label: the selected text's first words, on one line, at most 60 characters; none
+  // for a caret. Issho cleans it again, and an Issho before labels ignores it.
+  private label(): { label?: string } {
+    let text = "";
+    this.host.editor.getEditorState().read(() => {
+      const current = this.host.api.lexical.$getSelection();
+      if (this.host.api.lexical.$isRangeSelection(current) && !current.isCollapsed()) text = current.getTextContent();
+    });
+    const words = text.split(/\s+/).filter(Boolean).join(" ");
+    if (!words) return {};
+    const chars = Array.from(words);
+    return { label: chars.length > 60 ? chars.slice(0, 59).join("") + "…" : words };
   }
 
   // The people of the room, and the selections of the others in this document.
