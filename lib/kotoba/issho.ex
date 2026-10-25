@@ -234,7 +234,9 @@ if Code.ensure_loaded?(Issho.Binding) do
 
     A stream's place is `%{"doc" => document, "at" => at}`, `at` a node
     id (`%{"node" => id}`, a block's or a text's) or a Kotoba selection
-    (`Kotoba.Issho.Place`): the suggestion goes after its block. An
+    (`Kotoba.Issho.Place`). At a selection (its anchor and focus apart),
+    the suggestion replaces it, on the same words however the text
+    changed meanwhile; at a node, or a caret, it goes after its block. An
     editor shows one at a time; the others wait their turn. A stream's
     label is its `meta`'s `"label"`, else its kind.
 

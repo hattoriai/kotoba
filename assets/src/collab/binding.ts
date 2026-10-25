@@ -1,5 +1,5 @@
 import type { LexicalNode, PointType, SerializedLexicalNode } from "lexical";
-import type { CollaborationHost } from "../collaboration";
+import type { CollaborationHost, EditorPoint } from "../collaboration";
 import { apply, atomLocation, findAtom, children, clone, equal, spans, textAttrs, visibleAtoms, uuid, TEXT_TYPES, type Attrs, type Atom, type Operation, type State, type WireNode } from "./model";
 
 /** The nodes that stay in this browser (protocol.ts): never shared. */
@@ -51,6 +51,20 @@ export class Binding {
   /** The shared id of an editor node. */
   idOf(key: string): string | null {
     return this.refs.get(key)?.id ?? null;
+  }
+
+  /** The shared selection of a range of the editor (in a read). */
+  sharedOf(range: { anchor: PointType; focus: PointType }): SharedSelection | null {
+    const anchor = this.anchor(range.anchor);
+    const focus = this.anchor(range.focus);
+    return anchor && focus ? { anchor, focus } : null;
+  }
+
+  /** The points of the editor of a shared selection (in a read), or `null` when its words are gone. */
+  rangeOf(shared: SharedSelection): { anchor: EditorPoint; focus: EditorPoint } | null {
+    const anchor = this.point(shared.anchor);
+    const focus = this.point(shared.focus);
+    return anchor && focus ? { anchor, focus } : null;
   }
 
   selection(): SharedSelection | null {
@@ -373,7 +387,7 @@ export class Binding {
 
   private withoutChildren(data: Attrs): Attrs { const attrs = { ...data }; delete attrs.children; return attrs; }
 
-  private point(anchor: Anchor): { key: string; offset: number; type: "text" | "element" } | null {
+  private point(anchor: Anchor): EditorPoint | null {
     if (!this.current) return null;
     const buffer = atomLocation(this.current, anchor.before);
     // Awareness can arrive before the transaction that inserts its character.

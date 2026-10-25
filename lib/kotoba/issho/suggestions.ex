@@ -83,15 +83,23 @@ if Code.ensure_loaded?(Issho.Streams) do
 
     defp show(socket, editor, stream) do
       socket =
-        Live.stream_resume(socket, editor, stream.id, stream.content,
-          at: :after,
-          block: block(stream.place["at"]),
-          label: label(stream),
-          display: state(socket).display
+        Live.stream_resume(
+          socket,
+          editor,
+          stream.id,
+          stream.content,
+          [label: label(stream), display: state(socket).display] ++ target(stream.place["at"])
         )
 
       if stream.state == :finished, do: Live.stream_end(socket, editor, stream.id), else: socket
     end
+
+    # Where it goes: in place of a selection (a Kotoba place whose ends
+    # differ), else after the block of its place.
+    defp target(%{"anchor" => anchor, "focus" => focus} = selection) when anchor != focus,
+      do: [at: :selection, selection: selection]
+
+    defp target(at), do: [at: :after, block: block(at)]
 
     # The block of a place: a node id (`%{"node" => id}`), or a Kotoba
     # selection (`Kotoba.Issho.Place`), whose focus is in the block.

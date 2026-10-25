@@ -1,6 +1,7 @@
 import { defaultDraftStore, holdForm, joinRoom, pageHistory, registerEngine, releaseRoom, type HistoryOwner, type Peer, type Person as IsshoPerson, type Room, type SharedDocument, type State as IsshoState, type StaleDraft } from "issho";
 import * as issho from "issho";
-import type { Collaboration, CollaborationHost, CollabCredentials } from "../collaboration";
+import type { PointType } from "lexical";
+import type { Collaboration, CollaborationHost, CollabCredentials, EditorPoint } from "../collaboration";
 import { Binding, COLLAB_TAG, redo, type Change, type SharedSelection } from "./binding";
 import { kotobaEngine } from "./engine";
 import { apply, clone, envelope, equal, type Operation, type State } from "./model";
@@ -394,6 +395,12 @@ class Client implements Collaboration {
   keyOf(id: string): string | null { return this.binding.keyOf(id); }
 
   idOf(key: string): string | null { return this.binding.idOf(key); }
+
+  sharedOf(range: { anchor: PointType; focus: PointType }): unknown { return this.binding.sharedOf(range); }
+
+  rangeOf(shared: unknown): { anchor: EditorPoint; focus: EditorPoint } | null {
+    return isSelection(shared) ? this.binding.rangeOf(shared) : null;
+  }
 
   updateCredentials(credentials: CollabCredentials): void {
     if (credentials.document_id !== this.credentials.document_id || credentials.user.id !== this.credentials.user.id || credentials.socket !== this.credentials.socket) throw new Error("Collaboration identity cannot change while mounted");

@@ -1826,7 +1826,7 @@ defmodule KotobaDev.CollabLive do
     <h1>Shared document</h1>
     <p>Open this document in another tab with a different <code>?name=</code> to collaborate.</p>
     <.form for={@form} id="collab-form" phx-submit="save">
-      <.kotoba field={@form[:body]} id="shared_editor" label="Shared document" issho={@issho} user={@user} nodes={["/assets/nodes/tag.js"]} features={@features} assist={[summarize: "Summarize"]} />
+      <.kotoba field={@form[:body]} id="shared_editor" label="Shared document" issho={@issho} user={@user} nodes={["/assets/nodes/tag.js"]} features={@features} assist={[summarize: "Summarize", shorten: "Shorten"]} />
       <button type="submit" id="collab-save">Publish accepted revision</button>
     </.form>
     <button id="collab-insert" phx-click="insert">Insert tag</button>
@@ -1887,23 +1887,41 @@ defmodule KotobaDev.CollabLive do
   def handle_event("kotoba:suggestion", %{"ref" => ref, "action" => action}, socket),
     do: {:noreply, if(action == "accept", do: socket, else: KotobaDev.Assist.stop(socket, ref))}
 
+  # Shorten writes an Issho stream at the request's selection (a place of
+  # the document): accepted, it replaces those words.
+  def handle_event(
+        "kotoba:assist",
+        %{"action" => "shorten", "place" => %{"selection" => at}},
+        socket
+      ),
+      do: {:noreply, write(socket, at, "Shorter", ["few ", "words"])}
+
   # Summarize writes an Issho stream for this person, after the block of the
   # request, in a task of its own: the page shows it with
   # Kotoba.Issho.suggestions/4, and finds it again after going away.
-  def handle_event("kotoba:assist", %{"place" => %{"id" => block}}, socket) do
+  def handle_event("kotoba:assist", %{"place" => %{"id" => block}}, socket),
+    do:
+      {:noreply,
+       write(socket, %{"node" => block}, "Summary", ["Resumed ", "after ", "its ", "block"])}
+
+  def handle_info({:assist_chunk, id, ref, action, rest}, socket),
+    do: {:noreply, KotobaDev.Assist.next(socket, id, ref, action, rest)}
+
+  # An Issho stream for this person, at a place of the document, written in
+  # a task of its own.
+  defp write(socket, at, label, chunks) do
     %{user: user, document_id: document} = socket.assigns
-    place = %{"doc" => document, "at" => %{"node" => block}}
 
     Task.start(fn ->
       {:ok, stream} =
         Issho.Streams.start(KotobaDev.Issho, Issho.Policy.room(document),
-          kind: "summary",
+          kind: String.downcase(label),
           for: user,
-          place: place,
-          meta: %{"label" => "Summary"}
+          place: %{"doc" => document, "at" => at},
+          meta: %{"label" => label}
         )
 
-      for chunk <- ["Resumed ", "after ", "its ", "block"] do
+      for chunk <- chunks do
         Process.sleep(300)
         :ok = Issho.Streams.append(stream, chunk)
       end
@@ -1911,11 +1929,8 @@ defmodule KotobaDev.CollabLive do
       Issho.Streams.finish(stream)
     end)
 
-    {:noreply, socket}
+    socket
   end
-
-  def handle_info({:assist_chunk, id, ref, action, rest}, socket),
-    do: {:noreply, KotobaDev.Assist.next(socket, id, ref, action, rest)}
 
   # The last changes of the document, newest first; the room's other messages.
   def handle_info({Issho.Live, "event", _room, %Issho.Event{} = event}, socket),

@@ -1,4 +1,4 @@
-import type { LexicalEditor } from "lexical";
+import type { LexicalEditor, PointType } from "lexical";
 import type { ExtensionAPI } from "./extensions";
 
 export interface CollabCredentials {
@@ -18,6 +18,13 @@ export interface CollabCredentials {
   user: { id: string; name: string; color: string };
 }
 
+/** A point of the editor: a node's key, an offset in it, and its kind. */
+export interface EditorPoint {
+  key: string;
+  offset: number;
+  type: "text" | "element";
+}
+
 export interface Collaboration {
   readonly: boolean;
   flush(): Promise<{ epoch: string; revision: number }>;
@@ -26,6 +33,10 @@ export interface Collaboration {
   keyOf(id: string): string | null;
   /** The shared id of an editor node, or `null`. */
   idOf(key: string): string | null;
+  /** A range of the editor as a shared selection (`Kotoba.Issho.Place`), in a read; `null` when it has none. */
+  sharedOf?(range: { anchor: PointType; focus: PointType }): unknown;
+  /** The points of the editor of a shared selection, in a read; `null` when its words are gone. */
+  rangeOf?(shared: unknown): { anchor: EditorPoint; focus: EditorPoint } | null;
   dispose(): void;
 }
 

@@ -485,6 +485,8 @@ class Instance {
       announce: this.announce,
       keyOf: (id) => this.collaboration?.keyOf(id) ?? null,
       idOf: (key) => this.collaboration?.idOf(key) ?? null,
+      sharedOf: (range) => this.collaboration?.sharedOf?.(range) ?? null,
+      rangeOf: (shared) => this.collaboration?.rangeOf?.(shared) ?? null,
     });
 
     if (features.has("links")) {

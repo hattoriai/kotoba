@@ -317,6 +317,21 @@ defmodule Kotoba.LiveTest do
       send(view.pid, {:stream, :stream_start, ["r5", [block: "node-7"]]})
       assert_push_event(view, "kotoba:stream", %{ref: "r5", op: "start", block: "node-7"})
 
+      # In a shared document: the selection it replaces, as a place of it.
+      selection = %{
+        "anchor" => %{"node" => "t1", "before" => "a3"},
+        "focus" => %{"node" => "t1", "before" => "a9"}
+      }
+
+      send(view.pid, {:stream, :stream_start, ["r6", [selection: selection]]})
+
+      assert_push_event(view, "kotoba:stream", %{
+        ref: "r6",
+        op: "start",
+        at: "selection",
+        selection: ^selection
+      })
+
       send(view.pid, {:stream, :stream_chunk, ["r2", "Hello **wo"]})
       assert_push_event(view, "kotoba:stream", %{ref: "r2", op: "chunk", text: "Hello **wo"})
 
@@ -344,6 +359,10 @@ defmodule Kotoba.LiveTest do
 
       assert_raise ArgumentError, ~r/:block must be a block number/, fn ->
         Kotoba.Live.stream_resume(socket, @editor, "r", "text", block: 0)
+      end
+
+      assert_raise ArgumentError, ~r/:selection must be a Kotoba place/, fn ->
+        Kotoba.Live.stream_start(socket, @editor, "r", selection: %{"block" => 2})
       end
     end
 
