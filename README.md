@@ -2,6 +2,18 @@
 
 ![Kotoba — Rich text for Phoenix](https://raw.githubusercontent.com/hattoriai/kotoba/main/media/banner.png)
 
+<p>
+  <a href="https://hex.pm/packages/kotoba">
+    <img alt="Hex Version" src="https://img.shields.io/hexpm/v/kotoba.svg">
+  </a>
+  <a href="https://hexdocs.pm/kotoba">
+    <img src="https://img.shields.io/badge/docs-hexdocs-blue" alt="HexDocs">
+  </a>
+  <a href="https://github.com/hattoriai/kotoba/actions">
+    <img alt="CI Status" src="https://github.com/hattoriai/kotoba/actions/workflows/ci.yml/badge.svg">
+  </a>
+</p>
+
 Kotoba (言葉, "words") is rich text for Phoenix. It gives your app:
 
 * a rich-text editor for LiveView forms, built on
