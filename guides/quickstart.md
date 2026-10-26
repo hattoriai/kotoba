@@ -303,3 +303,8 @@ the [Security](security.md) guide.
 * [Theming](theming.md): colours, the Sumi theme, dark mode.
 * [Security](security.md), [Accessibility](accessibility.md) and
   [Known limits](limits.md).
+
+## Next: collaboration (optional)
+
+Everything above works without Issho. For shared documents, participant
+cursors and agents, add Issho: see [Collaboration](collaboration.md).

@@ -224,8 +224,8 @@ A table or a list has one handle, for the whole block, and moves as a
 whole: a list item moves its list. A gallery and an embed keep their own
 dragging; only the grip moves the block.
 
-Each change is one undo step. In a shared editor (see
-[Collaboration](collaboration.md)) a move is a move of the block in the
+Each change is one undo step. In a shared editor (optional, with Issho;
+see [Collaboration](collaboration.md)) a move is a move of the block in the
 shared document: another person's caret in it goes with it, and the undo
 of the person who moved it takes it back. An agent moves a block with the
 `move_block` tool.

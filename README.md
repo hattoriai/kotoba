@@ -21,6 +21,12 @@ Kotoba (言葉, "words") is rich text for Phoenix. It gives your app:
 The editor is a prebuilt JavaScript bundle in the Hex package. Your app
 does not run Node.js for it: you add the hook and one style sheet.
 
+Live collaboration is optional, with [Issho](https://hex.pm/packages/issho).
+Issho is an optional dependency: unless you add it to your deps, Mix does
+not download it, Kotoba's Issho modules are not compiled, and the browser
+never loads the collaboration bundle (`kotoba/collab`). The editor needs
+none of it.
+
 ## Try it: Notebook
 
 ![The Kotoba editor in Notebook: a toolbar, a second writer's live cursor, the selection menu over selected text, and a highlighted code block](https://raw.githubusercontent.com/hattoriai/kotoba/main/media/notebook-editor.png)
@@ -45,7 +51,7 @@ README has the details) to try every feature in your browser.
 | Files | drop, paste or pick images and files; image galleries, reordered from the keyboard; PDFs in the browser's viewer, MP4 and WebM videos; LiveView uploads, kept with [Storehouse](https://hexdocs.pm/storehouse): the local disk, S3, byte ranges |
 | Prompts | `@` mentions, emoji, tags: server searches (async too) or local lists, with queries that have spaces |
 | Suggestions | text streamed from the server (a language model), shown as it comes, then accepted as one undo step or rejected; an Assist menu |
-| Collaboration | shared documents, participant cursors, read-only viewers, per-author undo, offline draft recovery and accepted revisions for form submission; [setup](guides/collaboration.md) |
+| Collaboration | optional, with Issho: shared documents, participant cursors, read-only viewers, per-author undo, offline draft recovery and accepted revisions for form submission; [setup](guides/collaboration.md) |
 | Shortcuts | the usual keyboard shortcuts, and Markdown as you type (`## `, `- `, `**bold**`, ` ``` `) |
 | Markdown | CommonMark and GitHub Flavored Markdown in and out: paste a README and it looks as it does on GitHub; quotes of blocks, images, footnotes, aligned table columns; the whole GFM spec in the tests |
 | Per field | the features of each editor (`features={~w(bold links lists)}`), checked on the server |
@@ -184,6 +190,11 @@ HTML.
   must do.
 * [Accessibility](guides/accessibility.md): the roles and the keyboard.
 * [Known limits](guides/limits.md).
+
+Optional, with Issho:
+
+* [Collaboration](guides/collaboration.md): shared documents, participant
+  cursors, per-author undo and agents, when Issho is in your deps.
 
 ## Development
 

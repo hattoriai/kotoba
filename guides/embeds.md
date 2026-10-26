@@ -271,7 +271,7 @@ import reads embeds, and so does Markdown pasted in the editor. A block
 your reader returns `nil` for stays a code block. Only a block of the
 document's root becomes an embed (not one in a list or a quote).
 
-## Collaboration
+## In a shared document, with Issho
 
 In a shared document (see [Collaboration](collaboration.md)), an embed
 someone inserts reaches everyone's editor, and each person's LiveView
