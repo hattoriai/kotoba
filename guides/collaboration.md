@@ -291,6 +291,7 @@ gives it the editor's verbs, however it reaches your app:
 | `move_block` | moves a block after another one, as a block handle does: a list with its items |
 | `suggest_text` | suggests text after a block, for the person to accept or reject (an Issho stream, shown by `Kotoba.Issho.suggestions/4`) |
 | `copy_text`, `paste_text` | copies with its formatting, pastes in any document of the room |
+| `attach_file` | attaches a file it sends in base64 after a block, checked and stored as an upload is (with Storehouse) |
 
 Text is quoted, not counted, so the agent says what it means. Its
 changes are the operations an editor sends, through the same authority,

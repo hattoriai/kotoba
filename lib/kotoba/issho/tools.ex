@@ -588,6 +588,144 @@ if Code.ensure_loaded?(Issho.Tool) do
     end
   end
 
+  if Code.ensure_loaded?(Kotoba.Attachments) do
+    defmodule Kotoba.Issho.Tools.AttachFile do
+      @moduledoc false
+      use Issho.Tool,
+        name: "attach_file",
+        description: """
+        Attaches a file to a shared document, after block `after` (0 puts it
+        first), as a person's upload does: a PDF or a video shows in the
+        page, an image as an image, any other file as a download. `data` is
+        the file's bytes in base64. Only the bytes make a file what it is:
+        a web page named invoice.pdf is a download, never a PDF.
+        """,
+        annotations: []
+
+      arg :document, :string, required: true
+      arg :after, :integer, required: true, min: 0
+
+      arg :name, :string,
+        required: true,
+        max_length: 200,
+        description: "The file name: \"edp-2026-11.pdf\""
+
+      arg :data, :string, required: true, description: "The file's bytes, in base64"
+
+      arg :content_type, :string,
+        description: "The file's type, if you know it: \"application/pdf\""
+
+      arg :caption, :string, max_length: 500, description: "What the file is, shown under it"
+
+      alias Kotoba.Issho.{Text, Tools.Doc}
+      alias Kotoba.Nodes.Attachment
+
+      @max_bytes 10_000_000
+
+      # The largest file an agent attaches, and how it is stored: `attach:`
+      # of `config :kotoba, Kotoba.Issho` (`max_bytes`, and `Kotoba.Attachments.store/2`'s
+      # `:storage`, `:key` and `:preview`).
+      defp config, do: Keyword.get(Application.get_env(:kotoba, Kotoba.Issho, []), :attach, [])
+
+      @impl true
+      def call(args, ctx) do
+        max_bytes = Keyword.get(config(), :max_bytes, @max_bytes)
+
+        with {:ok, bytes} <- decode(args.data, max_bytes),
+             {:ok, doc} <- Doc.open(ctx, args.document),
+             :ok <- go_after(doc, args.after),
+             {:ok, node} <- store(bytes, args) do
+          case attach(doc, args.after, node) do
+            :ok ->
+              {:ok,
+               %{
+                 "attached" => node.name,
+                 "content_type" => node.content_type,
+                 "bytes" => node.bytes
+               }}
+
+            error ->
+              # The file is not in the document: nothing is left that no document points to.
+              _result =
+                Keyword.get_lazy(config(), :storage, &Kotoba.Storage.adapter/0).delete(node.key)
+
+              Doc.error(error)
+          end
+        else
+          error -> Doc.error(error)
+        end
+      end
+
+      defp decode(data, max_bytes) do
+        data = data |> String.replace(~r/\Adata:[^,]*;base64,/, "") |> String.replace(~r/\s+/, "")
+
+        # Base64 is four characters for three bytes: refused before it is decoded.
+        if byte_size(data) > div(max_bytes + 2, 3) * 4 do
+          {:error, "The file is larger than #{max_bytes} bytes."}
+        else
+          case Base.decode64(data) do
+            {:ok, ""} ->
+              {:error, "The file is empty."}
+
+            {:ok, bytes} when byte_size(bytes) > max_bytes ->
+              {:error, "The file is larger than #{max_bytes} bytes."}
+
+            {:ok, bytes} ->
+              {:ok, bytes}
+
+            :error ->
+              {:error, "`data` is not base64."}
+          end
+        end
+      end
+
+      defp store(bytes, args) do
+        path = Path.join(System.tmp_dir!(), "kotoba-attach-#{System.unique_integer([:positive])}")
+
+        try do
+          File.write!(path, bytes)
+
+          opts =
+            config()
+            |> Keyword.take([:storage, :key, :preview])
+            |> Keyword.put(:name, args.name)
+            |> Keyword.put(
+              :content_type,
+              args[:content_type] || Kotoba.Attachments.content_type(Path.extname(args.name))
+            )
+
+          case Kotoba.Attachments.store(path, opts) do
+            {:ok, node} -> {:ok, caption(node, args[:caption])}
+            {:error, reason} -> {:error, "The file could not be stored (#{inspect(reason)})."}
+          end
+        after
+          File.rm(path)
+        end
+      end
+
+      defp caption(%Attachment{} = node, caption) when is_binary(caption) do
+        case String.trim(caption) do
+          "" -> node
+          caption -> %Attachment{node | caption: caption}
+        end
+      end
+
+      defp caption(node, _caption), do: node
+
+      defp attach(doc, after_n, node) do
+        with {:ok, ops, _state} <- Text.insert_node(doc.state, after_n, Attachment.to_json(node)),
+             {:ok, _doc} <- Doc.commit(doc, ops),
+             do: :ok
+      end
+
+      defp go_after(_doc, 0), do: :ok
+
+      defp go_after(doc, n) do
+        with {:ok, caret} <- Text.caret(doc.state, {:end, n}), do: Doc.reach(doc, caret)
+      end
+    end
+  end
+
   defmodule Kotoba.Issho.Tools.MoveBlock do
     @moduledoc false
     use Issho.Tool,

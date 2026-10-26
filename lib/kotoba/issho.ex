@@ -341,22 +341,42 @@ if Code.ensure_loaded?(Issho.Binding) do
     `pace`: the milliseconds it takes to type a character (25; a long text
     is typed in at most 8 seconds). `travel`: whether it goes to where it
     works and drags (true).
+
+    With Storehouse, `attach_file` attaches a file the agent sends in
+    base64 after a block, checked and stored as an upload is
+    (`Kotoba.Attachments.store/2`). `attach:` sets the largest file (10 MB)
+    and how it is stored:
+
+        config :kotoba, Kotoba.Issho,
+          attach: [max_bytes: 10_000_000, key: &MyApp.Uploads.key/2, preview: &MyApp.Previews.make/2]
+
+    `:storage`, `:key` and `:preview` are `Kotoba.Attachments.store/2`'s.
+    The request that carries the file must fit the body size your endpoint
+    reads: `Plug.Parsers`' `:length` is 8 MB unless you set it.
     """
     @spec tools() :: [module()]
     def tools,
-      do: [
-        Kotoba.Issho.Tools.Read,
-        Kotoba.Issho.Tools.Select,
-        Kotoba.Issho.Tools.Type,
-        Kotoba.Issho.Tools.Replace,
-        Kotoba.Issho.Tools.Delete,
-        Kotoba.Issho.Tools.Format,
-        Kotoba.Issho.Tools.Link,
-        Kotoba.Issho.Tools.AddBlock,
-        Kotoba.Issho.Tools.MoveBlock,
-        Kotoba.Issho.Tools.SuggestText,
-        Kotoba.Issho.Tools.Copy,
-        Kotoba.Issho.Tools.Paste
-      ]
+      do:
+        [
+          Kotoba.Issho.Tools.Read,
+          Kotoba.Issho.Tools.Select,
+          Kotoba.Issho.Tools.Type,
+          Kotoba.Issho.Tools.Replace,
+          Kotoba.Issho.Tools.Delete,
+          Kotoba.Issho.Tools.Format,
+          Kotoba.Issho.Tools.Link,
+          Kotoba.Issho.Tools.AddBlock,
+          Kotoba.Issho.Tools.MoveBlock,
+          Kotoba.Issho.Tools.SuggestText,
+          Kotoba.Issho.Tools.Copy,
+          Kotoba.Issho.Tools.Paste
+        ] ++ attach_tools()
+
+    # `attach_file` stores files with Storehouse, an optional dependency.
+    if Code.ensure_loaded?(Kotoba.Attachments) do
+      defp attach_tools, do: [Kotoba.Issho.Tools.AttachFile]
+    else
+      defp attach_tools, do: []
+    end
   end
 end

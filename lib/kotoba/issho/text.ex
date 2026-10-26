@@ -689,6 +689,27 @@ defmodule Kotoba.Issho.Text do
     end
   end
 
+  @doc false
+  # A node with no text in it (an attachment, an embed), `data` its JSON,
+  # in the root of the document after the top-level block that holds block
+  # `n` (0: first): after a whole list or table, never inside it.
+  def insert_node(state, after_n, data) do
+    with {:ok, after_node} <-
+           if(after_n == 0, do: {:ok, nil}, else: top_of(state, blocks(state), after_n)) do
+      op = %{
+        "op" => "insert_node",
+        "id" => id(),
+        "parent" => state["root"],
+        "after" => after_node,
+        "data" => Map.put_new(data, "version", 1),
+        "element" => false
+      }
+
+      with {:ok, acc} <- emit(%{state: state, ops: []}, op),
+           do: {:ok, Enum.reverse(acc.ops), acc.state}
+    end
+  end
+
   defp block_slot(state, _blocks, 0), do: {:ok, state["root"], nil}
 
   defp block_slot(state, blocks, n) do
