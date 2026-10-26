@@ -9,6 +9,14 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `attach_file`, an agent's tool (with Storehouse): a file the agent
+  sends in base64 goes in a shared document after a block, as a person's
+  upload does. It is checked and stored by `Kotoba.Attachments.store/2`,
+  so only its bytes make it a PDF, an image or a video; a web page named
+  `invoice.pdf` is a download. `attach:` of `config :kotoba, Kotoba.Issho`
+  sets the largest file (10 MB) and the store's `:storage`, `:key` and
+  `:preview`. A file the document then refuses is deleted from the store.
+
 - A suggestion can replace a selection in a shared document, wherever it
   comes from. `kotoba:assist`'s `"place"` has the selection as a place of
   the document (`"selection"`, a `Kotoba.Issho.Place`, for a selection
