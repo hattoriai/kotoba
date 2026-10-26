@@ -134,7 +134,6 @@ defmodule Kotoba.MixProject do
         Guides: [
           "guides/quickstart.md",
           "guides/forms.md",
-          "guides/collaboration.md",
           "guides/upgrading.md",
           "guides/features.md",
           "guides/rendering.md",
@@ -146,6 +145,7 @@ defmodule Kotoba.MixProject do
           "guides/embeds.md",
           "guides/theming.md"
         ],
+        "Collaboration (optional, with Issho)": ["guides/collaboration.md"],
         Reference: [
           "guides/security.md",
           "guides/accessibility.md",
@@ -170,7 +170,11 @@ defmodule Kotoba.MixProject do
           Kotoba.Storage,
           Kotoba.Storage.Local,
           Kotoba.Storage.Local.Plug
-        ]
+        ],
+        # Kotoba.Collab and Kotoba.Issho compile only when Issho is a
+        # dependency; Kotoba.Collab's document and stores are for shared
+        # editors.
+        "Collaboration (optional, with Issho)": [~r/^Kotoba\.Collab/, ~r/^Kotoba\.Issho/]
       ]
     ]
   end

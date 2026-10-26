@@ -1,5 +1,11 @@
 # Collaboration
 
+**Optional.** Collaboration is an add-on. It needs `{:issho, "~> 0.4.2"}`
+in your deps and `import { enableCollaboration } from "kotoba/collab"` in
+your JavaScript (below). Without them, Kotoba is the same editor: Issho is
+not downloaded, Kotoba's Issho modules are not compiled, and the
+collaboration bundle is never loaded.
+
 Kotoba Collab lets people edit the same document, see participant cursors,
 and recover local drafts after a reconnect. Forms submit a revision that the
 server has accepted and saved.

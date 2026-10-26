@@ -156,16 +156,20 @@ that come after. What had come stays in the panel, and the person can
 still accept it.
 
 `kotoba:assist` also has `"place"`, the block of the selection:
-`%{"block" => 2}` (its number, 1 for the first), with `"id"` in a shared
-document. Keep it to put an answer back after the page comes back (below).
-In a shared document, a selection that is not a caret is in it too, as a
-place of the document (`"selection"`, a `Kotoba.Issho.Place`): give it as
-`:selection` (`at: :selection`) for an answer that replaces those words,
-from any tab and after a reload.
+`%{"block" => 2}` (its number, 1 for the first). Keep it to put an answer
+back after the page comes back (below).
 
 Both events have the editor's `id`, and go to the editor's `phx-target`
 when it has one, as the other events do (see
 [Forms and changesets](forms.md)).
+
+### The selection in a shared document, with Issho
+
+In a shared document (see [Collaboration](collaboration.md)), `"place"`
+has the block's `"id"` too, and a selection that is not a caret is in it
+as a place of the document (`"selection"`, a `Kotoba.Issho.Place`): give
+it as `:selection` (`at: :selection`) for an answer that replaces those
+words, from any tab and after a reload.
 
 ### From the insert menu
 

@@ -38,6 +38,13 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   selection and an agent's (Issho's labels, hattoriai/issho#32). Issho
   shows it to agents and in its panels; an Issho before labels ignores it.
 
+### Changed
+
+- The docs put the editor first and say that collaboration is optional,
+  with Issho: a note at the top of the Collaboration guide, Issho's parts
+  of the other guides in subsections of their own, and the collaboration
+  guide and modules in a "Collaboration (optional, with Issho)" group.
+
 ### Fixed
 
 - The Sumi theme gave Sumi's dark themes other than Ink the light

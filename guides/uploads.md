@@ -232,7 +232,7 @@ person clicks in it, or presses Alt+F10, writes the caption, and presses
 Enter (or leaves the field) to keep it; Escape leaves it as it was. The
 caption shows under the attachment, over its file name. Keeping a caption
 is one change of the document: Cmd/Ctrl+Z takes it back, and a shared
-editor (see [Collaboration](collaboration.md)) sends it to the others. An
+editor (optional, with Issho; see [Collaboration](collaboration.md)) sends it to the others. An
 empty caption removes it.
 
 The caption is the `caption` of the attachment node (`Kotoba.Nodes.Attachment`,
