@@ -76,7 +76,7 @@ Add `kotoba` to the deps in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:kotoba, "~> 0.8"}
+    {:kotoba, "~> 0.9"}
   ]
 end
 ```

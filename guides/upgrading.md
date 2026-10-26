@@ -1,5 +1,14 @@
 # Upgrading
 
+## To Kotoba 0.9, on Issho 0.5
+
+Update `{:kotoba, "~> 0.9"}`, and `{:issho, "~> 0.5"}` for a shared
+editor. An editor's code stays as it was. What is new is opt-in: an
+agent's suggestion can replace what a person selected (`Kotoba.Live`'s
+`:selection`, `Kotoba.Issho.Suggestions.target/1`), a shared editor's
+place has a label, and with Storehouse an agent attaches files
+(`attach_file`). See [Collaboration](collaboration.md).
+
 ## To Kotoba 0.8
 
 Kotoba 0.8 keeps uploads with [Storehouse](https://hex.pm/packages/storehouse),

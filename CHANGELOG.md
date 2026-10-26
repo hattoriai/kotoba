@@ -7,6 +7,11 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-10-26
+
+An agent's suggestion replaces what a person selected, a shared editor's
+place says what is selected, and an agent attaches files.
+
 ### Added
 
 - `attach_file`, an agent's tool (with Storehouse): a file the agent
@@ -48,6 +53,8 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- A shared editor takes Issho 0.5 (`{:issho, "~> 0.5"}`), whose requests
+  an agent's suggestion answers in place.
 - The docs put the editor first and say that collaboration is optional,
   with Issho: a note at the top of the Collaboration guide, Issho's parts
   of the other guides in subsections of their own, and the collaboration
