@@ -96,6 +96,10 @@ defmodule Kotoba.Issho.AttachFileTest do
     end
   end
 
+  test "is among Kotoba's tools with Storehouse, whatever order Kotoba's modules compile in" do
+    assert Kotoba.Issho.Tools.AttachFile in Kotoba.Issho.tools()
+  end
+
   test "attaches a PDF after a block, and everyone sees it", %{
     client: client,
     document: document,

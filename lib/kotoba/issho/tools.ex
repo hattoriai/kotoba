@@ -588,7 +588,7 @@ if Code.ensure_loaded?(Issho.Tool) do
     end
   end
 
-  if Code.ensure_loaded?(Kotoba.Attachments) do
+  if Code.ensure_loaded?(Storehouse) do
     defmodule Kotoba.Issho.Tools.AttachFile do
       @moduledoc false
       use Issho.Tool,

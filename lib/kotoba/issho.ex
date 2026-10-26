@@ -373,7 +373,7 @@ if Code.ensure_loaded?(Issho.Binding) do
         ] ++ attach_tools()
 
     # `attach_file` stores files with Storehouse, an optional dependency.
-    if Code.ensure_loaded?(Kotoba.Attachments) do
+    if Code.ensure_loaded?(Storehouse) do
       defp attach_tools, do: [Kotoba.Issho.Tools.AttachFile]
     else
       defp attach_tools, do: []
