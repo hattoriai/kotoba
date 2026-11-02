@@ -256,3 +256,67 @@ test("browser and authority replay the same transactions and character moves", a
   });
   expect(mismatch).toBeNull();
 });
+
+// The operations of the transactions a page sends, from now on.
+function sentOperations(page: Page): Operation[] {
+  const sent: Operation[] = [];
+  page.on("websocket", socket => socket.on("framesent", frame => {
+    if (typeof frame.payload !== "string") return;
+    const [, , topic, event, payload] = JSON.parse(frame.payload) as [string, string, string, string, { tx?: { ops: Operation[] } }];
+    if (topic.startsWith("issho:") && event === "tx" && payload.tx) sent.push(...payload.tx.ops);
+  }));
+  return sent;
+}
+
+test("deleting a character in a paragraph sends its deletion, not moves of the text after it", async ({ page, context }) => {
+  const other = await context.newPage();
+  const id = crypto.randomUUID();
+  const sent = sentOperations(page);
+  await open(page, id, "Ada");
+  await open(other, id, "Grace");
+  await editor(page).click();
+  await page.keyboard.type("The quick brown fox jumps over the lazy dog");
+  await expect(editor(other)).toHaveText("The quick brown fox jumps over the lazy dog");
+  await expect(status(page)).toHaveText("Saved");
+
+  sent.length = 0;
+  await page.keyboard.press("Home");
+  for (let step = 0; step < 9; step++) await page.keyboard.press("ArrowRight");
+  await settle(page);
+  await page.keyboard.press("Backspace");
+  await expect(editor(other)).toHaveText("The quic brown fox jumps over the lazy dog");
+  await expect(status(page)).toHaveText("Saved");
+  expect(sent.map(op => op.op)).toEqual(["text_visibility"]);
+
+  sent.length = 0;
+  await page.keyboard.press(`${MOD}+Z`);
+  await expect(editor(other)).toHaveText("The quick brown fox jumps over the lazy dog");
+  await expect(status(page)).toHaveText("Saved");
+  expect(sent.map(op => op.op)).toEqual(["text_visibility"]);
+});
+
+test("joining two paragraphs moves none of the paragraphs after them", async ({ page, context }) => {
+  const other = await context.newPage();
+  const id = crypto.randomUUID();
+  const sent = sentOperations(page);
+  await open(page, id, "Ada");
+  await open(other, id, "Grace");
+  await editor(page).click();
+  for (const [index, word] of ["one", "two", "three", "four", "five"].entries()) {
+    if (index > 0) await page.keyboard.press("Enter");
+    await page.keyboard.type(word);
+  }
+  await expect(editor(other).locator("p")).toHaveText(["one", "two", "three", "four", "five"]);
+  await expect(status(page)).toHaveText("Saved");
+
+  sent.length = 0;
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("ArrowUp");
+  await page.keyboard.press("Home");
+  await settle(page);
+  await page.keyboard.press("Backspace");
+  await expect(editor(other).locator("p")).toHaveText(["one", "twothree", "four", "five"]);
+  await expect(status(page)).toHaveText("Saved");
+  expect(sent.map(op => op.op)).toContain("node_visibility");
+  expect(sent.filter(op => op.op === "move_node")).toEqual([]);
+});
