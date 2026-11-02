@@ -92,6 +92,50 @@ defmodule Kotoba.Collab.Document do
 
   def upgrade(_stored), do: {:error, :unsupported_version}
 
+  @doc """
+  The state without what only past operations need: deleted characters,
+  the copies of characters moved elsewhere, deleted nodes and everything
+  under them, and the order entries of nodes that moved away. It keeps
+  exactly what `to_envelope/1` walks, so:
+
+    * the content is the same (`validate/2` gives the same);
+    * every node and character that remains keeps its id, attributes and
+      versions, so places, comments, suggestions and the operations of a
+      browser that was offline still find them;
+    * an operation that names what went is refused (`:unknown_atom`,
+      `:unknown_anchor`, `:unknown_node`). One whose `"inherit"` went
+      inserts where it would have, with its own formatting, as when that
+      character is unknown.
+
+  Issho compacts an idle document with it (`Kotoba.Issho`).
+  """
+  def compact(state) do
+    live = state |> live_nodes(state["root"]) |> MapSet.new()
+    nodes = Map.filter(state["nodes"], fn {id, _node} -> MapSet.member?(live, id) end)
+
+    orders =
+      for {id, order} <- state["orders"], MapSet.member?(live, id), into: %{} do
+        {id, Enum.filter(order, &(MapSet.member?(live, &1) and nodes[&1]["parent"] == id))}
+      end
+
+    texts =
+      for {id, atoms} <- state["texts"], MapSet.member?(live, id), into: %{} do
+        {id, Enum.reject(atoms, &(&1["deleted"] or &1["moved_to"]))}
+      end
+
+    {:ok, %{state | "nodes" => nodes, "orders" => orders, "texts" => texts}}
+  end
+
+  # A node and the nodes export_node/2 reaches from it.
+  defp live_nodes(state, id) do
+    children =
+      Enum.filter(state["orders"][id] || [], fn child ->
+        state["nodes"][child]["parent"] == id and not state["nodes"][child]["deleted"]
+      end)
+
+    [id | Enum.flat_map(children, &live_nodes(state, &1))]
+  end
+
   defp editing(state), do: Map.take(state, ~w(v schema root nodes orders texts))
 
   defp run_ops(state, ops) do
