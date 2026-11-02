@@ -25,6 +25,16 @@ function withLocal(current: LexicalNode[], desired: LexicalNode[]): LexicalNode[
   return result;
 }
 
+/**
+ * The item before `id` in `order` among those in `kept`, or null. The others
+ * leave `order` after the walk (deleted, or moved to a later parent), so where
+ * an item stands among them is not a move.
+ */
+function keptBefore(order: readonly string[], id: string, kept: ReadonlySet<string>): string | null {
+  for (let index = order.indexOf(id) - 1; index >= 0; index--) if (kept.has(order[index])) return order[index];
+  return null;
+}
+
 export const COLLAB_TAG = "kotoba-collab";
 interface NodeRef { id: string; atoms?: string[] }
 export interface Anchor { node: string; before: string | null; offset?: number }
@@ -118,16 +128,14 @@ export class Binding {
         inverse.unshift(undo);
       };
 
-      const visit = (view: ViewNode, parent: string | null, after: string | null): void => {
+      const visit = (view: ViewNode, parent: string | null, after: string | null, kept: ReadonlySet<string>): void => {
         desired.add(view.id);
         const old = working.nodes[view.id];
         if (!old && parent !== null) {
           const tag = uuid();
           emit({ op: "insert_node", id: view.id, parent, after, data: view.data, element: view.element }, { op: "node_visibility", id: view.id, deleted: true, tag, if_empty: view.element || view.data.type === "text" });
         } else if (old && parent !== null) {
-          const siblings = children(working, parent);
-          const previous = siblings[siblings.indexOf(view.id) - 1] ?? null;
-          if (old.parent !== parent || previous !== after) {
+          if (old.parent !== parent || keptBefore(children(working, parent), view.id, kept) !== after) {
             const oldSiblings = old.parent ? children(working, old.parent) : [];
             const oldAfter = oldSiblings[oldSiblings.indexOf(view.id) - 1] ?? null;
             const stamp = uuid();
@@ -147,12 +155,13 @@ export class Binding {
           emit({ op: "set_attrs", id: view.id, values, stamp }, { op: "set_attrs", id: view.id, values: previous, expected_versions: Object.fromEntries(Object.keys(values).map(key => [key, stamp])), stamp: uuid() });
         }
         if (!view.characters) {
+          const here = new Set(view.children.map(child => child.id));
           let anchor: string | null = null;
-          for (const child of view.children) { visit(child, view.id, anchor); anchor = child.id; }
+          for (const child of view.children) { visit(child, view.id, anchor, here); anchor = child.id; }
         }
       };
 
-      visit(view, null, null);
+      visit(view, null, null, new Set());
       const textViews: ViewNode[] = [];
       const collect = (node: ViewNode): void => { if (node.characters) textViews.push(node); else node.children.forEach(collect); };
       collect(view);
@@ -239,6 +248,7 @@ export class Binding {
 
   private diffText(getState: () => State, view: ViewNode, emit: (op: Operation, undo: Operation) => void): void {
     let after: string | null = null;
+    const kept = new Set(view.characters!.map(character => character.id!));
     const patches = new Map<string, { atoms: string[]; values: Attrs; previous: Attrs }>();
     for (let index = 0; index < view.characters!.length; index++) {
       const character = view.characters![index];
@@ -262,8 +272,9 @@ export class Binding {
       }
       const source = atomLocation(state, id)!;
       const sourceAtoms = visibleAtoms(state, source);
-      const previous = sourceAtoms[sourceAtoms.findIndex(value => value.id === id) - 1]?.id ?? null;
-      if (source !== view.id || previous !== after) {
+      const order = sourceAtoms.map(value => value.id);
+      const previous = order[order.indexOf(id) - 1] ?? null;
+      if (source !== view.id || keptBefore(order, id, kept) !== after) {
         const stamp = uuid();
         const moving = [id];
         if (source !== view.id) {
