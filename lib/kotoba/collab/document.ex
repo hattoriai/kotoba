@@ -95,12 +95,29 @@ defmodule Kotoba.Collab.Document do
   defp editing(state), do: Map.take(state, ~w(v schema root nodes orders texts))
 
   defp run_ops(state, ops) do
-    Enum.reduce_while(ops, {:ok, state}, fn op, {:ok, current} ->
-      case apply_op(current, op) do
-        {:ok, next} -> {:cont, {:ok, next}}
-        error -> {:halt, error}
-      end
-    end)
+    initial = {:ok, state, atom_locations(state)}
+
+    result =
+      Enum.reduce_while(ops, initial, fn op, {:ok, current, locations} ->
+        case apply_op(current, locations, op) do
+          {:ok, next, locations} -> {:cont, {:ok, next, locations}}
+          error -> {:halt, error}
+        end
+      end)
+
+    with {:ok, state, _locations} <- result, do: {:ok, state}
+  end
+
+  # Each atom id and the text node that holds its live copy. A move leaves
+  # a copy marked "moved_to" behind, but every atom keeps exactly one live
+  # copy, so the keys are every atom id in the document.
+  defp atom_locations(state) do
+    Map.new(
+      for {buffer, atoms} <- state["texts"],
+          atom <- atoms,
+          is_nil(atom["moved_to"]),
+          do: {atom["id"], buffer}
+    )
   end
 
   @doc "Validates and renders a snapshot on the server."
@@ -178,7 +195,7 @@ defmodule Kotoba.Collab.Document do
   defp check_count(ops) when is_list(ops) and ops != [] and length(ops) <= @max_ops, do: :ok
   defp check_count(_ops), do: {:error, :invalid_operations}
 
-  defp apply_op(state, %{
+  defp apply_op(state, locations, %{
          "op" => "insert_node",
          "id" => id,
          "parent" => parent,
@@ -206,7 +223,7 @@ defmodule Kotoba.Collab.Document do
         |> put_in(["orders", id], [])
 
       state = if data["type"] == "text", do: put_in(state, ["texts", id], []), else: state
-      {:ok, state}
+      {:ok, state, locations}
     else
       false -> {:error, :invalid_id}
       error -> error
@@ -215,6 +232,7 @@ defmodule Kotoba.Collab.Document do
 
   defp apply_op(
          state,
+         locations,
          %{"op" => "move_node", "id" => id, "parent" => parent, "after" => after_id} = op
        ) do
     with :ok <- live_node(state, id),
@@ -229,9 +247,9 @@ defmodule Kotoba.Collab.Document do
          state
          |> put_in(["nodes", id, "parent"], parent)
          |> put_in(["nodes", id, "move_version"], op["stamp"])
-         |> put_in(["orders", parent], order)}
+         |> put_in(["orders", parent], order), locations}
       else
-        {:ok, state}
+        {:ok, state, locations}
       end
     else
       false -> {:error, :invalid_move}
@@ -241,23 +259,24 @@ defmodule Kotoba.Collab.Document do
 
   defp apply_op(
          state,
+         locations,
          %{"op" => "node_visibility", "id" => id, "deleted" => deleted, "tag" => tag} = op
        )
        when is_boolean(deleted) and is_binary(tag) do
     cond do
       id == state["root"] -> {:error, :root_is_fixed}
       not Map.has_key?(state["nodes"], id) -> {:error, :unknown_node}
-      deleted and op["if_empty"] == true and not empty_node?(state, id) -> {:ok, state}
-      true -> {:ok, update_in(state, ["nodes", id], &visibility(&1, tag, deleted))}
+      deleted and op["if_empty"] == true and not empty_node?(state, id) -> {:ok, state, locations}
+      true -> {:ok, update_in(state, ["nodes", id], &visibility(&1, tag, deleted)), locations}
     end
   end
 
-  defp apply_op(state, %{"op" => "set_attrs", "id" => id, "values" => values} = op)
+  defp apply_op(state, locations, %{"op" => "set_attrs", "id" => id, "values" => values} = op)
        when is_map(values) do
     with :ok <- live_node(state, id),
          true <- Enum.all?(Map.keys(values), &(is_binary(&1) and &1 not in @reserved)) do
       node = patch_record(state["nodes"][id], "data", values, op)
-      {:ok, put_in(state, ["nodes", id], node)}
+      {:ok, put_in(state, ["nodes", id], node), locations}
     else
       false -> {:error, :reserved_attribute}
       error -> error
@@ -266,22 +285,24 @@ defmodule Kotoba.Collab.Document do
 
   defp apply_op(
          state,
+         locations,
          %{"op" => "insert_text", "id" => id, "after" => after_id, "atoms" => atoms} = op
        )
        when is_list(atoms) do
-    target = atom_location(state, after_id) || atom_location(state, op["inherit"]) || id
+    target = locations[after_id] || locations[op["inherit"]] || id
     atoms = Enum.map(atoms, &expand_atom(&1, op["attrs"]))
 
     with :ok <- live_node(state, target),
          true <- Map.has_key?(state["texts"], target),
-         :ok <- check_atoms(state, atoms),
+         :ok <- check_atoms(locations, atoms),
          {:ok, index} <- insertion_index(state, target, id, after_id, op["inherit"]) do
-      inherited = find_atom(state, op["inherit"])
+      inherited = find_atom(state, locations, op["inherit"])
 
       atoms = Enum.map(atoms, &inserted_atom(&1, inherited, op["base_attrs"]))
+      locations = Enum.reduce(atoms, locations, &Map.put(&2, &1["id"], target))
 
       {before, rest} = Enum.split(state["texts"][target], index)
-      {:ok, put_in(state, ["texts", target], before ++ atoms ++ rest)}
+      {:ok, put_in(state, ["texts", target], before ++ atoms ++ rest), locations}
     else
       false -> {:error, :not_text}
       error -> error
@@ -290,32 +311,41 @@ defmodule Kotoba.Collab.Document do
 
   defp apply_op(
          state,
+         locations,
          %{"op" => "move_text", "id" => target, "after" => after_id, "atoms" => ids} = op
        )
        when is_list(ids) do
     with :ok <- live_node(state, target),
          true <- Map.has_key?(state["texts"], target),
          true <- ids != [] and length(ids) == MapSet.size(MapSet.new(ids)),
-         true <- Enum.all?(ids, &(atom_location(state, &1) != nil)) do
+         true <- Enum.all?(ids, &Map.has_key?(locations, &1)) do
       eligible =
         Enum.filter(ids, fn id ->
           not is_map(op["expected_moves"]) or not Map.has_key?(op["expected_moves"], id) or
-            find_atom(state, id)["move_version"] == op["expected_moves"][id]
+            find_atom(state, locations, id)["move_version"] == op["expected_moves"][id]
         end)
 
       moving =
         Enum.map(eligible, fn id ->
-          find_atom(state, id) |> Map.delete("moved_to") |> Map.put("move_version", op["stamp"])
+          find_atom(state, locations, id)
+          |> Map.delete("moved_to")
+          |> Map.put("move_version", op["stamp"])
         end)
 
+      sources = Enum.uniq([target | Enum.map(eligible, &locations[&1])])
+
       texts =
-        Map.new(state["texts"], fn {buffer, atoms} ->
-          {buffer, move_source(atoms, buffer, target, eligible)}
+        Enum.reduce(sources, state["texts"], fn buffer, texts ->
+          Map.update!(texts, buffer, &move_source(&1, buffer, target, eligible))
         end)
+
+      locations = Enum.reduce(eligible, locations, &Map.put(&2, &1, target))
 
       with {:ok, index} <- anchor_index(texts[target], after_id, & &1["id"]) do
         {before, rest} = Enum.split(texts[target], index)
-        {:ok, Map.put(state, "texts", Map.put(texts, target, before ++ moving ++ rest))}
+
+        {:ok, Map.put(state, "texts", Map.put(texts, target, before ++ moving ++ rest)),
+         locations}
       end
     else
       false -> {:error, :unknown_atom}
@@ -323,7 +353,7 @@ defmodule Kotoba.Collab.Document do
     end
   end
 
-  defp apply_op(state, %{
+  defp apply_op(state, locations, %{
          "op" => "text_visibility",
          "id" => id,
          "atoms" => ids,
@@ -331,11 +361,12 @@ defmodule Kotoba.Collab.Document do
          "tag" => tag
        })
        when is_list(ids) and is_boolean(deleted) and is_binary(tag) do
-    update_atoms(state, id, ids, &visibility(&1, tag, deleted))
+    update_atoms(state, locations, id, ids, &visibility(&1, tag, deleted))
   end
 
   defp apply_op(
          state,
+         locations,
          %{"op" => "set_text_attrs", "id" => id, "atoms" => ids, "values" => values} = op
        )
        when is_list(ids) and is_map(values) do
@@ -344,10 +375,10 @@ defmodule Kotoba.Collab.Document do
          &(&1 in ~w(children text format id deleted deletions versions moved_to move_version))
        ) or not valid_text_attrs?(values),
        do: {:error, :reserved_attribute},
-       else: update_atoms(state, id, ids, &patch_record(&1, "attrs", values, op))
+       else: update_atoms(state, locations, id, ids, &patch_record(&1, "attrs", values, op))
   end
 
-  defp apply_op(_state, _op), do: {:error, :invalid_operation}
+  defp apply_op(_state, _locations, _op), do: {:error, :invalid_operation}
 
   defp expand_atom(atom, attrs) when is_map(atom), do: Map.put_new(atom, "attrs", attrs)
   defp expand_atom(atom, _attrs), do: atom
@@ -375,16 +406,8 @@ defmodule Kotoba.Collab.Document do
       else: atom
   end
 
-  defp atom_location(_state, nil), do: nil
-
-  defp atom_location(state, id) do
-    Enum.find_value(state["texts"], fn {buffer, atoms} ->
-      if Enum.any?(atoms, &(&1["id"] == id and is_nil(&1["moved_to"]))), do: buffer
-    end)
-  end
-
-  defp find_atom(state, id) do
-    case atom_location(state, id) do
+  defp find_atom(state, locations, id) do
+    case locations[id] do
       nil -> nil
       buffer -> Enum.find(state["texts"][buffer], &(&1["id"] == id and is_nil(&1["moved_to"])))
     end
@@ -399,19 +422,19 @@ defmodule Kotoba.Collab.Document do
   defp insertion_index(state, target, _original, after_id, _inherited),
     do: anchor_index(state["texts"][target], after_id, & &1["id"])
 
-  defp update_atoms(state, id, ids, fun) do
-    locations = Enum.map(ids, &atom_location(state, &1))
+  defp update_atoms(state, locations, id, ids, fun) do
+    buffers = Enum.map(ids, &locations[&1])
 
-    with true <- ids != [] and Enum.all?(locations, &(not is_nil(&1))),
-         :ok <- live_locations(state, locations) do
+    with true <- ids != [] and Enum.all?(buffers, &(not is_nil(&1))),
+         :ok <- live_locations(state, buffers) do
       targets = MapSet.new(ids)
 
       texts =
-        Map.new(state["texts"], fn {buffer, atoms} ->
-          {buffer, update_targets(atoms, targets, fun)}
+        Enum.reduce(Enum.uniq(buffers), state["texts"], fn buffer, texts ->
+          Map.update!(texts, buffer, &update_targets(&1, targets, fun))
         end)
 
-      {:ok, Map.put(state, "texts", texts)}
+      {:ok, Map.put(state, "texts", texts), locations}
     else
       false ->
         if(Map.has_key?(state["texts"], id),
@@ -493,20 +516,19 @@ defmodule Kotoba.Collab.Document do
         Map.new(Enum.reject(desired, fn {key, value} -> Map.get(base, key) == value end))
       )
 
-  defp check_atoms(state, atoms) do
+  defp check_atoms(locations, atoms) do
     ids = Enum.map(atoms, fn atom -> if is_map(atom), do: atom["id"] end)
-    existing = state["texts"] |> Map.values() |> List.flatten() |> MapSet.new(& &1["id"])
 
     if atoms != [] and length(ids) == MapSet.size(MapSet.new(ids)) and
-         Enum.all?(atoms, &valid_atom?(&1, existing)), do: :ok, else: {:error, :invalid_atoms}
+         Enum.all?(atoms, &valid_atom?(&1, locations)), do: :ok, else: {:error, :invalid_atoms}
   end
 
-  defp valid_atom?(atom, existing) when is_map(atom) do
-    valid_id?(atom["id"]) and atom["id"] not in existing and scalar?(atom["text"]) and
-      valid_text_attrs?(atom["attrs"])
+  defp valid_atom?(atom, locations) when is_map(atom) do
+    valid_id?(atom["id"]) and not Map.has_key?(locations, atom["id"]) and
+      scalar?(atom["text"]) and valid_text_attrs?(atom["attrs"])
   end
 
-  defp valid_atom?(_atom, _existing), do: false
+  defp valid_atom?(_atom, _locations), do: false
 
   defp scalar?(text),
     do: is_binary(text) and String.valid?(text) and length(String.codepoints(text)) == 1
