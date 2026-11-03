@@ -1849,6 +1849,18 @@ defmodule KotobaDev.SmallCollabSocket do
   def id(_socket), do: nil
 end
 
+# The socket of KotobaDev.QuickIssho, for the e2e tests of compaction.
+defmodule KotobaDev.QuickIsshoChannel do
+  use Issho.Channel, instance: KotobaDev.QuickIssho
+end
+
+defmodule KotobaDev.QuickCollabSocket do
+  use Phoenix.Socket
+  channel("issho:*", KotobaDev.QuickIsshoChannel)
+  def connect(_params, socket, _connect_info), do: {:ok, socket}
+  def id(_socket), do: nil
+end
+
 defmodule KotobaDev.CollabLive do
   use Phoenix.LiveView
   on_mount(Issho.Live)
@@ -2049,6 +2061,38 @@ defmodule KotobaDev.CollabLive do
          width: 160,
          height: 90
        })}
+end
+
+defmodule KotobaDev.QuickCollabLive do
+  @moduledoc false
+  # A shared editor on KotobaDev.QuickIssho, whose documents close half a
+  # second after the last person leaves, and compact as they close:
+  # /collab/quick?document=ID&name=Ada. For the e2e tests of compaction.
+  use Phoenix.LiveView
+  on_mount(Issho.Live)
+  import Kotoba.Components
+
+  def mount(params, _session, socket) do
+    name = Map.get(params, "name", "Ada")
+
+    issho = [
+      instance: KotobaDev.QuickIssho,
+      document: Map.get(params, "document", "quick"),
+      socket: "/issho/quick-socket"
+    ]
+
+    {:ok,
+     assign(socket, issho: issho, user: %{id: name, name: name}, form: to_form(%{}, as: :quick))}
+  end
+
+  def render(assigns) do
+    ~H"""
+    <h1>Shared document, compacted when idle</h1>
+    <.form for={@form} id="quick-form">
+      <.kotoba field={@form[:body]} id="quick_editor" label="Shared document" issho={@issho} user={@user} />
+    </.form>
+    """
+  end
 end
 
 defmodule KotobaDev.ManyCollabLive do
@@ -2306,6 +2350,7 @@ defmodule KotobaDev.Router do
     live("/resume", KotobaDev.ResumeLive)
     live("/embeds", KotobaDev.EmbedsLive)
     live("/collab", KotobaDev.CollabLive)
+    live("/collab/quick", KotobaDev.QuickCollabLive)
     live("/collab/many", KotobaDev.ManyCollabLive)
     live("/collab/nested", KotobaDev.NestedCollabLive)
     live("/collab/notebook", KotobaDev.NotebookLive)
@@ -2326,6 +2371,10 @@ defmodule KotobaDev.Endpoint do
   socket("/issho/socket", KotobaDev.CollabSocket, websocket: [max_frame_size: 1_000_000])
 
   socket("/issho/small-socket", KotobaDev.SmallCollabSocket,
+    websocket: [max_frame_size: 1_000_000]
+  )
+
+  socket("/issho/quick-socket", KotobaDev.QuickCollabSocket,
     websocket: [max_frame_size: 1_000_000]
   )
 
@@ -2371,6 +2420,17 @@ Task.async(fn ->
          endpoint: KotobaDev.Endpoint,
          policy: KotobaDev.Collaboration,
          store: {Issho.Store.Memory, KotobaDev.IsshoStore}},
+        # Documents that close half a second after the last person leaves,
+        # and compact as they close (KotobaDev.QuickCollabLive). Presence is
+        # the first instance's: one runs on a node.
+        {Issho,
+         name: KotobaDev.QuickIssho,
+         pubsub: KotobaDev.PubSub,
+         endpoint: KotobaDev.Endpoint,
+         policy: KotobaDev.Collaboration,
+         store: {Issho.Store.Memory, KotobaDev.IsshoStore},
+         presence: false,
+         ttl: 500},
         KotobaDev.Endpoint
       ],
       strategy: :one_for_one
