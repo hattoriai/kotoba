@@ -7,6 +7,14 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- In a shared document, formatting part of what was just inserted, in
+  the same transaction, formats only that part in the browser too. Every
+  character of an insert shared one attributes object, so the browser
+  formatted all of them, and wrote the formatting into the insert of a
+  pending transaction, which then carried it to the server.
+
 ## [0.9.0] - 2026-10-26
 
 An agent's suggestion replaces what a person selected, a shared editor's
