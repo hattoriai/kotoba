@@ -259,6 +259,50 @@ defmodule Kotoba.Collab.DocumentTest do
     assert content.html == "<p>a</p><p>bX<strong>c</strong></p>"
   end
 
+  test "operations see the characters that earlier operations in the transaction moved or added" do
+    original = state()
+
+    operations = [
+      %{
+        "op" => "insert_node",
+        "id" => "p2",
+        "parent" => "root",
+        "after" => "seed:1",
+        "data" => %{"type" => "paragraph", "version" => 1}
+      },
+      %{
+        "op" => "insert_node",
+        "id" => "text2",
+        "parent" => "p2",
+        "after" => nil,
+        "data" => %{"type" => "text", "version" => 1}
+      },
+      %{
+        "op" => "move_text",
+        "id" => "text2",
+        "after" => nil,
+        "atoms" => ["seed:2:1", "seed:2:2"],
+        "stamp" => "alice:split"
+      },
+      insert("alice:1", "seed:2:1", "X"),
+      insert("alice:2", "alice:1", "Y")
+    ]
+
+    {:ok, together} = Document.apply_ops(original, operations)
+
+    one_by_one =
+      Enum.reduce(operations, original, fn operation, state ->
+        {:ok, next} = Document.apply_ops(state, [operation])
+        next
+      end)
+
+    assert together == one_by_one
+    assert text(together) == "a\nbXYc"
+
+    duplicate = [insert("alice:1", "seed:2:0", "X"), insert("alice:1", "seed:2:1", "Y")]
+    assert {:error, _} = Document.apply_ops(original, duplicate)
+  end
+
   test "malformed attributes and deep JSON fail without changing the accepted state" do
     original = state()
     base = %{"op" => "set_text_attrs", "id" => "seed:2", "atoms" => ["seed:2:0"]}
