@@ -159,7 +159,7 @@ export function apply(state: State, operations: Operation[]): State {
         const atoms = result.texts[target];
         const inherited = op.inherit ? findAtom(result, op.inherit) : undefined;
         const inserted = clone(op.atoms).map(atom => {
-          let attrs = atom.attrs ?? op.attrs ?? {};
+          let attrs = atom.attrs ?? clone(op.attrs ?? {});
           if (inherited && op.base_attrs) {
             const overrides = Object.fromEntries(Object.entries(attrs).filter(([key, value]) => !equal(op.base_attrs![key], value)));
             attrs = { ...inherited.attrs, ...overrides };
