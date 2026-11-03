@@ -233,6 +233,11 @@ test("browser and authority replay the same transactions and character moves", a
         { op: "insert_node", id: "buffer2", parent: "paragraph", after: null, data: { type: "text", version: 1 }, element: false },
       ]);
       if (result) return result;
+      result = await transact([
+        { op: "insert_text", id: "buffer2", after: null, attrs: { type: "text", version: 1 }, atoms: [{ id: "pair:1", text: "a" }, { id: "pair:2", text: "b" }] },
+        { op: "set_text_attrs", id: "buffer2", atoms: ["pair:1"], values: { bold: true }, stamp: "format:pair" },
+      ]);
+      if (result) return result;
       for (let index = 0; index < 60; index++) {
         const atoms = Object.values(state.texts).flat().filter(atom => !atom.moved_to);
         const atom = atoms[index % Math.max(atoms.length, 1)];
