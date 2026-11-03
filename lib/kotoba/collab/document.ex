@@ -4,11 +4,11 @@ defmodule Kotoba.Collab.Document do
 
   Nodes and Unicode scalar values have persistent identities. Deleted
   values remain as anchors, so an offline insertion does not depend on a
-  current array index.
+  current array index, until `compact/1` drops them.
 
-  The wire format uses string keys. Issho orders the transactions, keeps
-  their receipts and journal (`Kotoba.Issho`); this module is the state
-  and its operations. A transaction is atomic: its resulting tree must
+  The wire format uses string keys. Issho orders the transactions and
+  keeps their receipts (`Kotoba.Issho`); this module is the state and its
+  operations. A transaction is atomic: its resulting tree must
   pass the node, nesting, URL and feature checks.
   """
 

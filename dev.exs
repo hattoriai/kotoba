@@ -2430,6 +2430,7 @@ Task.async(fn ->
          policy: KotobaDev.Collaboration,
          store: {Issho.Store.Memory, KotobaDev.IsshoStore},
          presence: false,
+         compact: true,
          ttl: 500},
         KotobaDev.Endpoint
       ],

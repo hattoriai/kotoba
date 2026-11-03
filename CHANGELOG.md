@@ -7,6 +7,19 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `Kotoba.Collab.Document.compact/1` removes deleted characters, moved
+  copies, and deleted blocks while preserving the content and the ids of
+  everything that remains. `Kotoba.Issho.Engine.compact/2` exposes it to
+  Issho versions that support idle compaction.
+
+### Changed
+
+- A shared editor clears undo and redo when it opens a new epoch. Undo
+  operations from before compaction can name characters that no longer
+  exist. Pending edits still follow Issho's recovery protocol.
+
 ### Fixed
 
 - A deletion in a shared document sends no moves of what follows it. A

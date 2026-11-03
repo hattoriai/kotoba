@@ -1,6 +1,8 @@
 import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
 import { MOD, focusEnd, openEditor, settle } from "./support";
 
+test.skip(process.env.KOTOBA_COMPACTION !== "1", "Set KOTOBA_COMPACTION=1 with an Issho build that supports idle compaction");
+
 // The quick page's documents close half a second after the last person leaves, and Issho compacts
 // them as they close when that drops enough: a new epoch that continues the last, without the
 // deleted characters. Each test deletes a few hundred characters first, so that it does.
