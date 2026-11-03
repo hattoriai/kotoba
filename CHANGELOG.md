@@ -7,6 +7,14 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Fixed
+
+- A deletion in a shared document sends no moves of what follows it. A
+  Backspace in the middle of a paragraph sent a `move_text` for each
+  character after the caret. Joining two blocks sent a `move_node` for
+  each block after them, and undoing the join sent them all back. The
+  text was right, but the document's journal kept every move.
+
 ## [0.10.0] - 2026-11-04
 
 An extension can now change what the editor has already, as TipTap's
