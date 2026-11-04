@@ -681,8 +681,10 @@ defmodule Kotoba.Collab.Document do
     {update_in(state, ["orders", parent], &(&1 ++ [id])), counter}
   end
 
+  # A code token's type (highlightType) is not shared: it comes from the
+  # code block's language, in each browser.
   defp text_attrs(json) do
-    attrs = Map.drop(json, ["text", "children", "format"])
+    attrs = Map.drop(json, ["text", "children", "format", "highlightType"])
 
     Enum.reduce(@marks, attrs, fn {name, index}, attrs ->
       Map.put(attrs, name, (Map.get(json, "format", 0) &&& 1 <<< index) != 0)

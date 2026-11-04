@@ -46,6 +46,30 @@ defmodule Kotoba.Collab.DocumentTest do
     assert state["texts"]["seed:2"] |> length() == 13
   end
 
+  test "a code token's type is not shared: it comes from the block's language" do
+    {:ok, content} =
+      Content.cast(%{
+        "type" => "root",
+        "children" => [
+          %{
+            "type" => "code",
+            "language" => "elixir",
+            "children" => [
+              %{"type" => "code-highlight", "text" => "do", "highlightType" => "keyword"},
+              %{"type" => "code-highlight", "text" => " x"}
+            ]
+          }
+        ]
+      })
+
+    {:ok, state} = Document.new(content)
+    atoms = state["texts"] |> Map.values() |> List.flatten()
+
+    assert Enum.map_join(atoms, & &1["text"]) == "do x"
+    refute Enum.any?(atoms, &Map.has_key?(&1["attrs"], "highlightType"))
+    assert {:ok, %Content{}} = Document.validate(state)
+  end
+
   test "concurrent offline insertions merge at persistent character anchors" do
     original = state()
     a = transaction(original, [insert("a:1", "seed:2:0", "X")])

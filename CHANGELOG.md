@@ -7,6 +7,15 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.1] - 2026-11-04
+
+### Changed
+
+- A code token's type (`highlightType`) is not in the shared document. It
+  comes from the code block's language, and each browser's highlighter
+  finds it again; the server does not render it. Typing in a code block
+  shares the text only, not the type of each token whose color changed.
+
 ### Fixed
 
 - A shared editor no longer stops sending edits after an edit in a code
@@ -21,7 +30,6 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   a form that saved the shared document saved it without them: an image
   just uploaded was gone. When the edit cannot be read either way, the
   editor stops, keeps the local draft, and says so.
-
 - In a shared document, formatting part of what was just inserted, in
   the same transaction, formats only that part in the browser too. Every
   character of an insert shared one attributes object, so the browser
@@ -840,7 +848,9 @@ The first release.
 - Guides: quickstart, forms, uploads, prompts, custom nodes, theming,
   security, accessibility and known limits.
 
-[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/hattoriai/kotoba/compare/v0.9.0...v0.9.1
+[0.9.0]: https://github.com/hattoriai/kotoba/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/hattoriai/kotoba/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/hattoriai/kotoba/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/hattoriai/kotoba/compare/v0.5.0...v0.6.0
