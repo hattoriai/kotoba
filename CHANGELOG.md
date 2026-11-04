@@ -9,6 +9,19 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A shared editor no longer stops sending edits after an edit in a code
+  block. A code token with no highlight has an `undefined` attribute in
+  Lexical, which JSON cannot hold, and the editor could not read the edit
+  (`"undefined" is not valid JSON`). An attribute that is gone is now
+  `null`.
+- A shared editor whose map of the document no longer fits it (an editor
+  node of a node that was deleted: `deleted_target`) reads the edit again,
+  as new nodes matched to the document by their text. Before, the edit
+  and each edit after it stayed in the browser only, with no message, and
+  a form that saved the shared document saved it without them: an image
+  just uploaded was gone. When the edit cannot be read either way, the
+  editor stops, keeps the local draft, and says so.
+
 - In a shared document, formatting part of what was just inserted, in
   the same transaction, formats only that part in the browser too. Every
   character of an insert shared one attributes object, so the browser
