@@ -35,6 +35,10 @@ export const visibleAtoms = (state: State, id: string): Atom[] => (state.texts[i
 
 export function textAttrs(node: Attrs): Attrs {
   const attrs = defined(node);
+  // A code token's type comes from the code block's language: each browser's
+  // highlighter finds it again, and the server does not render it. It is not
+  // shared, so typing in code shares the text only.
+  delete attrs.highlightType;
   delete attrs.text;
   delete attrs.children;
   delete attrs.format;
