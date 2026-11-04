@@ -7,6 +7,17 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.9.2] - 2026-11-04
+
+### Fixed
+
+- A shared editor no longer stops sending edits in a document where an
+  agent deleted a block. The server deletes the block only, and its text
+  stays alive inside it, out of the document. Each edit in the browser
+  tried to delete that text again and failed (`deleted_target`), so no
+  edit was shared, and a form that saved the shared document saved it
+  without them. Text out of the document is now left as it is.
+
 ## [0.9.1] - 2026-11-04
 
 ### Changed
@@ -848,7 +859,8 @@ The first release.
 - Guides: quickstart, forms, uploads, prompts, custom nodes, theming,
   security, accessibility and known limits.
 
-[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.9.2...HEAD
+[0.9.2]: https://github.com/hattoriai/kotoba/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/hattoriai/kotoba/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/hattoriai/kotoba/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/hattoriai/kotoba/compare/v0.7.0...v0.8.0

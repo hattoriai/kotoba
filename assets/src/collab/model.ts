@@ -31,6 +31,21 @@ export function equal(a: unknown, b: unknown): boolean {
   return Object.keys(first).length === Object.keys(second).length && Object.keys(first).every(key => Object.hasOwn(second, key) && equal(first[key], second[key]));
 }
 export const children = (state: State, id: string): string[] => (state.orders[id] ?? []).filter(child => state.nodes[child]?.parent === id && !state.nodes[child]?.deleted);
+/**
+ * Whether a node is in the document: it and each of its parents are not
+ * deleted, up to the root. A node deleted with its parent only (an agent's
+ * deletion of a block) keeps its text alive, out of the document.
+ */
+export function reachable(state: State, id: string): boolean {
+  for (let current: string | null = id; current !== null; ) {
+    const node: ModelNode | undefined = state.nodes[current];
+    if (!node || node.deleted) return false;
+    if (current === state.root) return true;
+    current = node.parent;
+  }
+  return false;
+}
+
 export const visibleAtoms = (state: State, id: string): Atom[] => (state.texts[id] ?? []).filter(atom => !atom.deleted && !atom.moved_to);
 
 export function textAttrs(node: Attrs): Attrs {

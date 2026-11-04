@@ -1,6 +1,6 @@
 import type { LexicalNode, PointType, SerializedLexicalNode } from "lexical";
 import type { CollaborationHost, EditorPoint } from "../collaboration";
-import { apply, atomLocation, defined, findAtom, children, clone, equal, spans, textAttrs, visibleAtoms, uuid, TEXT_TYPES, type Attrs, type Atom, type Operation, type State, type WireNode } from "./model";
+import { apply, atomLocation, defined, reachable, findAtom, children, clone, equal, spans, textAttrs, visibleAtoms, uuid, TEXT_TYPES, type Attrs, type Atom, type Operation, type State, type WireNode } from "./model";
 
 /** The nodes that stay in this browser (protocol.ts): never shared. */
 const LOCAL_TYPES: ReadonlySet<string> = new Set(["kotoba-upload", "kotoba-pending"]);
@@ -168,6 +168,9 @@ export class Binding {
       const desiredAtoms = new Set(textViews.flatMap(node => node.characters!.map(character => character.id!)));
       for (const text of textViews) this.diffText(() => working, text, emit);
       for (const [buffer, atoms] of Object.entries(state.texts)) {
+        // Text out of the document (its block deleted) is not in the editor,
+        // and it was not removed there: it stays as it is.
+        if (!reachable(working, buffer)) continue;
         const removed = atoms.filter(atom => !atom.deleted && !atom.moved_to && !desiredAtoms.has(atom.id)).map(atom => atom.id);
         if (removed.length) {
           const tag = uuid();
