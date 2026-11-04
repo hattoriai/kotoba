@@ -1,6 +1,6 @@
 import type { LexicalNode, PointType, SerializedLexicalNode } from "lexical";
 import type { CollaborationHost, EditorPoint } from "../collaboration";
-import { apply, atomLocation, defined, findAtom, children, clone, equal, spans, textAttrs, visibleAtoms, uuid, TEXT_TYPES, type Attrs, type Atom, type Operation, type State, type WireNode } from "./model";
+import { apply, atomLocation, defined, reachable, findAtom, children, clone, equal, spans, textAttrs, visibleAtoms, uuid, TEXT_TYPES, type Attrs, type Atom, type Operation, type State, type WireNode } from "./model";
 
 /** The nodes that stay in this browser (protocol.ts): never shared. */
 const LOCAL_TYPES: ReadonlySet<string> = new Set(["kotoba-upload", "kotoba-pending"]);
@@ -27,7 +27,12 @@ function withLocal(current: LexicalNode[], desired: LexicalNode[]): LexicalNode[
 
 export const COLLAB_TAG = "kotoba-collab";
 interface NodeRef { id: string; atoms?: string[] }
-export interface Anchor { node: string; before: string | null; offset?: number }
+/**
+ * A place in the shared document: after the character `before` of the text
+ * `node`; or, in the element `node`, after its child `after` (first with
+ * `after` null), with `offset`, the child's index, for an older client.
+ */
+export interface Anchor { node: string; before: string | null; offset?: number; after?: string | null }
 export interface SharedSelection { anchor: Anchor; focus: Anchor }
 export interface Change { forward: Operation[]; inverse: Operation[] }
 interface ViewNode { id: string; data: Attrs; element: boolean; key: string; children: ViewNode[]; characters?: { text: string; attrs: Attrs; id?: string }[]; source?: string[] }
@@ -83,7 +88,7 @@ export class Binding {
   private anchor(point: PointType): Anchor | null {
     const ref = this.refs.get(point.key);
     if (!ref || !this.current) return null;
-    if (!ref.atoms) return { node: ref.id, before: null, offset: point.offset };
+    if (!ref.atoms) return this.elementAnchor(point, ref.id);
     let offset = 0;
     let before: string | null = null;
     for (const atom of visibleAtoms(this.current, ref.id).filter(atom => ref.atoms!.includes(atom.id))) {
@@ -107,6 +112,23 @@ export class Binding {
    */
   forget(): void {
     this.refs = new Map();
+  }
+
+  // A place between the children of an element (a caret at the start of a
+  // code block's line, after its line break): after the child before it,
+  // which a render keeps, not at its index, which a render changes (a code
+  // block's text is one node in the document and many tokens in the editor).
+  private elementAnchor(point: PointType, id: string): Anchor {
+    const element = this.host.api.lexical.$getNodeByKey(point.key);
+    const previous = element && this.host.api.lexical.$isElementNode(element) && point.offset > 0 ? element.getChildAtIndex(point.offset - 1) : null;
+    if (previous === null) return { node: id, before: null, offset: point.offset, after: null };
+    const ref = this.refs.get(previous.getKey());
+    // After a text: after its last character.
+    if (ref?.atoms) {
+      const text: PointType = { key: previous.getKey(), offset: previous.getTextContentSize(), type: "text" } as PointType;
+      return this.anchor(text) ?? { node: id, before: null, offset: point.offset };
+    }
+    return ref ? { node: id, before: null, offset: point.offset, after: ref.id } : { node: id, before: null, offset: point.offset };
   }
 
   /** Read edits as semantic transactions, with origin-aware inverse operations. */
@@ -168,6 +190,9 @@ export class Binding {
       const desiredAtoms = new Set(textViews.flatMap(node => node.characters!.map(character => character.id!)));
       for (const text of textViews) this.diffText(() => working, text, emit);
       for (const [buffer, atoms] of Object.entries(state.texts)) {
+        // Text out of the document (its block deleted) is not in the editor,
+        // and it was not removed there: it stays as it is.
+        if (!reachable(working, buffer)) continue;
         const removed = atoms.filter(atom => !atom.deleted && !atom.moved_to && !desiredAtoms.has(atom.id)).map(atom => atom.id);
         if (removed.length) {
           const tag = uuid();
@@ -340,6 +365,8 @@ export class Binding {
     const focused = this.host.editable.contains(document.activeElement);
     const nextRefs = new Map<string, NodeRef>();
     const nextKeys = new Map<string, string>();
+    // A caret between the children of a code block, as a place in its text.
+    let codeCaret: { key: string; offset: number } | null = null;
     this.host.editor.update(() => {
       const root = api.$getRoot();
       const reconcile = (id: string, existing?: LexicalNode): LexicalNode => {
@@ -388,10 +415,86 @@ export class Binding {
           range.anchor.set(anchor.key, anchor.offset, anchor.type);
           range.focus.set(focus.key, focus.offset, focus.type);
           api.$setSelection(range);
+          codeCaret = this.codeCaret(anchor, focus);
         }
       }
     }, { tag: focused ? COLLAB_TAG : [COLLAB_TAG, "skip-dom-selection"], discrete: true });
+    // The code highlighter splits a code block's text into tokens after the
+    // render: an index among its children then points elsewhere. Its text
+    // stays, and the caret goes back to its place in it.
+    const caret = codeCaret as { key: string; offset: number } | null;
+    if (caret !== null) {
+      this.host.editor.update(() => this.$placeInCode(caret.key, caret.offset), { tag: focused ? COLLAB_TAG : [COLLAB_TAG, "skip-dom-selection"], discrete: true });
+    }
+    // The transforms of the render (the code highlighter's tokens) made
+    // nodes of their own: the map is of the editor as it is now, so that the
+    // next render finds the caret, and the next edit its text.
+    this.host.editor.getEditorState().read(() => this.remap(state));
     this.rendering = false;
+  }
+
+  // The editor's nodes, child by child, as the shared document's: a text
+  // of the document is the editor's text nodes that hold its characters in
+  // order. A node the walk cannot match keeps the render's map.
+  private remap(state: State): void {
+    const api = this.host.api.lexical;
+    const refs = new Map(this.refs);
+    const keys = new Map(this.keys);
+    const walk = (node: LexicalNode, id: string): void => {
+      refs.set(node.getKey(), { id });
+      keys.set(id, node.getKey());
+      if (!api.$isElementNode(node)) return;
+      const editor = node.getChildren().filter(child => !LOCAL_TYPES.has(child.getType()));
+      let index = 0;
+      for (const child of children(state, id)) {
+        if (state.texts[child]) {
+          const atoms = visibleAtoms(state, child);
+          let offset = 0;
+          while (offset < atoms.length && index < editor.length && TEXT_TYPES.has(editor[index].getType())) {
+            const size = Array.from(editor[index].getTextContent()).length;
+            refs.set(editor[index].getKey(), { id: child, atoms: atoms.slice(offset, offset + size).map(atom => atom.id) });
+            offset += size;
+            index++;
+          }
+        } else if (index < editor.length && !TEXT_TYPES.has(editor[index].getType())) {
+          walk(editor[index], child);
+          index++;
+        }
+      }
+    };
+    walk(api.$getRoot(), state.root);
+    this.refs = refs;
+    this.keys = keys;
+  }
+
+  // A collapsed caret between the children of a code block, as the number
+  // of characters before it (a line break is one).
+  private codeCaret(anchor: EditorPoint, focus: EditorPoint): { key: string; offset: number } | null {
+    if (anchor.type !== "element" || focus.type !== "element" || anchor.key !== focus.key || anchor.offset !== focus.offset) return null;
+    const element = this.host.api.lexical.$getNodeByKey(anchor.key);
+    if (!element || element.getType() !== "code" || !this.host.api.lexical.$isElementNode(element)) return null;
+    const offset = element.getChildren().slice(0, anchor.offset).reduce((sum, child) => sum + child.getTextContentSize(), 0);
+    return { key: anchor.key, offset };
+  }
+
+  private $placeInCode(key: string, offset: number): void {
+    const api = this.host.api.lexical;
+    const element = api.$getNodeByKey(key);
+    if (!element || !api.$isElementNode(element)) return;
+    const children = element.getChildren();
+    let remaining = offset;
+    let point: EditorPoint = { key, offset: children.length, type: "element" };
+    for (let index = 0; index < children.length; index++) {
+      const child = children[index];
+      if (remaining === 0) { point = { key, offset: index, type: "element" }; break; }
+      const size = child.getTextContentSize();
+      if (api.$isTextNode(child) && remaining <= size) { point = { key: child.getKey(), offset: remaining, type: "text" }; break; }
+      remaining -= size;
+    }
+    const range = api.$createRangeSelection();
+    range.anchor.set(point.key, point.offset, point.type);
+    range.focus.set(point.key, point.offset, point.type);
+    api.$setSelection(range);
   }
 
   private withoutChildren(data: Attrs): Attrs { const attrs = { ...data }; delete attrs.children; return attrs; }
@@ -403,6 +506,16 @@ export class Binding {
     if (anchor.before !== null && buffer === null) return null;
     const location = buffer ?? anchor.node;
     if (!this.current.nodes[location] || this.current.nodes[location].deleted) return null;
+    if (anchor.after !== undefined && anchor.offset !== undefined) {
+      const key = this.keys.get(anchor.node);
+      const node = key ? this.host.api.lexical.$getNodeByKey(key) : null;
+      if (!node || !this.host.api.lexical.$isElementNode(node)) return null;
+      if (anchor.after === null) return { key: node.getKey(), offset: 0, type: "element" };
+      const childKey = this.keys.get(anchor.after);
+      const child = childKey ? this.host.api.lexical.$getNodeByKey(childKey) : null;
+      if (child && child.getParent()?.getKey() === node.getKey()) return { key: node.getKey(), offset: child.getIndexWithinParent() + 1, type: "element" };
+      // The child is gone: its index, as before.
+    }
     if (anchor.offset !== undefined) {
       const key = this.keys.get(anchor.node);
       const node = key ? this.host.api.lexical.$getNodeByKey(key) : null;

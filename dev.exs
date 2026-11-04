@@ -1814,6 +1814,20 @@ defmodule KotobaDev.CollabLive do
     # Issho's streams for this person, as suggestions in the editor.
     socket = Kotoba.Issho.suggestions(socket, user, %{"shared_editor" => issho})
 
+    # Uploads go in the shared document from the server, where they are
+    # stored (consume_uploads with :issho). ?uploads=browser: through the
+    # browser, as an editor that is not shared.
+    socket =
+      socket
+      |> assign(upload_via: params["uploads"] || "server")
+      |> allow_upload(:shared,
+        accept: ~w(.png .jpg .jpeg .gif .webp .pdf),
+        max_entries: 4,
+        max_file_size: 5_000_000,
+        auto_upload: true,
+        progress: &handle_progress/3
+      )
+
     # The document's changes, as the room's events (Kotoba.Issho.events/2).
     if connected?(socket),
       do: Issho.Live.subscribe(socket.assigns.room, :self, events: ["text.*"])
@@ -1825,8 +1839,8 @@ defmodule KotobaDev.CollabLive do
     ~H"""
     <h1>Shared document</h1>
     <p>Open this document in another tab with a different <code>?name=</code> to collaborate.</p>
-    <.form for={@form} id="collab-form" phx-submit="save">
-      <.kotoba field={@form[:body]} id="shared_editor" label="Shared document" issho={@issho} user={@user} nodes={["/assets/nodes/tag.js"]} features={@features} assist={[summarize: "Summarize", shorten: "Shorten"]} />
+    <.form for={@form} id="collab-form" phx-change="validate" phx-submit="save">
+      <.kotoba field={@form[:body]} id="shared_editor" label="Shared document" issho={@issho} user={@user} nodes={["/assets/nodes/tag.js"]} features={@features} uploads={@uploads.shared} assist={[summarize: "Summarize", shorten: "Shorten"]} />
       <button type="submit" id="collab-save">Publish accepted revision</button>
     </.form>
     <button id="collab-insert" phx-click="insert">Insert tag</button>
@@ -1858,6 +1872,8 @@ defmodule KotobaDev.CollabLive do
     prompts = Kotoba.Issho.comment_prompts(socket.assigns.room, socket.assigns.mentionable)
     {:noreply, Kotoba.Live.handle_prompt(socket, params, prompts)}
   end
+
+  def handle_event("validate", _params, socket), do: {:noreply, socket}
 
   def handle_event("save", %{"kotoba_collab" => %{"shared_editor" => json}}, socket) do
     with {:ok, revision} <- JSON.decode(json),
@@ -1937,6 +1953,15 @@ defmodule KotobaDev.CollabLive do
     do: {:noreply, assign(socket, events: Enum.take([event | socket.assigns.events], 5))}
 
   def handle_info({Issho.Live, _event, _key, _payload}, socket), do: {:noreply, socket}
+
+  defp handle_progress(:shared, entry, socket) do
+    if entry.done? do
+      opts = if socket.assigns.upload_via == "server", do: [issho: socket.assigns.issho], else: []
+      {:noreply, Kotoba.Live.consume_uploads(socket, :shared, "shared_editor", opts)}
+    else
+      {:noreply, socket}
+    end
+  end
 
   # An image attachment, for the shared caption (its file is not stored).
   def handle_event("attach", _params, socket),
