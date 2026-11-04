@@ -1,7 +1,7 @@
 defmodule Kotoba.MixProject do
   use Mix.Project
 
-  @version "0.9.2"
+  @version "0.10.0"
   @source_url "https://github.com/hattoriai/kotoba"
 
   # KOTOBA_OLDEST=1 resolves the oldest Phoenix and LiveView that Kotoba
@@ -164,7 +164,13 @@ defmodule Kotoba.MixProject do
           Kotoba.CodeLanguages
         ],
         Content: [Kotoba.Content, Kotoba.Document, Kotoba.Renderer, Kotoba.Sanitizer],
-        Nodes: [Kotoba.Node, Kotoba.Node.Field, Kotoba.Nodes, ~r/^Kotoba\.Nodes\./],
+        Nodes: [
+          Kotoba.Node,
+          Kotoba.Node.Field,
+          Kotoba.Node.Override,
+          Kotoba.Nodes,
+          ~r/^Kotoba\.Nodes\./
+        ],
         Attachments: [
           Kotoba.Attachments,
           Kotoba.Storage,

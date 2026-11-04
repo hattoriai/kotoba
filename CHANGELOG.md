@@ -7,6 +7,35 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-04
+
+An extension can now change what the editor has already, as TipTap's
+`extend`, without a feature of the app in Kotoba. See "Change what the
+editor has" in the Extensions guide.
+
+### Added
+
+- The link form takes an extension's `link`: `suggest(query, context)`
+  lists suggestions under the input for the words typed (a combobox, with
+  the arrow keys, Enter and a click), and `open(request, context)` opens a
+  link form of the extension's own in place of Kotoba's, with `apply(url)`
+  for the request's selection.
+- `Kotoba.Node.Override`: another rendering (HTML, text, Markdown) of a
+  built-in node or an app node, from `config :kotoba, overrides:` or the
+  `overrides` option of the renderer, `Kotoba.Content.rerender/2` and
+  `kotoba_content/1` (which also takes `opts`, render options that the
+  overrides read). `Kotoba.Node.Override.state/3` reads an extension's
+  state on a node (Lexical's NodeState, `"$"` in the JSON), which the
+  server keeps.
+- The extension API has the editor's `@lexical/link`, `@lexical/list`,
+  `@lexical/table`, `@lexical/rich-text`, `@lexical/code-core` and
+  `@lexical/mark` (`link`, `list`, `table`, `richText`, `code`, `mark`),
+  Kotoba's own node classes (`nodes`), and `inline`: `$toggle` and
+  `$isActive` put the selected text in an inline element node of the
+  extension (a mark of the app over text), or take it out.
+- The extension context has `request(event, payload)`: a push to the
+  LiveView that returns a promise of its reply.
+
 ## [0.9.2] - 2026-11-04
 
 ### Added
@@ -875,7 +904,8 @@ The first release.
 - Guides: quickstart, forms, uploads, prompts, custom nodes, theming,
   security, accessibility and known limits.
 
-[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.9.2...HEAD
+[Unreleased]: https://github.com/hattoriai/kotoba/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/hattoriai/kotoba/compare/v0.9.2...v0.10.0
 [0.9.2]: https://github.com/hattoriai/kotoba/compare/v0.9.1...v0.9.2
 [0.9.1]: https://github.com/hattoriai/kotoba/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/hattoriai/kotoba/compare/v0.8.0...v0.9.0

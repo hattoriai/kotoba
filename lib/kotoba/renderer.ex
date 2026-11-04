@@ -55,6 +55,7 @@ defmodule Kotoba.Renderer do
   """
 
   alias Kotoba.{Document, Sanitizer}
+  alias Kotoba.Node.Override
   alias Kotoba.Nodes.{AutoLink, FootnoteReference, Link, Root, Text, Unknown}
 
   @typedoc "An attribute of an HTML tag. A `nil` or `false` value is left out."
@@ -297,15 +298,28 @@ defmodule Kotoba.Renderer do
   def policy(opts), do: Sanitizer.policy(Keyword.get(opts, :policy, :default))
 
   defp prepare(opts) when is_list(opts) do
-    Keyword.put(opts, :policy, Sanitizer.policy(Keyword.get(opts, :policy, :default)))
+    opts
+    |> Keyword.put(:policy, Sanitizer.policy(Keyword.get(opts, :policy, :default)))
+    |> Keyword.put_new_lazy(:kotoba_overrides, fn ->
+      Override.registry(Keyword.get(opts, :overrides, []))
+    end)
   end
 
   defp render(%Unknown{type: type}, _parent, format, _opts), do: unknown(format, type)
 
   defp render(%module{} = node, parent, format, opts) do
     case Sanitizer.check(node, parent, opts) do
-      :ok -> call(module, format, node, Keyword.put(opts, :parent, parent))
+      :ok -> call(renderer_of(module, opts), format, node, Keyword.put(opts, :parent, parent))
       {:error, _reason} -> unknown(format, module.type())
+    end
+  end
+
+  # The module that renders a node: its override (`Kotoba.Node.Override`),
+  # else the node's own module.
+  defp renderer_of(module, opts) do
+    case Keyword.get(opts, :kotoba_overrides) do
+      %{^module => override} -> override
+      _none -> module
     end
   end
 

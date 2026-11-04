@@ -761,7 +761,7 @@ defmodule Kotoba.Components do
 
   The cached `:html` of the content is used when its cache version is the
   current one (`Kotoba.Content.cache_version/0`), the policy is `:default`
-  and no extra `nodes` are given: this is the HTML that `Kotoba.Renderer`
+  and no extra `nodes` or `overrides` are given: this is the HTML that `Kotoba.Renderer`
   made when the content was cast. In every other case, the document is
   rendered again with `Kotoba.Renderer` (a document that no longer parses
   renders as nothing). `nil` renders an empty wrapper.
@@ -777,6 +777,15 @@ defmodule Kotoba.Components do
     doc:
       "extra node modules, `{module, js_url}` tuples, or JavaScript module URLs (the same list as `kotoba/1`; a URL has no module to render)"
 
+  attr :overrides, :list,
+    default: [],
+    doc:
+      "`Kotoba.Node.Override` modules: another rendering of a node, as the `overrides` option of `Kotoba.Renderer`"
+
+  attr :opts, :list,
+    default: [],
+    doc: "more render options, which the overrides read (for example `site: :public`)"
+
   attr :embed, :any,
     default: nil,
     doc:
@@ -790,7 +799,14 @@ defmodule Kotoba.Components do
       assign(
         assigns,
         :html,
-        content_html(assigns.content, assigns.policy, modules(assigns.nodes), assigns.embed)
+        content_html(
+          assigns.content,
+          assigns.policy,
+          modules(assigns.nodes),
+          assigns.embed,
+          assigns.overrides,
+          assigns.opts
+        )
       )
 
     ~H"""
@@ -798,15 +814,15 @@ defmodule Kotoba.Components do
     """
   end
 
-  defp content_html(nil, _policy, _nodes, _embed), do: ""
+  defp content_html(nil, _policy, _nodes, _embed, _overrides, _opts), do: ""
 
-  defp content_html(%Content{} = content, policy, nodes, embed) do
-    if cached?(content, policy, nodes) and is_nil(embed),
+  defp content_html(%Content{} = content, policy, nodes, embed, overrides, opts) do
+    if cached?(content, policy, nodes) and is_nil(embed) and overrides == [] and opts == [],
       do: {:safe, content.html},
-      else: render_doc(content.doc, policy, nodes, embed)
+      else: render_doc(content.doc, policy, nodes, embed, overrides, opts)
   end
 
-  defp content_html(other, _policy, _nodes, _embed) do
+  defp content_html(other, _policy, _nodes, _embed, _overrides, _opts) do
     raise ArgumentError, "kotoba_content needs a Kotoba.Content or nil, got: #{inspect(other)}"
   end
 
@@ -815,8 +831,9 @@ defmodule Kotoba.Components do
       Sanitizer.policy(policy) == Sanitizer.policy(:default)
   end
 
-  defp render_doc(doc, policy, nodes, embed) do
-    opts = if embed, do: [policy: policy, embed: embed], else: [policy: policy]
+  defp render_doc(doc, policy, nodes, embed, overrides, opts) do
+    opts = Keyword.merge(opts, policy: policy, overrides: overrides)
+    opts = if embed, do: Keyword.put(opts, :embed, embed), else: opts
 
     case Document.parse(doc, nodes: nodes) do
       {:ok, parsed} -> Renderer.to_html(parsed, opts)

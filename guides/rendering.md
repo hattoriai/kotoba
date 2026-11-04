@@ -176,9 +176,52 @@ Kotoba.Features.used(doc)         # the features it uses
 Repo.insert!(%Post{title: "Hello", body: Kotoba.Content.from_markdown("# Hello\n\nFirst **post**.")})
 ```
 
+## Another rendering of a node
+
+A `Kotoba.Node.Override` renders a node (built-in or of the app) in
+another way, as TipTap's `extend` of a node: its HTML, text or Markdown.
+The node stays the same: its type, its JSON and its struct. A callback
+that the override does not define renders as the node does.
+
+```elixir
+defmodule MyApp.PageLinks do
+  use Kotoba.Node.Override, of: Kotoba.Nodes.Link
+
+  # A link to a page (`/pages/5`) goes to where the page is now, or is
+  # only its text when the page is gone.
+  @impl Kotoba.Node.Override
+  def render_html(%{url: "/pages/" <> id} = node, opts) do
+    case MyApp.Pages.path(id, opts[:site]) do
+      nil -> Kotoba.Renderer.html_children(node, opts)
+      path -> Kotoba.Nodes.Link.render_html(%{node | url: path}, opts)
+    end
+  end
+
+  def render_html(node, opts), do: Kotoba.Nodes.Link.render_html(node, opts)
+end
+```
+
+An override applies:
+
+* from `config :kotoba, overrides: [...]`: everywhere, also in the HTML
+  that `Kotoba.Content` keeps when it is cast;
+* from the `overrides` option of `Kotoba.Renderer.to_html/2` (and
+  `to_text/2`, `to_markdown/2`), `Kotoba.Content.rerender/2`, and the
+  `overrides` attribute of `kotoba_content/1`. A caller's override of a
+  node replaces the configured one.
+
+The render options reach the override (`opts`): give it the data it
+needs there, for example `kotoba_content`'s `opts={[site: :public]}`. The
+cached HTML is used only when `kotoba_content` has no `overrides` and no
+`opts`.
+
+An override's HTML is not sanitized again: render the app's data with
+HEEx (`~H`) or `Kotoba.Renderer.tag/3`, which escape it.
+
 ## After a change of the registry
 
 The cached HTML stays as it was rendered. After a change of your node
-registry (`config :kotoba, nodes:`), of a node's `render_html/2`, or of
+registry (`config :kotoba, nodes:`), of a node's `render_html/2`, of the
+configured overrides (`config :kotoba, overrides:`), or of
 `config :kotoba, allowed_link_schemes:`, render the stored rows again with
 `Kotoba.Content.rerender/2`. See the [Known limits](limits.md) guide.

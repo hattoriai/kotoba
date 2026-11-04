@@ -1186,6 +1186,39 @@ div.kotoba-unknown {
   display: none;
 }
 
+/* The suggestions of the app's extensions, under the input. */
+.kotoba-link-form:has(.kotoba-link-suggestions:not([hidden])) {
+  flex-wrap: wrap;
+  min-width: min(22rem, 100%);
+}
+
+.kotoba-link-suggestions {
+  flex-basis: 100%;
+  padding: 0;
+}
+
+.kotoba-link-suggestions[hidden] {
+  display: none;
+}
+
+.kotoba-link-suggestion {
+  justify-content: flex-start;
+  align-items: center;
+}
+
+.kotoba-link-suggestion-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.kotoba-link-suggestion-label,
+.kotoba-link-suggestion-detail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .kotoba-link-input:focus-visible,
 .kotoba-link-apply:focus-visible,
 .kotoba-link-remove:focus-visible {
