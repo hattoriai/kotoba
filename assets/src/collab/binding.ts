@@ -1,6 +1,6 @@
 import type { LexicalNode, PointType, SerializedLexicalNode } from "lexical";
 import type { CollaborationHost, EditorPoint } from "../collaboration";
-import { apply, atomLocation, findAtom, children, clone, equal, spans, textAttrs, visibleAtoms, uuid, TEXT_TYPES, type Attrs, type Atom, type Operation, type State, type WireNode } from "./model";
+import { apply, atomLocation, defined, findAtom, children, clone, equal, spans, textAttrs, visibleAtoms, uuid, TEXT_TYPES, type Attrs, type Atom, type Operation, type State, type WireNode } from "./model";
 
 /** The nodes that stay in this browser (protocol.ts): never shared. */
 const LOCAL_TYPES: ReadonlySet<string> = new Set(["kotoba-upload", "kotoba-pending"]);
@@ -100,6 +100,15 @@ export class Binding {
     return { node: ref.id, before };
   }
 
+  /**
+   * Forgets which shared node each editor node is. The next capture reads
+   * the editor as new nodes, matched to the document by their text only: the
+   * way back when the editor and its map of the document disagree.
+   */
+  forget(): void {
+    this.refs = new Map();
+  }
+
   /** Read edits as semantic transactions, with origin-aware inverse operations. */
   capture(state: State): Change | null {
     if (this.rendering) return null;
@@ -182,7 +191,7 @@ export class Binding {
     const json = node.exportJSON() as unknown as WireNode;
     const persistent = id ?? this.refs.get(node.getKey())?.id ?? uuid();
     used.add(persistent);
-    const data = { ...json };
+    const data = defined(json as unknown as Attrs);
     delete data.children;
     const view: ViewNode = { id: persistent, data, element: this.host.api.lexical.$isElementNode(node), key: node.getKey(), children: [] };
     if (!this.host.api.lexical.$isElementNode(node)) return view;

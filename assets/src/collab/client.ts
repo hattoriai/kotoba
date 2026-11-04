@@ -104,7 +104,8 @@ class Client implements Collaboration {
     const api = this.host.api.lexical;
     this.cleanups.push(this.host.editor.registerUpdateListener(({ tags, dirtyElements, dirtyLeaves }) => {
       if (tags.has(COLLAB_TAG) || !this.view || this.readonly || (dirtyElements.size === 0 && dirtyLeaves.size === 0)) return;
-      const change = this.binding.capture(this.view);
+      const change = this.capture(this.view);
+      if (change === false) return;
       if (!change) { this.awareness(); return; }
       const isTyping = (op: Operation): boolean => op.op === "insert_text" || op.op === "text_visibility" || (op.op === "insert_node" && op.data.type === "text") || op.op === "set_attrs";
       const typing = change.forward.some(op => op.op === "insert_text") && change.forward.every(isTyping);
@@ -195,6 +196,26 @@ class Client implements Collaboration {
     this.people();
     this.updateStatus();
     this.awareness();
+  }
+
+  // The editor's edit as a change of the document. When the binding's map of
+  // the document no longer fits it (a node it knows was deleted), the edit is
+  // read again as new nodes; when that fails too, the editor stops and keeps
+  // the draft, and says so: an edit is never left out of the document silently.
+  private capture(view: State): Change | null | false {
+    try {
+      return this.binding.capture(view);
+    } catch (error) {
+      console.warn("Kotoba collaboration: the edit is read again.", error);
+    }
+    try {
+      this.binding.forget();
+      return this.binding.capture(view);
+    } catch (error) {
+      console.error("Kotoba collaboration: the edit could not be read.", error);
+      this.fail("Your last edit could not be shared. Your local draft is preserved.");
+      return false;
+    }
   }
 
   private roomStatus(status: string, reason?: string): void {

@@ -34,13 +34,22 @@ export const children = (state: State, id: string): string[] => (state.orders[id
 export const visibleAtoms = (state: State, id: string): Atom[] => (state.texts[id] ?? []).filter(atom => !atom.deleted && !atom.moved_to);
 
 export function textAttrs(node: Attrs): Attrs {
-  const attrs = { ...node };
+  const attrs = defined(node);
   delete attrs.text;
   delete attrs.children;
   delete attrs.format;
   const format = typeof node.format === "number" ? node.format : 0;
   MARKS.forEach((mark, bit) => { attrs[mark] = (format & (1 << bit)) !== 0; });
   return attrs;
+}
+
+/**
+ * The attributes, with `null` in place of `undefined`: Lexical exports a
+ * value it does not have as `undefined` (a code token with no highlight), and
+ * JSON has no `undefined`. An attribute that is gone is `null` in the model.
+ */
+export function defined(attrs: Attrs): Attrs {
+  return Object.fromEntries(Object.entries(attrs).map(([key, value]) => [key, value === undefined ? null : value]));
 }
 
 export function textJSON(attrs: Attrs, text: string): WireNode {
