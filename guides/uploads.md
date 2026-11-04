@@ -74,6 +74,39 @@ the document was posted.
 When the check or the adapter fails, it logs a warning and removes the
 marker.
 
+## In a shared editor
+
+In a shared editor (`issho`), give `consume_uploads/4` the editor's
+`issho` option too:
+
+```elixir
+defp handle_progress(:attachments, %{done?: true}, socket) do
+  {:noreply,
+   Kotoba.Live.consume_uploads(socket, :attachments, "post-body",
+     issho: socket.assigns.issho
+   )}
+end
+```
+
+Then the server puts each upload in the shared document, in the step that
+stores its file, as an agent's `attach_file` does. The browser only says
+where its marker is, and removes the marker. So an upload is in the
+document even when the browser could not share it, and every person in the
+document sees it at once. When the upload cannot go in the document, its
+file is deleted, and no stored file is left that no document points to.
+
+* The file goes after the top-level block that held its marker (after
+  the whole paragraph, not in it, as `attach_file` does), or in its
+  gallery. Images handed in together keep their order.
+* When that block or gallery is gone, it goes at the end of the document.
+* The files go up once the server has the markers' blocks, which go
+  through Issho's socket.
+* Add `:author` to `issho` (your user, as for `Kotoba.Issho.change/4`) to
+  make the change the person's; it is `"server"` otherwise.
+
+Without `:issho`, the node goes in through the browser, as in an editor
+that is not shared.
+
 ## What Kotoba checks
 
 The size limit and the accepted extensions are the ones of

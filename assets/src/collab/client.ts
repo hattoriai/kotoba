@@ -302,6 +302,17 @@ class Client implements Collaboration {
     this.host.editor.dispatchCommand(api.CAN_REDO_COMMAND, canRedo);
   }
 
+  // Once the server has every change of this editor: an upload then names
+  // only nodes the server has. At most a few seconds, and at once offline.
+  async settled(): Promise<void> {
+    const doc = this.doc;
+    if (!doc || !this.connected || this.failure) return;
+    doc.flush();
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const late = new Promise<void>(resolve => { timer = setTimeout(resolve, 3000); });
+    try { await Promise.race([doc.settled(), late]); } catch { /* The upload goes anyway. */ } finally { clearTimeout(timer); }
+  }
+
   // The revision with every change of this editor, once the server has accepted them all.
   async flush(): Promise<{ epoch: string; revision: number }> {
     const doc = this.doc;

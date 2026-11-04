@@ -56,6 +56,34 @@ interface UploadOptions {
   /** The LiveView file input, or `null` when the editor takes no uploads. */
   target: HTMLInputElement | null;
   announce(message: string): void;
+  /**
+   * In a shared editor, the shared id of an editor node (or `null`): each
+   * upload then tells the server where its marker is, and the server puts
+   * it in the shared document (`Kotoba.Live.consume_uploads/4`'s `:issho`).
+   */
+  idOf?(key: NodeKey): string | null;
+  /** In a shared editor, resolves when the server has the editor's changes. */
+  settled?(): Promise<void>;
+}
+
+/**
+ * Where a marker is, in shared ids: in a gallery, after the item before
+ * it; else after the top-level block that holds it. `null` out of a shared
+ * editor, or when the marker is gone.
+ */
+function $sharedPlace(key: NodeKey, idOf: (key: NodeKey) => string | null): Record<string, unknown> | null {
+  const marker = $getNodeByKey(key);
+  if (!$isUploadMarkerNode(marker) || !marker.isAttached()) return null;
+  const parent = marker.getParent();
+  if ($isGalleryNode(parent)) {
+    let previous = marker.getPreviousSibling();
+    while (previous !== null && $isUploadMarkerNode(previous)) previous = previous.getPreviousSibling();
+    const gallery = idOf(parent.getKey());
+    if (gallery === null) return { parent: null, after: null, first: false };
+    return { parent: gallery, after: previous === null ? null : idOf(previous.getKey()), first: previous === null };
+  }
+  const top = marker.getTopLevelElement();
+  return { parent: null, after: top === null ? null : idOf(top.getKey()), first: false };
 }
 
 /** Inserts a node at the selection, or at the end of the document. */
@@ -166,10 +194,33 @@ export function createUploads(editor: LexicalEditor, options: UploadOptions): Up
           if (marker !== undefined) markers.push({ key: marker.getKey(), file });
         }
       },
-      { tag: "history-merge" },
+      // At once: a shared editor shares the markers' blocks before the
+      // files tell the server where they go.
+      { tag: "history-merge", discrete: true },
     );
 
-    target.dispatchEvent(new CustomEvent("track-uploads", { bubbles: true, detail: { files } }));
+    const { idOf } = options;
+    if (idOf !== undefined) {
+      const batch = crypto.randomUUID();
+      files.forEach((file, index) => {
+        const key = markers.find((marker) => marker.file === file)?.key;
+        if (key === undefined) return;
+        // LiveView reads it when it sends the file (UploadEntry's client_meta).
+        (file as File & { meta?: () => unknown }).meta = () => {
+          let place: Record<string, unknown> | null = null;
+          editor.getEditorState().read(() => {
+            place = $sharedPlace(key, idOf);
+          });
+          return place === null ? {} : { kotoba: { ...(place as Record<string, unknown>), batch, index } };
+        };
+      });
+    }
+
+    // In a shared editor, the files go once the server has their markers'
+    // blocks, which go through another socket: it then knows where they go.
+    const send = (): void => { target.dispatchEvent(new CustomEvent("track-uploads", { bubbles: true, detail: { files } })); };
+    if (options.settled === undefined) send();
+    else void options.settled().catch(() => undefined).then(send);
     options.announce(files.length === 1 ? `Uploading ${files[0]?.name ?? "a file"}` : `Uploading ${files.length} files`);
   };
 

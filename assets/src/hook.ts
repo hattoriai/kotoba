@@ -502,6 +502,8 @@ class Instance {
       host: this.el,
       target: features.has("attachments") ? this.config.upload : null,
       announce: this.announce,
+      idOf: (key) => this.collaboration?.idOf(key) ?? null,
+      settled: () => this.collaboration?.settled?.() ?? Promise.resolve(),
     });
 
     const existing =

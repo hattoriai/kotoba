@@ -9,7 +9,23 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [0.9.2] - 2026-11-04
 
+### Added
+
+- `Kotoba.Live.consume_uploads/4` takes `:issho`, a shared editor's
+  `issho` option: the server puts each upload in the shared document in
+  the step that stores its file, at the place of its marker, and the
+  browser only removes the marker. An upload is in the document even when
+  the browser could not share it. When it cannot go in, its file is
+  deleted. See "In a shared editor" in the Uploads guide.
+
 ### Fixed
+
+- In a shared editor, typing lines in a code block keeps them in order.
+  When the document rendered again (each accepted change does, more often
+  with someone else in it), the code highlighter split the code into
+  tokens after the render: a caret at the start of a line pointed into an
+  earlier line, and the editor's map of the document lost the caret's
+  text, so the next characters went into another line.
 
 - A shared editor no longer stops sending edits in a document where an
   agent deleted a block. The server deletes the block only, and its text

@@ -33,6 +33,8 @@ export interface Collaboration {
   keyOf(id: string): string | null;
   /** The shared id of an editor node, or `null`. */
   idOf(key: string): string | null;
+  /** Resolves when the server has this editor's changes (or after a while, or offline). */
+  settled?(): Promise<void>;
   /** A range of the editor as a shared selection (`Kotoba.Issho.Place`), in a read; `null` when it has none. */
   sharedOf?(range: { anchor: PointType; focus: PointType }): unknown;
   /** The points of the editor of a shared selection, in a read; `null` when its words are gone. */

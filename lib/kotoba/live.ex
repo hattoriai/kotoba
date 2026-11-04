@@ -424,10 +424,12 @@ defmodule Kotoba.Live do
 
   if Code.ensure_loaded?(Storehouse) do
     alias Kotoba.{Attachments, Storage}
+    alias Kotoba.Collab.Upload
     alias Phoenix.LiveView
     alias Phoenix.LiveView.{UploadConfig, UploadEntry}
 
     @consumed :kotoba_consumed_uploads
+    @placed :kotoba_placed_uploads
 
     @doc """
     Stores the finished uploads of `upload_name` and puts an attachment node
@@ -463,6 +465,16 @@ defmodule Kotoba.Live do
       * `:key` - a function of the upload entry and the checked content
         type that returns a storage key. The default is
         `&Storehouse.key(&1.client_name, &2)`.
+      * `:issho` - the `issho` option of a shared editor (`:instance` and
+        `:document`, and `:author`, who uploads, an actor or a key: `"server"`
+        unless given). Each upload goes in the shared document from the
+        server, in the step that stored its file, at the place of its
+        marker (after the top-level block that holds it, or in its gallery),
+        and the marker is removed: an upload is in the document even when
+        the browser could not share it. When it cannot go in, its file is
+        deleted, a warning is logged and the marker is removed. Without
+        `:issho`, or from an editor that is not shared, the node goes in
+        through the browser, with `insert_node/4`.
       * `:preview` - a function of the stored attachment
         (`Kotoba.Nodes.Attachment`) and the path of the uploaded file that
         returns the URL of a preview image, or `nil`: the first page of a
@@ -507,7 +519,7 @@ defmodule Kotoba.Live do
 
         case result do
           {:ok, attachment} ->
-            insert_node(socket, editor_id, attachment, ref: entry.ref)
+            place(socket, editor_id, entry, attachment, storage, opts[:issho])
 
           {:error, reason} ->
             Logger.warning(
@@ -518,6 +530,65 @@ defmodule Kotoba.Live do
         end
       end)
     end
+
+    # A shared editor's upload goes in the shared document from here, where
+    # its file was stored (Kotoba.Collab.Upload): the browser only removes
+    # its marker. Another editor's goes in through the browser.
+    defp place(socket, editor_id, entry, attachment, storage, issho) do
+      case shared_place(issho, entry) do
+        nil ->
+          insert_node(socket, editor_id, attachment, ref: entry.ref)
+
+        place ->
+          key = {@placed, editor_id, place["batch"]}
+          placed = Map.get(socket.private, key, %{})
+
+          case insert_shared(issho, attachment, place, placed) do
+            {:ok, id} ->
+              placed = Map.put(placed, place["index"], id)
+
+              %{socket | private: Map.put(socket.private, key, placed)}
+              |> remove_marker(editor_id, entry.ref)
+
+            {:error, reason} ->
+              Logger.warning(
+                "Kotoba: the upload #{inspect(entry.client_name)} could not be put in the shared document: #{inspect(reason)}"
+              )
+
+              # Not in the document: no file is left that it does not point to.
+              delete_stored(storage, attachment.key)
+              remove_marker(socket, editor_id, entry.ref)
+          end
+      end
+    end
+
+    # The insert, as a result: a document that does not answer in time, or
+    # an error in it, does not leave the stored file behind.
+    defp insert_shared(issho, attachment, place, placed) do
+      Upload.insert(issho, attachment, place, placed)
+    rescue
+      error -> {:error, error}
+    catch
+      :exit, reason -> {:error, {:exit, reason}}
+    end
+
+    defp delete_stored(storage, key) do
+      case storage.delete(key) do
+        :ok ->
+          :ok
+
+        {:error, reason} ->
+          Logger.error(
+            "Kotoba: the file #{inspect(key)} is in no document and could not be deleted: #{inspect(reason)}"
+          )
+      end
+    end
+
+    defp shared_place([_ | _] = _issho, %UploadEntry{client_meta: meta}) when is_map(meta) do
+      if Code.ensure_loaded?(Upload), do: Upload.place(meta)
+    end
+
+    defp shared_place(_issho, _entry), do: nil
 
     defp entries(socket, upload_name) do
       case socket.assigns[:uploads] do
