@@ -1,6 +1,11 @@
 // The link form: `Cmd/Ctrl+K` or the toolbar's link button opens it for the
 // selected text. Enter applies the URL, an empty URL removes the link, and
 // Escape closes the form.
+//
+// Extensions (`link` in extensions.ts) can list suggestions under the input
+// for the text typed (not for a URL): the input is then a combobox, the
+// arrow keys move in the list, and Enter applies the suggestion. Or an
+// extension opens a form of its own in place of this one.
 
 import { $isLinkNode, $toggleLink } from "@lexical/link";
 import { $findMatchingParent } from "@lexical/utils";
@@ -19,6 +24,7 @@ import {
   type RangeSelection,
 } from "lexical";
 
+import type { LinkRequest, LinkSuggestion } from "./extensions";
 import { isAllowedLinkUrl, normalizeUrl } from "./links";
 
 export interface LinkForm {
@@ -31,6 +37,29 @@ interface LinkOptions {
   linkSchemes: readonly string[];
   idPrefix: string;
   announce(message: string): void;
+  /** The `link` of the editor's extensions, in order, with their context. */
+  extensions?: readonly LinkHooks[];
+}
+
+/** The time between the last key and the request for suggestions, in milliseconds. */
+const SUGGEST_DELAY = 150;
+/** The most suggestions that the list shows. */
+const SUGGEST_LIMIT = 10;
+
+// A URL, not words to search: a scheme, a path, a fragment or a query, or a
+// host name (`example.com`, `example.com/docs`).
+const URL_LIKE = /^(?:[a-z][a-z0-9+.-]*:|[/#?]|[^\s/]+\.[a-z]{2,}(?:[/?#:]|$))/i;
+
+/** An extension's `link`, bound to its context. */
+export interface LinkHooks {
+  suggest?(query: string): readonly LinkSuggestion[] | Promise<readonly LinkSuggestion[]>;
+  open?(request: LinkRequest): boolean;
+}
+
+interface SelectionState {
+  collapsed: boolean;
+  url: string | null;
+  text: string;
 }
 
 /** Reads the URL of the link at the selection, or `null`. */
@@ -73,8 +102,125 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
   remove.className = "kotoba-link-remove";
   remove.textContent = "Remove";
 
-  form.append(label, input, apply, remove);
+  const suggesters = (options.extensions ?? []).flatMap((hooks) => (hooks.suggest === undefined ? [] : [hooks.suggest]));
+  const openers = (options.extensions ?? []).flatMap((hooks) => (hooks.open === undefined ? [] : [hooks.open]));
+
+  // The suggestions: a listbox under the input, which is its combobox.
+  const list = document.createElement("ul");
+  list.id = `${options.idPrefix}-link-suggestions`;
+  list.className = "kotoba-menu-list kotoba-link-suggestions";
+  list.setAttribute("role", "listbox");
+  list.setAttribute("aria-label", "Suggestions");
+  list.hidden = true;
+
+  if (suggesters.length > 0) {
+    label.textContent = "Link";
+    input.placeholder = "Paste a link or search";
+    input.setAttribute("role", "combobox");
+    input.setAttribute("aria-autocomplete", "list");
+    input.setAttribute("aria-expanded", "false");
+    input.setAttribute("aria-controls", list.id);
+  }
+
+  form.append(label, input, apply, remove, list);
   options.host.append(form);
+
+  let suggestions: LinkSuggestion[] = [];
+  let active = -1;
+  let asked = 0;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+
+  const setActive = (index: number): void => {
+    active = index;
+    list.querySelectorAll<HTMLElement>("[role=option]").forEach((option, i) => {
+      option.setAttribute("aria-selected", String(i === index));
+      if (i === index) option.scrollIntoView({ block: "nearest" });
+    });
+    if (index === -1) input.removeAttribute("aria-activedescendant");
+    else input.setAttribute("aria-activedescendant", `${list.id}-${index}`);
+  };
+
+  const clearSuggestions = (): void => {
+    asked += 1;
+    clearTimeout(timer);
+    suggestions = [];
+    list.replaceChildren();
+    list.hidden = true;
+    input.setAttribute("aria-expanded", "false");
+    setActive(-1);
+  };
+
+  const showSuggestions = (query: string, found: LinkSuggestion[]): void => {
+    suggestions = found.slice(0, SUGGEST_LIMIT);
+    list.replaceChildren(
+      ...suggestions.map((suggestion, index) => {
+        const option = document.createElement("li");
+        option.id = `${list.id}-${index}`;
+        option.className = "kotoba-menu-option kotoba-link-suggestion";
+        option.setAttribute("role", "option");
+        option.setAttribute("aria-selected", "false");
+        option.dataset.url = suggestion.url;
+        if (suggestion.icon !== undefined) {
+          const icon = document.createElement("span");
+          icon.className = "kotoba-menu-icon";
+          icon.setAttribute("aria-hidden", "true");
+          try {
+            icon.append(suggestion.icon());
+            option.append(icon);
+          } catch (error) {
+            console.error("Kotoba: the icon of a link suggestion failed", error);
+          }
+        }
+        const text = document.createElement("span");
+        text.className = "kotoba-link-suggestion-text";
+        const name = document.createElement("span");
+        name.className = "kotoba-link-suggestion-label";
+        name.textContent = suggestion.label;
+        text.append(name);
+        if (suggestion.detail !== undefined && suggestion.detail !== "") {
+          const detail = document.createElement("span");
+          detail.className = "kotoba-menu-hint kotoba-link-suggestion-detail";
+          detail.textContent = suggestion.detail;
+          text.append(detail);
+        }
+        option.append(text);
+        return option;
+      }),
+    );
+    const open = suggestions.length > 0;
+    list.hidden = !open;
+    input.setAttribute("aria-expanded", String(open));
+    // Words select the first suggestion, so Enter takes it; a URL does not.
+    setActive(open && !URL_LIKE.test(query) ? 0 : -1);
+    options.announce(open ? `${suggestions.length} suggestion${suggestions.length === 1 ? "" : "s"}` : "No suggestions");
+  };
+
+  const suggest = (): void => {
+    const query = input.value.trim();
+    if (suggesters.length === 0) return;
+    if (query === "" || /^[a-z][a-z0-9+.-]*:|^[/#?]/i.test(query)) {
+      clearSuggestions();
+      return;
+    }
+    asked += 1;
+    const ask = asked;
+    clearTimeout(timer);
+    timer = setTimeout(() => {
+      void Promise.all(
+        suggesters.map(async (suggester) => {
+          try {
+            const found = await suggester(query);
+            return Array.isArray(found) ? found.filter(isSuggestion) : [];
+          } catch (error) {
+            console.error("Kotoba: link suggestions failed", error);
+            return [];
+          }
+        }),
+      ).then((lists) => {
+        if (ask === asked && !form.hidden) showSuggestions(query, lists.flat());
+      });
+    }, SUGGEST_DELAY);
+  };
 
   // The selection when the form opened. The link goes on it, even when the
   // editor's selection changed while the focus was in the form.
@@ -82,6 +228,7 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
 
   const close = (): void => {
     form.hidden = true;
+    clearSuggestions();
     kept = null;
     editor.focus();
   };
@@ -101,20 +248,51 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
 
   // Reads the selection for the form, in an update. The link goes on this
   // selection when the user applies the URL.
-  const $readSelection = (): { collapsed: boolean; url: string | null } | null => {
+  const $readSelection = (): SelectionState | null => {
     const selection = $domSelection(editor) ?? $getSelection();
     if (!$isRangeSelection(selection)) return null;
     kept = selection.clone();
-    return { collapsed: selection.isCollapsed(), url: $selectedLinkUrl(selection) };
+    return { collapsed: selection.isCollapsed(), url: $selectedLinkUrl(selection), text: selection.getTextContent() };
   };
 
-  const show = (state: { collapsed: boolean; url: string | null } | null): void => {
+  // An extension's own form: it gets the selection of this request, which
+  // its `apply` keeps.
+  const openOwn = (state: SelectionState): boolean => {
+    if (openers.length === 0) return false;
+    const selection = kept;
+    let done = false;
+    const request: LinkRequest = {
+      url: state.url,
+      text: state.text,
+      apply: (url) => {
+        if (done) return false;
+        const normal = url === null ? "" : normalizeUrl(url);
+        if (normal !== "" && !isAllowedLinkUrl(normal, options.linkSchemes)) return false;
+        done = true;
+        kept = selection;
+        toggle(normal === "" ? null : normal);
+        return true;
+      },
+    };
+    for (const opener of openers) {
+      try {
+        if (opener(request) === true) return true;
+      } catch (error) {
+        console.error("Kotoba: an extension's link form failed", error);
+      }
+    }
+    return false;
+  };
+
+  const show = (state: SelectionState | null): void => {
     if (state === null || (state.collapsed && state.url === null)) {
       kept = null;
       options.announce("Select text to make a link");
       return;
     }
+    if (openOwn(state)) return;
 
+    clearSuggestions();
     input.value = state.url ?? "";
     remove.hidden = state.url === null;
     form.hidden = false;
@@ -126,7 +304,7 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
   // From the toolbar: outside an update.
   const open = (): void => {
     if (!editor.isEditable()) return;
-    let state = null as { collapsed: boolean; url: string | null } | null;
+    let state = null as SelectionState | null;
     editor.update(
       () => {
         state = $readSelection();
@@ -137,7 +315,8 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
   };
 
   const submit = (): void => {
-    const url = normalizeUrl(input.value);
+    const chosen = active === -1 ? undefined : suggestions[active];
+    const url = normalizeUrl(chosen?.url ?? input.value);
     if (url === "") {
       toggle(null);
     } else if (isAllowedLinkUrl(url, options.linkSchemes)) {
@@ -149,10 +328,21 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
   };
 
   const onKeyDown = (event: KeyboardEvent): void => {
-    if (event.key === "Escape") {
+    if (event.key === "Escape" && !list.hidden) {
+      // The first Escape closes the list, the second the form.
+      event.preventDefault();
+      event.stopPropagation();
+      clearSuggestions();
+    } else if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
       close();
+    } else if ((event.key === "ArrowDown" || event.key === "ArrowUp") && event.target === input && suggestions.length > 0) {
+      event.preventDefault();
+      const step = event.key === "ArrowDown" ? 1 : -1;
+      const count = suggestions.length;
+      // From none, Down goes to the first and Up to the last.
+      setActive(active === -1 ? (step === 1 ? 0 : count - 1) : (active + step + count) % count);
     } else if (event.key === "Enter" && event.target === input) {
       // Enter in the input would otherwise submit the app's form.
       event.preventDefault();
@@ -163,7 +353,21 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
 
   // The input has no name, but its events would still reach the app's form
   // (a phx-change with an empty target).
-  const onInput = (event: Event): void => event.stopPropagation();
+  const onInput = (event: Event): void => {
+    event.stopPropagation();
+    if (event.type === "input") suggest();
+  };
+
+  // A press on a suggestion keeps the focus in the input; the click applies it.
+  const onListPointerDown = (event: PointerEvent): void => event.preventDefault();
+  const onListClick = (event: MouseEvent): void => {
+    const option = (event.target as Element | null)?.closest<HTMLElement>("[role=option]");
+    if (option === null || option === undefined) return;
+    const index = [...list.children].indexOf(option);
+    if (index === -1) return;
+    setActive(index);
+    submit();
+  };
 
   const onRemove = (): void => toggle(null);
 
@@ -178,6 +382,8 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
   form.addEventListener("keydown", onKeyDown);
   form.addEventListener("focusout", onFocusOut);
   remove.addEventListener("click", onRemove);
+  list.addEventListener("pointerdown", onListPointerDown);
+  list.addEventListener("click", onListClick);
 
   const unregister = mergeRegister(
     editor.registerCommand(
@@ -206,9 +412,25 @@ export function createLinkForm(editor: LexicalEditor, options: LinkOptions): Lin
       form.removeEventListener("keydown", onKeyDown);
       form.removeEventListener("focusout", onFocusOut);
       remove.removeEventListener("click", onRemove);
+      list.removeEventListener("pointerdown", onListPointerDown);
+      list.removeEventListener("click", onListClick);
+      clearTimeout(timer);
       form.remove();
     },
   };
+}
+
+function isSuggestion(value: unknown): value is LinkSuggestion {
+  if (typeof value !== "object" || value === null) return false;
+  const suggestion = value as Record<string, unknown>;
+  return (
+    typeof suggestion.url === "string" &&
+    suggestion.url !== "" &&
+    typeof suggestion.label === "string" &&
+    suggestion.label.trim() !== "" &&
+    (suggestion.detail === undefined || typeof suggestion.detail === "string") &&
+    (suggestion.icon === undefined || typeof suggestion.icon === "function")
+  );
 }
 
 // Lexical reads a change of the DOM selection a moment after it happens, so

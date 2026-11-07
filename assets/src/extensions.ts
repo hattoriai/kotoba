@@ -17,12 +17,21 @@
 //       register(editor, context) { return editor.registerCommand(...) },
 //     })
 //
-// The default export is called with the editor's copies of `lexical`,
-// `@lexical/utils` and `@lexical/selection`, once for each editor, so that
-// two editors do not share the state of an extension. It returns one
-// extension or a list of them. (A Markdown shortcut is a plain object: it
-// needs only the types of `@lexical/markdown`. The API leaves the package
-// out, which keeps it out of the bundle.)
+// The default export is called with the editor's copies of `lexical` and of
+// the Lexical packages the editor is made with (see `ExtensionAPI`), once
+// for each editor, so that two editors do not share the state of an
+// extension. It returns one extension or a list of them. (A Markdown
+// shortcut is a plain object: it needs only the types of
+// `@lexical/markdown`.)
+//
+// An extension can also change what the editor has already:
+//
+//   * `link`: suggestions in the link form, or a link form of its own;
+//   * a built-in node: its own state on it (Lexical's NodeState,
+//     `lexical.createState`), kept in the JSON under `"$"`, and its DOM
+//     (a mutation listener of the node class, `api.nodes`), with the server
+//     half in a `Kotoba.Node.Override`;
+//   * text marks: an inline element node over the text (`api.inline`).
 //
 // Order: the built-in features first, then the app's extensions in the order
 // of `data-extensions`. Every `register` runs before the document loads, and
@@ -34,13 +43,26 @@
 // taken and a `register` that throws are logged, and the rest of the
 // editor mounts.
 
+import * as code from "@lexical/code-core";
+import * as link from "@lexical/link";
+import * as list from "@lexical/list";
+import * as mark from "@lexical/mark";
 import { registerMarkdownShortcuts, type Transformer } from "@lexical/markdown";
+import * as richText from "@lexical/rich-text";
 import * as selection from "@lexical/selection";
+import * as table from "@lexical/table";
 import * as utils from "@lexical/utils";
 import * as lexical from "lexical";
 import type { ElementNode, Klass, LexicalEditor, LexicalNode } from "lexical";
 
+import * as inline from "./inline";
+import { AttachmentNode } from "./nodes/attachment";
 import { isNodeClass } from "./nodes/custom";
+import { EmbedNode } from "./nodes/embed";
+import { FootnoteDefinitionNode, FootnoteReferenceNode } from "./nodes/footnote";
+import { GalleryNode } from "./nodes/gallery";
+import { ImageNode } from "./nodes/image";
+import { MentionNode } from "./nodes/mention";
 
 /** A button of the toolbar, from an extension. */
 export interface ToolbarControl {
@@ -114,6 +136,52 @@ export interface ExtensionContext {
    * Returns the suggestion's ref, or `null` when the editor has no `assist`.
    */
   assist(action: string, detail?: Record<string, unknown>): string | null;
+  /**
+   * Pushes an event to the LiveView, as `push`, and resolves with its
+   * reply (`{:reply, map, socket}`). It rejects when the editor is
+   * destroyed first or the LiveView does not reply in 10 seconds.
+   */
+  request(event: string, payload: Record<string, unknown>): Promise<unknown>;
+}
+
+/** A suggestion of the link form: a link to something of the app. */
+export interface LinkSuggestion {
+  /** The URL that the link gets. */
+  url: string;
+  /** What the list shows, and its accessible name. */
+  label: string;
+  /** A second line: a path, a kind, a date. */
+  detail?: string;
+  /** The icon: an element for the item. */
+  icon?: () => Element;
+}
+
+/** What the link form is asked for: the Link button, Cmd/Ctrl+K or the link card's Edit. */
+export interface LinkRequest {
+  /** The URL of the link at the selection, or `null`. */
+  url: string | null;
+  /** The selected text. */
+  text: string;
+  /**
+   * Puts the link on the selection of the request (or removes it, with
+   * `null`), and gives the focus back to the editor. A URL that the
+   * editor's link schemes refuse is not applied: it returns `false`.
+   */
+  apply(url: string | null): boolean;
+}
+
+/** What an extension does with the link form. */
+export interface LinkExtension {
+  /**
+   * Suggestions for the text typed in the form (not for a URL). The form
+   * lists the suggestions of every extension, in order, under the input.
+   */
+  suggest?(query: string, context: ExtensionContext): readonly LinkSuggestion[] | Promise<readonly LinkSuggestion[]>;
+  /**
+   * A form of its own. It returns `true` when it opened it; then Kotoba's
+   * form does not open. The first extension that returns `true` has it.
+   */
+  open?(request: LinkRequest, context: ExtensionContext): boolean;
 }
 
 export interface KotobaExtension {
@@ -127,6 +195,8 @@ export interface KotobaExtension {
   blocks?: readonly BlockSpec[];
   /** Items of the insert menu. A block with a label and `create` is one already. */
   insert?: readonly InsertControl[];
+  /** Suggestions in the link form, or a link form of its own. */
+  link?: LinkExtension;
   /** Registers the extension's behaviour. Returns its cleanup. */
   register?(editor: LexicalEditor, context: ExtensionContext): (() => void) | void;
 }
@@ -138,16 +208,60 @@ export interface ResolvedControl extends ToolbarControl {
   group: string;
 }
 
-/** What the default export of an extension module gets. */
+/** Kotoba's own node classes, for a mutation listener, a transform or `instanceof`. */
+export const KOTOBA_NODES = {
+  AttachmentNode,
+  GalleryNode,
+  ImageNode,
+  MentionNode,
+  EmbedNode,
+  FootnoteReferenceNode,
+  FootnoteDefinitionNode,
+} as const;
+
+/**
+ * What the default export of an extension module gets: the editor's copies
+ * of Lexical and its packages (a class must extend these, not a copy of its
+ * own), Kotoba's own node classes, and the inline element functions.
+ */
 export interface ExtensionAPI {
   lexical: typeof lexical;
   utils: typeof utils;
   selection: typeof selection;
+  /** `@lexical/link`: LinkNode, AutoLinkNode, $toggleLink... */
+  link: typeof link;
+  /** `@lexical/list`. */
+  list: typeof list;
+  /** `@lexical/table`. */
+  table: typeof table;
+  /** `@lexical/rich-text`: HeadingNode, QuoteNode... */
+  richText: typeof richText;
+  /** `@lexical/code-core`: CodeNode, CodeHighlightNode... */
+  code: typeof code;
+  /** `@lexical/mark`: MarkNode, $wrapSelectionInMarkNode... */
+  mark: typeof mark;
+  /** Kotoba's own node classes. */
+  nodes: typeof KOTOBA_NODES;
+  /** An inline element over the selected text: `$toggle` and `$isActive` (see inline.ts). */
+  inline: typeof inline;
   /** The version of this contract. */
   version: 1;
 }
 
-export const EXTENSION_API: ExtensionAPI = { lexical, utils, selection, version: 1 };
+export const EXTENSION_API: ExtensionAPI = {
+  lexical,
+  utils,
+  selection,
+  link,
+  list,
+  table,
+  richText,
+  code,
+  mark,
+  nodes: KOTOBA_NODES,
+  inline,
+  version: 1,
+};
 
 const NAME = /^[a-z][a-z0-9-]*$/;
 
@@ -235,7 +349,21 @@ export function checkExtension(value: unknown, source: string): KotobaExtension 
     insert.push(item as unknown as InsertControl);
   }
 
-  return { ...(value as unknown as KotobaExtension), toolbar, blocks, insert };
+  let linkSpec: LinkExtension | undefined;
+  if (value.link !== undefined) {
+    const spec = value.link;
+    if (
+      !isObject(spec) ||
+      (spec.suggest !== undefined && typeof spec.suggest !== "function") ||
+      (spec.open !== undefined && typeof spec.open !== "function")
+    ) {
+      console.error(`Kotoba: the link of the extension "${name}" is not an object with suggest and open functions`);
+    } else {
+      linkSpec = spec as unknown as LinkExtension;
+    }
+  }
+
+  return { ...(value as unknown as KotobaExtension), toolbar, blocks, insert, link: linkSpec };
 }
 
 /** Loads the app's extension modules. */

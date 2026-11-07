@@ -96,7 +96,9 @@ import {
   markdownTransformers,
   registerExtensions,
   EXTENSION_API,
+  type ExtensionContext,
   type KotobaExtension,
+  type LinkRequest,
 } from "./extensions";
 import { type Feature, builtInExtensions, parseFeatures } from "./features";
 import { attachBlockHandles } from "./blocks";
@@ -264,6 +266,8 @@ function asState(root: JSONNode): SerializedEditorState {
 
 /** An update with this tag came from the server; it is not pushed back. */
 const REMOTE_TAG = "kotoba-remote";
+// How long an extension's request waits for the LiveView's reply, in milliseconds.
+const REQUEST_TIMEOUT = 10_000;
 
 let instances = 0;
 
@@ -410,15 +414,15 @@ class Instance {
     surface.append(editable, placeholder);
     this.el.append(surface, this.live);
 
-    this.cleanups.push(
-      registerExtensions(editor, extensions, {
-        id: this.id,
-        element: this.el,
-        announce: this.announce,
-        push: (event, payload) => this.push(event, { ...payload, v: PROTOCOL_VERSION, id: this.id }),
-        assist: (action, detail) => this.suggestions?.request(action, detail) ?? null,
-      }),
-    );
+    const context: ExtensionContext = {
+      id: this.id,
+      element: this.el,
+      announce: this.announce,
+      push: (event, payload) => this.push(event, { ...payload, v: PROTOCOL_VERSION, id: this.id }),
+      assist: (action, detail) => this.suggestions?.request(action, detail) ?? null,
+      request: (event, payload) => this.request(event, { ...payload, v: PROTOCOL_VERSION, id: this.id }),
+    };
+    this.cleanups.push(registerExtensions(editor, extensions, context));
 
     // Embeds: their slots, which the editor's Kotoba.Embeds component fills.
     // The slots of deleted embeds wait in an element LiveView leaves alone.
@@ -495,6 +499,16 @@ class Instance {
         linkSchemes: this.config.linkSchemes,
         idPrefix: this.id,
         announce: this.announce,
+        extensions: extensions.flatMap(({ link }) =>
+          link === undefined
+            ? []
+            : [
+                {
+                  suggest: link.suggest === undefined ? undefined : (query: string) => link.suggest!(query, context),
+                  open: link.open === undefined ? undefined : (request: LinkRequest) => link.open!(request, context),
+                },
+              ],
+        ),
       });
     }
     if (features.has("highlight")) this.colors = createColorMenu(editor, { host: surface, announce: this.announce });
@@ -834,10 +848,27 @@ class Instance {
     });
   }
 
-  private push(event: string, payload: object): void {
+  private push(event: string, payload: object, reply?: (payload: unknown) => void): void {
     const target = this.el.getAttribute("phx-target");
-    if (target !== null && target !== "") this.hook.pushEventTo(target, event, payload);
-    else this.hook.pushEvent(event, payload);
+    if (target !== null && target !== "") this.hook.pushEventTo(target, event, payload, reply);
+    else this.hook.pushEvent(event, payload, reply);
+  }
+
+  // An extension's request: the LiveView's reply, or a rejection when the
+  // editor is destroyed first or no reply comes in time.
+  private request(event: string, payload: object): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      if (this.destroyed) {
+        reject(new Error("Kotoba: the editor is destroyed"));
+        return;
+      }
+      const timer = setTimeout(() => reject(new Error(`Kotoba: no reply to ${event}`)), REQUEST_TIMEOUT);
+      this.push(event, payload, (reply) => {
+        clearTimeout(timer);
+        if (this.destroyed) reject(new Error("Kotoba: the editor is destroyed"));
+        else resolve(reply);
+      });
+    });
   }
 
   // LiveView builds the form data for phx-change and phx-submit with

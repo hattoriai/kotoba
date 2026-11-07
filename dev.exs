@@ -21,6 +21,8 @@
 
 Code.require_file("dev/lib/kotoba_dev/nodes/tag.ex", __DIR__)
 Code.require_file("dev/lib/kotoba_dev/nodes/callout.ex", __DIR__)
+Code.require_file("dev/lib/kotoba_dev/nodes/spoiler.ex", __DIR__)
+Code.require_file("dev/lib/kotoba_dev/overrides/links.ex", __DIR__)
 
 port = "PORT" |> System.get_env("4099") |> String.to_integer()
 watch? = System.get_env("KOTOBA_DEV_WATCH") != "false"
@@ -28,7 +30,13 @@ uploads = Path.expand("tmp/uploads", __DIR__)
 
 Application.put_env(:phoenix, :json_library, JSON)
 Logger.configure(level: :info)
-Application.put_env(:kotoba, :nodes, [KotobaDev.Nodes.Tag, KotobaDev.Nodes.Callout])
+
+Application.put_env(:kotoba, :nodes, [
+  KotobaDev.Nodes.Tag,
+  KotobaDev.Nodes.Callout,
+  KotobaDev.Nodes.Spoiler
+])
+
 Application.put_env(:kotoba, :allowed_link_schemes, ~w(http https mailto tel))
 Application.put_env(:issho, Issho.MCP, instance: KotobaDev.Issho)
 Application.put_env(:kotoba, :storage, Kotoba.Storage.Local)
@@ -1370,6 +1378,71 @@ defmodule KotobaDev.ExtensionsLive do
       {:noreply, Kotoba.Live.push_content(socket, "comment_editor", KotobaDev.Sample.document())}
 end
 
+defmodule KotobaDev.PointsLive do
+  @moduledoc """
+  The extension points, with the example extension
+  `dev/assets/js/kotoba/nodes/points.js`: page links from the link form's
+  suggestions (`dev:pages`), a link form of the extension's own, a state
+  on the built-in links, and a spoiler mark. Under the editor, the
+  document as the server renders it with `KotobaDev.Overrides.Links`.
+  """
+  use Phoenix.LiveView
+
+  import Kotoba.Components
+
+  alias KotobaDev.Overrides.Links
+
+  @impl true
+  def mount(_params, _session, socket) do
+    {:ok, assign(socket, form: to_form(%{"body" => nil}, as: :points), content: nil)}
+  end
+
+  @impl true
+  def render(assigns) do
+    ~H"""
+    <h1>Extension points</h1>
+    <.form for={@form} id="points-form">
+      <label id="points-label" class="label">Body</label>
+      <.kotoba
+        field={@form[:body]}
+        id="points_editor"
+        label_id="points-label"
+        change
+        debounce={50}
+        features={~w(bold italic links)}
+        extensions={["/assets/nodes/points.js"]}
+        selection_menu={~w(bold link points:spoiler)}
+      />
+    </.form>
+    <.kotoba_content
+      id="points-rendered"
+      content={@content}
+      overrides={[Links]}
+    />
+    """
+  end
+
+  @impl true
+  def handle_event("kotoba:change", %{"id" => "points_editor", "doc" => doc}, socket) do
+    case Kotoba.Content.cast(doc) do
+      {:ok, content} -> {:noreply, assign(socket, content: content)}
+      :error -> {:noreply, socket}
+    end
+  end
+
+  # The link form's suggestions: the pages whose title has the words.
+  def handle_event("dev:pages", %{"query" => query}, socket) do
+    words = query |> String.downcase() |> String.split()
+
+    pages =
+      for {id, title, slug} <- Links.pages(),
+          Enum.all?(words, &String.contains?(String.downcase(title), &1)),
+          do: %{url: "/pages/" <> id, label: title, detail: "/docs/" <> slug}
+
+    {:reply, %{pages: pages}, socket}
+  end
+end
+
 defmodule KotobaDev.BlocksLive do
   @moduledoc """
   The block handles (the `blocks` feature). The first editor has the
@@ -2227,6 +2300,7 @@ defmodule KotobaDev.Router do
     live("/two", KotobaDev.TwoEditorsLive)
     live("/nodes", KotobaDev.NodesLive)
     live("/extensions", KotobaDev.ExtensionsLive)
+    live("/points", KotobaDev.PointsLive)
     live("/blocks", KotobaDev.BlocksLive)
     live("/insert", KotobaDev.InsertLive)
     live("/resume", KotobaDev.ResumeLive)

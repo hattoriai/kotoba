@@ -1,5 +1,12 @@
 # Upgrading
 
+## To Kotoba 0.10
+
+Update `{:kotoba, "~> 0.10"}`. An editor's code stays as it was. What is
+new is opt-in: an extension can change what the editor has (the link
+form, a built-in node, marks over text), and a `Kotoba.Node.Override`
+renders a node in another way. See the [Extensions](extensions.md) guide.
+
 ## To Kotoba 0.9, on Issho 0.5
 
 Update `{:kotoba, "~> 0.9"}`, and `{:issho, "~> 0.5"}` for a shared

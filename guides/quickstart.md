@@ -15,7 +15,7 @@ In `mix.exs`:
 ```elixir
 def deps do
   [
-    {:kotoba, "~> 0.9"}
+    {:kotoba, "~> 0.10"}
   ]
 end
 ```
