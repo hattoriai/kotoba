@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { MOD, focusEnd, openEditor, selectBack, settle } from "./support";
 import type { State, Operation } from "../../assets/src/collab/model";
+import type { CollaborationHost } from "../../assets/src/collaboration";
 
 const editor = (page: Page) => page.locator("#shared_editor .kotoba-editable");
 const status = (page: Page) => page.locator("#shared_editor [data-collab-status]");
@@ -262,13 +263,12 @@ test("browser and authority replay the same transactions and character moves", a
   expect(mismatch).toBeNull();
 });
 
-// The operations of the transactions a page sends, from now on.
-function sentOperations(page: Page): Operation[] {
-  const sent: Operation[] = [];
+function sentTransactions(page: Page): Operation[][] {
+  const sent: Operation[][] = [];
   page.on("websocket", socket => socket.on("framesent", frame => {
     if (typeof frame.payload !== "string") return;
     const [, , topic, event, payload] = JSON.parse(frame.payload) as [string, string, string, string, { tx?: { ops: Operation[] } }];
-    if (topic.startsWith("issho:") && event === "tx" && payload.tx) sent.push(...payload.tx.ops);
+    if (topic.startsWith("issho:") && event === "tx" && payload.tx) sent.push(payload.tx.ops);
   }));
   return sent;
 }
@@ -276,7 +276,7 @@ function sentOperations(page: Page): Operation[] {
 test("deleting a character in a paragraph sends its deletion, not moves of the text after it", async ({ page, context }) => {
   const other = await context.newPage();
   const id = crypto.randomUUID();
-  const sent = sentOperations(page);
+  const sent = sentTransactions(page);
   await open(page, id, "Ada");
   await open(other, id, "Grace");
   await editor(page).click();
@@ -291,19 +291,108 @@ test("deleting a character in a paragraph sends its deletion, not moves of the t
   await page.keyboard.press("Backspace");
   await expect(editor(other)).toHaveText("The quic brown fox jumps over the lazy dog");
   await expect(status(page)).toHaveText("Saved");
-  expect(sent.map(op => op.op)).toEqual(["text_visibility"]);
+  expect(sent.flat().map(op => op.op)).toEqual(["text_visibility"]);
 
   sent.length = 0;
   await page.keyboard.press(`${MOD}+Z`);
   await expect(editor(other)).toHaveText("The quick brown fox jumps over the lazy dog");
   await expect(status(page)).toHaveText("Saved");
-  expect(sent.map(op => op.op)).toEqual(["text_visibility"]);
+  expect(sent.flat().map(op => op.op)).toEqual(["text_visibility"]);
+});
+
+test("deleting a paragraph and reordering its siblings in one capture still sends the real move", async ({ page, context }) => {
+  const other = await context.newPage();
+  const id = crypto.randomUUID();
+  const sent = sentTransactions(page);
+  await open(page, id, "Ada");
+  await open(other, id, "Grace");
+  await editor(page).click();
+  for (const [index, word] of ["A", "X", "B", "C"].entries()) {
+    if (index > 0) await page.keyboard.press("Enter");
+    await page.keyboard.type(word);
+  }
+  await expect(editor(other).locator("p")).toHaveText(["A", "X", "B", "C"]);
+  await expect(status(page)).toHaveText("Saved");
+
+  sent.length = 0;
+  await page.evaluate(() => {
+    const collab = document.querySelector<HTMLElement & { kotobaCollab: { host: CollaborationHost } }>("#shared_editor")?.kotobaCollab;
+    if (!collab) throw new Error("Shared editor is not mounted");
+    collab.host.editor.update(() => {
+      const [, removed, before, moved] = collab.host.api.lexical.$getRoot().getChildren();
+      removed.remove();
+      before.insertBefore(moved);
+    }, { discrete: true });
+  });
+  await expect(editor(other).locator("p")).toHaveText(["A", "C", "B"]);
+  await expect(status(page)).toHaveText("Saved");
+  expect(sent).toHaveLength(1);
+  expect(sent[0].map(op => op.op)).toContain("node_visibility");
+  expect(sent[0].filter(op => op.op === "move_node")).toHaveLength(1);
+  expect(sent[0].filter(op => op.op === "insert_node")).toEqual([]);
+
+  await page.keyboard.press(`${MOD}+Z`);
+  await expect(editor(other).locator("p")).toHaveText(["A", "X", "B", "C"]);
+  await expect(status(page)).toHaveText("Saved");
+});
+
+test("deleting a character and reordering its neighbours in one capture still sends the real move", async ({ page, context }) => {
+  const other = await context.newPage();
+  const id = crypto.randomUUID();
+  const sent = sentTransactions(page);
+  await open(page, id, "Ada");
+  await open(other, id, "Grace");
+  await editor(page).click();
+  await page.evaluate(() => {
+    const collab = document.querySelector<HTMLElement & { kotobaCollab: { host: CollaborationHost } }>("#shared_editor")?.kotobaCollab;
+    if (!collab) throw new Error("Shared editor is not mounted");
+    collab.host.editor.update(() => {
+      const { $getRoot, $createParagraphNode, $createTextNode } = collab.host.api.lexical;
+      const paragraph = $createParagraphNode().append(
+        $createTextNode("A"),
+        $createTextNode("X").toggleFormat("bold"),
+        $createTextNode("B").toggleFormat("italic"),
+        $createTextNode("C").toggleFormat("bold"),
+      );
+      $getRoot().clear().append(paragraph);
+      paragraph.selectEnd();
+    }, { discrete: true });
+  });
+  await expect(editor(other)).toHaveText("AXBC");
+  await expect(editor(other).locator("strong")).toHaveText(["X", "C"]);
+  await expect(editor(other).locator("em")).toHaveText("B");
+  await expect(status(page)).toHaveText("Saved");
+
+  sent.length = 0;
+  await page.evaluate(() => {
+    const collab = document.querySelector<HTMLElement & { kotobaCollab: { host: CollaborationHost } }>("#shared_editor")?.kotobaCollab;
+    if (!collab) throw new Error("Shared editor is not mounted");
+    collab.host.editor.update(() => {
+      const paragraph = collab.host.api.lexical.$getRoot().getFirstChildOrThrow();
+      if (!collab.host.api.lexical.$isElementNode(paragraph)) throw new Error("Expected a paragraph");
+      const [, removed, before, moved] = paragraph.getChildren();
+      removed.remove();
+      before.insertBefore(moved);
+    }, { discrete: true });
+  });
+  await expect(editor(other)).toHaveText("ACB");
+  await expect(editor(other).locator("strong")).toHaveText("C");
+  await expect(editor(other).locator("em")).toHaveText("B");
+  await expect(status(page)).toHaveText("Saved");
+  expect(sent).toHaveLength(1);
+  expect(sent[0].map(op => op.op)).toContain("text_visibility");
+  expect(sent[0].filter(op => op.op === "move_text")).toHaveLength(1);
+  expect(sent[0].filter(op => op.op === "insert_text")).toEqual([]);
+
+  await page.keyboard.press(`${MOD}+Z`);
+  await expect(editor(other)).toHaveText("AXBC");
+  await expect(status(page)).toHaveText("Saved");
 });
 
 test("joining two paragraphs moves none of the paragraphs after them", async ({ page, context }) => {
   const other = await context.newPage();
   const id = crypto.randomUUID();
-  const sent = sentOperations(page);
+  const sent = sentTransactions(page);
   await open(page, id, "Ada");
   await open(other, id, "Grace");
   await editor(page).click();
@@ -322,6 +411,13 @@ test("joining two paragraphs moves none of the paragraphs after them", async ({ 
   await page.keyboard.press("Backspace");
   await expect(editor(other).locator("p")).toHaveText(["one", "twothree", "four", "five"]);
   await expect(status(page)).toHaveText("Saved");
-  expect(sent.map(op => op.op)).toContain("node_visibility");
-  expect(sent.filter(op => op.op === "move_node")).toEqual([]);
+  expect(sent.flat().map(op => op.op)).toContain("node_visibility");
+  expect(sent.flat().filter(op => op.op === "move_node")).toEqual([]);
+
+  sent.length = 0;
+  await page.keyboard.press(`${MOD}+Z`);
+  await expect(editor(other).locator("p")).toHaveText(["one", "two", "three", "four", "five"]);
+  await expect(status(page)).toHaveText("Saved");
+  expect(sent.flat().map(op => op.op)).toContain("node_visibility");
+  expect(sent.flat().filter(op => op.op === "move_node")).toEqual([]);
 });
