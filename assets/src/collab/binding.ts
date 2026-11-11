@@ -1,6 +1,6 @@
 import type { LexicalNode, PointType, SerializedLexicalNode } from "lexical";
 import type { CollaborationHost, EditorPoint } from "../collaboration";
-import { apply, atomLocation, defined, reachable, findAtom, children, clone, equal, spans, textAttrs, visibleAtoms, uuid, TEXT_TYPES, type Attrs, type Atom, type Operation, type State, type WireNode } from "./model";
+import { apply, atomLocation, defined, reachable, children, clone, equal, spans, textAttrs, visibleAtoms, uuid, TEXT_TYPES, type Attrs, type Atom, type Operation, type State, type WireNode } from "./model";
 
 /** The nodes that stay in this browser (protocol.ts): never shared. */
 const LOCAL_TYPES: ReadonlySet<string> = new Set(["kotoba-upload", "kotoba-pending"]);
@@ -26,13 +26,33 @@ function withLocal(current: LexicalNode[], desired: LexicalNode[]): LexicalNode[
 }
 
 /**
- * The item before `id` in `order` among those in `kept`, or null. The others
+ * The item before `order[index]` among those in `kept`, or null. The others
  * leave `order` after the walk (deleted, or moved to a later parent), so where
  * an item stands among them is not a move.
  */
-function keptBefore(order: readonly string[], id: string, kept: ReadonlySet<string>): string | null {
-  for (let index = order.indexOf(id) - 1; index >= 0; index--) if (kept.has(order[index])) return order[index];
+function keptBefore(order: readonly string[], index: number, kept: ReadonlySet<string>): string | null {
+  for (let cursor = index - 1; cursor >= 0; cursor--) if (kept.has(order[cursor])) return order[cursor];
   return null;
+}
+
+interface TextOrder { ids: string[]; positions: Map<string, number> }
+
+interface AtomIndex { located: Map<string, { buffer: string; atom: Atom }>; orders: Map<string, TextOrder> }
+
+function indexAtoms(state: State): AtomIndex {
+  const index: AtomIndex = { located: new Map(), orders: new Map() };
+  for (const [buffer, atoms] of Object.entries(state.texts)) {
+    const order: TextOrder = { ids: [], positions: new Map() };
+    for (const atom of atoms) {
+      if (atom.moved_to) continue;
+      if (!index.located.has(atom.id)) index.located.set(atom.id, { buffer, atom });
+      if (atom.deleted) continue;
+      if (!order.positions.has(atom.id)) order.positions.set(atom.id, order.ids.length);
+      order.ids.push(atom.id);
+    }
+    index.orders.set(buffer, order);
+  }
+  return index;
 }
 
 export const COLLAB_TAG = "kotoba-collab";
@@ -148,8 +168,10 @@ export class Binding {
     this.host.editor.getEditorState().read(() => {
       const root = this.host.api.lexical.$getRoot();
       const view = this.readElement(root, new Set(), state.root);
-      this.identifyCharacters(view, state);
-      let working = clone(state);
+      let working = state;
+      let indexed: { state: State; index: AtomIndex } | null = null;
+      const current = (): AtomIndex => (indexed?.state === working ? indexed : (indexed = { state: working, index: indexAtoms(working) })).index;
+      this.identifyCharacters(view, state, current().located);
       const forward: Operation[] = [];
       const inverse: Operation[] = [];
       const desired = new Set<string>();
@@ -166,7 +188,8 @@ export class Binding {
           const tag = uuid();
           emit({ op: "insert_node", id: view.id, parent, after, data: view.data, element: view.element }, { op: "node_visibility", id: view.id, deleted: true, tag, if_empty: view.element || view.data.type === "text" });
         } else if (old && parent !== null) {
-          if (old.parent !== parent || keptBefore(children(working, parent), view.id, kept) !== after) {
+          const siblings = children(working, parent);
+          if (old.parent !== parent || keptBefore(siblings, siblings.indexOf(view.id), kept) !== after) {
             const oldSiblings = old.parent ? children(working, old.parent) : [];
             const oldAfter = oldSiblings[oldSiblings.indexOf(view.id) - 1] ?? null;
             const stamp = uuid();
@@ -197,7 +220,7 @@ export class Binding {
       const collect = (node: ViewNode): void => { if (node.characters) textViews.push(node); else node.children.forEach(collect); };
       collect(view);
       const desiredAtoms = new Set(textViews.flatMap(node => node.characters!.map(character => character.id!)));
-      for (const text of textViews) this.diffText(() => working, text, emit);
+      for (const text of textViews) this.diffText(() => working, current, text, emit);
       for (const [buffer, atoms] of Object.entries(state.texts)) {
         // Text out of the document (its block deleted) is not in the editor,
         // and it was not removed there: it stays as it is.
@@ -250,7 +273,7 @@ export class Binding {
     return view;
   }
 
-  private identifyCharacters(view: ViewNode, state: State): void {
+  private identifyCharacters(view: ViewNode, state: State, located: AtomIndex["located"]): void {
     const groups: ViewNode[] = [];
     const collect = (node: ViewNode): void => { if (node.characters) groups.push(node); else node.children.forEach(collect); };
     collect(view);
@@ -267,7 +290,7 @@ export class Binding {
       }
     };
     for (const group of groups) {
-      const old = (group.source ?? []).map(id => findAtom(state, id)).filter((atom): atom is Atom => !!atom && !atom.deleted && !used.has(atom.id));
+      const old = (group.source ?? []).map(id => located.get(id)?.atom).filter((atom): atom is Atom => !!atom && !atom.deleted && !used.has(atom.id));
       match(old, group.characters!);
     }
     // Splits and wrappers create new Lexical keys. Match their remaining text
@@ -280,48 +303,47 @@ export class Binding {
     remaining.forEach(character => { character.id ??= uuid(); });
   }
 
-  private diffText(getState: () => State, view: ViewNode, emit: (op: Operation, undo: Operation) => void): void {
+  private diffText(getState: () => State, current: () => AtomIndex, view: ViewNode, emit: (op: Operation, undo: Operation) => void): void {
+    const locate = (id: string) => current().located.get(id);
     let after: string | null = null;
     const kept = new Set(view.characters!.map(character => character.id!));
     const patches = new Map<string, { atoms: string[]; values: Attrs; previous: Attrs }>();
     for (let index = 0; index < view.characters!.length; index++) {
       const character = view.characters![index];
       const id = character.id!;
-      let state = getState();
-      let atom = findAtom(state, id);
+      const state = getState();
+      let atom = locate(id)?.atom;
       if (!atom) {
         const inserted: Atom[] = [];
         do {
           const next = view.characters![index];
           inserted.push({ id: next.id!, text: next.text, attrs: clone(next.attrs), deleted: false, deletions: [], versions: {} });
-          if (index + 1 >= view.characters!.length || findAtom(state, view.characters![index + 1].id!)) break;
+          if (index + 1 >= view.characters!.length || locate(view.characters![index + 1].id!)) break;
           index++;
         } while (true);
-        const anchor = after ? findAtom(state, after) : visibleAtoms(state, view.id)[0];
+        const anchor = after ? locate(after)?.atom : visibleAtoms(state, view.id)[0];
         const op: Operation = { op: "insert_text", id: view.id, after, atoms: inserted };
         if (anchor) { op.inherit = anchor.id; op.base_attrs = anchor.attrs; }
         emit(op, { op: "text_visibility", id: view.id, atoms: inserted.map(atom => atom.id), deleted: true, tag: uuid() });
         after = inserted[inserted.length - 1].id;
         continue;
       }
-      const source = atomLocation(state, id)!;
-      const sourceAtoms = visibleAtoms(state, source);
-      const order = sourceAtoms.map(value => value.id);
-      const previous = order[order.indexOf(id) - 1] ?? null;
-      if (source !== view.id || keptBefore(order, id, kept) !== after) {
+      const source = locate(id)!.buffer;
+      const { ids: order, positions } = current().orders.get(source)!;
+      const position = positions.get(id) ?? -1;
+      const previous = order[position - 1] ?? null;
+      if (source !== view.id || keptBefore(order, position, kept) !== after) {
         const stamp = uuid();
         const moving = [id];
         if (source !== view.id) {
-          const sourceIndex = sourceAtoms.findIndex(value => value.id === id);
           for (let cursor = index + 1; cursor < view.characters!.length; cursor++) {
             const candidate = view.characters![cursor].id!;
-            if (sourceAtoms[sourceIndex + cursor - index]?.id !== candidate) break;
+            if (order[position + cursor - index] !== candidate) break;
             moving.push(candidate);
           }
         }
         emit({ op: "move_text", id: view.id, after, atoms: moving, stamp }, { op: "move_text", id: source, after: previous, atoms: moving, expected_moves: Object.fromEntries(moving.map(id => [id, stamp])), stamp: uuid() });
-        state = getState();
-        atom = findAtom(state, id)!;
+        atom = locate(id)!.atom;
       }
       const values: Attrs = {};
       const prior: Attrs = {};
@@ -378,6 +400,20 @@ export class Binding {
     const nextKeys = new Map<string, string>();
     // A caret between the children of a code block, as a place in its text.
     let codeCaret: { key: string; offset: number } | null = null;
+    const oldRefs = [...this.refs];
+    const holders = new Map<string, number[]>();
+    oldRefs.forEach(([, ref], position) => {
+      for (const atom of ref.atoms ?? []) {
+        const positions = holders.get(atom);
+        if (positions) positions.push(position);
+        else holders.set(atom, [position]);
+      }
+    });
+    const oldText = (atoms: Atom[]): string | null => {
+      let first = oldRefs.length;
+      for (const atom of atoms) for (const position of holders.get(atom.id) ?? []) if (position < first && !nextRefs.has(oldRefs[position][0])) first = position;
+      return oldRefs[first]?.[0] ?? null;
+    };
     this.host.editor.update(() => {
       const root = api.$getRoot();
       const reconcile = (id: string, existing?: LexicalNode): LexicalNode => {
@@ -397,8 +433,8 @@ export class Binding {
           for (const child of children(state, id)) {
             if (state.texts[child]) {
               for (const span of spans(state, child)) {
-                const old = [...this.refs].find(([key, ref]) => ref.atoms?.some(atom => span.atoms.some(value => value.id === atom)) && !nextRefs.has(key));
-                let text = old ? api.$getNodeByKey(old[0]) : null;
+                const old = oldText(span.atoms);
+                let text = old ? api.$getNodeByKey(old) : null;
                 if (!text || text.getType() !== span.json.type || !api.$isTextNode(text)) text = api.$parseSerializedNode(span.json as unknown as SerializedLexicalNode);
                 else text.updateFromJSON(span.json as never);
                 nextRefs.set(text.getKey(), { id: child, atoms: span.atoms.map(atom => atom.id) });
