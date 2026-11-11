@@ -236,6 +236,17 @@ defmodule Kotoba.CollabTest do
     end
   end
 
+  test "an editor batches its changes for 80 ms, or for its issho :batch", %{instance: instance} do
+    assert {_view, %{"batch" => 80}} = credentials(instance, "post:5")
+    assert {_view, %{"batch" => 2000}} = credentials(instance, "post:5", batch: 2000)
+
+    for wrong <- [0, -80, 2.5, "2000"] do
+      assert_raise ArgumentError, fn ->
+        Collab.credentials([instance: instance, document: "post:5", batch: wrong], %{id: 7})
+      end
+    end
+  end
+
   test "the person is the app's actor: its key and name, and Issho's colour when it has none",
        %{instance: instance} do
     {_view, credentials} = credentials(instance, "post:6", user: "member")

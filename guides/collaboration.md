@@ -221,10 +221,32 @@ The keys: `:instance` and `:document` (required); `:can`, `:write` or
 `:follow`, `false` for an editor that takes no part in following;
 `:on_behalf_of` and `:claims`, for your policy. Kotoba's own: `:undo`
 (`:editor`, the default, undoes in the editor; `:page`, the person's last
-change on the page; `false`, the browser's own), and `:socket` and
-`:max_channels` (above). Any other key raises,
+change on the page; `false`, the browser's own), `:socket` and
+`:max_channels` (above), and `:batch` (below). Any other key raises,
 so a typo does not go unnoticed. The editor signs its credentials once
 for the LiveView's life.
+
+The editor sends its changes in batches. `:batch` is a positive integer
+of milliseconds, 80 by default. A batch starts with a change
+and goes `:batch` milliseconds later, with every change
+made while it waited. A form's submit sends it at once. A longer delay
+sends fewer transactions, so the authority saves the document less
+often. With `batch: 2000`, someone who types four keys a second sends a
+transaction every two seconds instead of one for nearly every key, and
+the others in the document see the text up to two seconds later. A batch
+that has not gone yet is in the tab's draft (see Offline and retention),
+not on the server.
+
+When the editor goes away, on a LiveView navigation or because your
+LiveView no longer renders it, it sends its batch at once. The page
+keeps the room until the server accepts the batch, for ten seconds at
+most. When the person closes the tab or loads another page, the editor
+sends its batch as the page unloads. A batch stays behind when the
+connection is down, when the editor's previous transaction still waits
+for the server's reply as the page unloads, or when the browser discards
+the tab without unloading it, as a mobile browser can with a tab in the
+background. That batch goes the next time that tab opens the document,
+as after a reload. A new tab does not have it.
 
 `user` is your user, as your `Issho.Actor` implementation says them: its
 key (`"user:4"`), name and colour, the same person in every block of the

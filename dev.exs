@@ -1867,6 +1867,10 @@ defmodule KotobaDev.CollabLive do
       follow: params["follow"] != "false"
     ]
 
+    # ?batch=2000: the editor gathers its changes for 2 seconds before it sends them.
+    issho =
+      if params["batch"], do: issho ++ [batch: String.to_integer(params["batch"])], else: issho
+
     socket =
       assign(socket,
         document_id: id,
@@ -2055,7 +2059,8 @@ defmodule KotobaDev.ManyCollabLive do
   @moduledoc false
   # Many shared editors on one page, as in a document of many text blocks:
   # /collab/many?document=ID&count=20&name=Ada. ?repeat=1 adds a last editor of
-  # the first editor's document; ?socket=small signs for KotobaDev.SmallCollabSocket.
+  # the first editor's document; ?socket=small signs for KotobaDev.SmallCollabSocket;
+  # ?batch=2000 gathers each editor's changes for 2 seconds before it sends them.
   use Phoenix.LiveView
   on_mount(Issho.Live)
   import Kotoba.Components
@@ -2077,6 +2082,11 @@ defmodule KotobaDev.ManyCollabLive do
       if params["socket"] == "small",
         do: [socket: "/issho/small-socket", max_channels: 5],
         else: []
+
+    signing =
+      if params["batch"],
+        do: signing ++ [batch: String.to_integer(params["batch"])],
+        else: signing
 
     {:ok,
      assign(socket,

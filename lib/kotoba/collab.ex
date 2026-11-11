@@ -18,14 +18,14 @@ if Code.ensure_loaded?(Issho) do
 
     @doc false
     # The editor's credentials, from its `issho` option (`Issho.Join`, and
-    # Kotoba's own `:undo`, `:socket` and `:max_channels`) and its `user`:
-    # an Issho grant for the document's room, which the LiveView renews
-    # when the editor asks, after asking the policy again
+    # Kotoba's own `:undo`, `:socket`, `:max_channels` and `:batch`) and its
+    # `user`: an Issho grant for the document's room, which the LiveView
+    # renews when the editor asks, after asking the policy again
     # (`Issho.Live.grant/4`). Kept for the LiveView's life, so that a
     # render signs no new token.
     @spec credentials(keyword() | map() | Issho.Join.t(), term()) :: map()
     def credentials(issho, user) do
-      join = Issho.Join.new!(issho, [:undo, :socket, :max_channels])
+      join = Issho.Join.new!(issho, [:undo, :socket, :max_channels, :batch])
 
       if is_nil(user),
         do: raise(ArgumentError, "<.kotoba issho={...}> needs user, the person who edits")
@@ -45,6 +45,11 @@ if Code.ensure_loaded?(Issho) do
       unless is_integer(max_channels) and max_channels > 0,
         do: raise(ArgumentError, "issho's :max_channels must be a positive integer")
 
+      batch = Map.get(join.extra, :batch, 80)
+
+      unless is_integer(batch) and batch > 0,
+        do: raise(ArgumentError, "issho's :batch must be a positive integer of milliseconds")
+
       grant =
         Issho.Live.grant(
           join.instance,
@@ -60,6 +65,7 @@ if Code.ensure_loaded?(Issho) do
         "token" => grant["token"],
         "socket" => grant["socket"],
         "max_channels" => max_channels,
+        "batch" => batch,
         "user" => person,
         "role" => Atom.to_string(join.can),
         "people" => join.people,
