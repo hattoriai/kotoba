@@ -505,7 +505,8 @@ All participants replay that accepted order. This is a central authority
 protocol; independent peers cannot choose their own accepted histories.
 
 Nodes and characters retain identities through moves, link wrapping and
-paragraph splits. Deleted characters remain as insertion anchors. Deletions
+paragraph splits. Deleted characters remain as insertion anchors until Issho
+compacts the document (see Offline and retention). Deletions
 name the characters actually observed, so they preserve unseen concurrent
 insertions. Formatting changes patch individual marks, allowing concurrent
 bold and italic to combine. Concurrent writes to the same attribute follow
@@ -534,13 +535,28 @@ structure can require review. Kotoba freezes the draft and offers a JSON
 download; it preserves local work instead of silently replacing it. These
 conflicts do not currently have an interactive merge UI.
 
-The v1 store retains the initial snapshot, tombstones, receipts and accepted
-journal. It does not compact them. Issho's defaults limit a channel message
-to 1 MB (`:max_message_bytes`), a transaction to 1,000 operations, and
-stored state to 16 MB (`:max_document_bytes`). Size
-limits produce a rejected transaction, not a false acknowledgement. Plan
-retention and migrations before accepting unbounded documents. Removing
-tombstones or changing an epoch invalidates old pending work.
+`Kotoba.Collab.Document.compact/1` removes deleted characters, the copies
+that moves leave behind, and deleted blocks. It preserves the content and
+the ids of every node and character that remains. A comment anchored to a
+deleted character has no surviving anchor after compaction.
+
+With an Issho version that supports idle compaction, set `compact: true`
+on the Issho instance to enable it. After the last session leaves and
+`:ttl` passes, Issho can save the compacted state as a new epoch that
+continues the previous one. Issho controls when the size reduction is
+large enough to save. Released Issho versions without the optional
+`compact/2` engine callback keep the original state.
+
+An offline tab's edits that name surviving ids can still apply. Edits
+that name removed characters need review, and the editor preserves the
+local draft for download. Undo and redo history do not cross epochs.
+
+Issho's defaults limit a channel message to 1 MB (`:max_message_bytes`), a
+transaction to 1,000 operations, and stored state to 16 MB
+(`:max_document_bytes`). Size limits produce a rejected transaction, not a
+false acknowledgement. Plan retention and migrations before accepting
+unbounded documents. Changing an epoch any other way invalidates old pending
+work.
 
 Named branches, peer replication and branch review are not supported.
 

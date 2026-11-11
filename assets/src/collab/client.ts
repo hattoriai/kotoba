@@ -43,6 +43,7 @@ class Client implements Collaboration {
   // so undo takes back the person's last change wherever on the page they made it.
   private undoStack: Change[] = [];
   private redoStack: Change[] = [];
+  private epoch: string | null = null;
   private readonly undo: "page" | "editor" | false;
   private readonly steps: HistoryOwner = {
     undo: () => this.step(false),
@@ -180,9 +181,12 @@ class Client implements Collaboration {
       this.cleanups.push(this.room.awareness.on(() => this.people()));
       this.doc = await this.room.open(id, { batch: { delay: 80, maxOps: 900 } });
       if (this.disposed) return;
+      this.epoch = this.doc.epoch;
       this.cleanups.push(this.doc.on(event => {
+        if (event.type === "change" && event.origin === "reset" && this.doc!.epoch !== this.epoch) this.newEpoch();
         if (event.type === "change" && !(this.changing && event.origin === "local")) this.render();
         else if (event.type === "refused") this.refused(event.reason);
+        if (event.type === "change" && !this.failure && this.doc!.pending.length === 0) this.recoveryDraft = undefined;
         if (event.type === "change") this.updateStatus();
       }));
     } catch {
@@ -295,6 +299,15 @@ class Client implements Collaboration {
     return true;
   }
 
+  private newEpoch(): void {
+    if (this.doc!.pending.length > 0) this.recoveryDraft = this.host.readDocument();
+    this.epoch = this.doc!.epoch;
+    this.undoStack = [];
+    this.redoStack = [];
+    if (this.undo === "page") pageHistory.forget(this.steps);
+    this.historyState();
+  }
+
   private historyState(): void {
     const api = this.host.api.lexical;
     const [canUndo, canRedo] = this.undo === "page" ? [pageHistory.canUndo, pageHistory.canRedo] : this.undo === "editor" ? [this.undoStack.length > 0, this.redoStack.length > 0] : [false, false];
@@ -399,7 +412,7 @@ class Client implements Collaboration {
 
   private fail(message: string): void {
     if (this.failure) return;
-    this.recoveryDraft = this.host.readDocument();
+    this.recoveryDraft ??= this.host.readDocument();
     this.failure = message;
     this.host.setReadonly(true);
     this.recover.hidden = this.view === null;
