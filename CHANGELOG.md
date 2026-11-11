@@ -7,6 +7,12 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- Applying shared-document operations in the browser copies only the
+  containers an operation changes. Untouched containers stay shared
+  between states, without changing the state or operations given.
+
 ### Fixed
 
 - A deletion in a shared document sends no moves of what follows it. A
