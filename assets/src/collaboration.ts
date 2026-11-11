@@ -14,6 +14,7 @@ export interface CollabCredentials {
   token: string;
   socket: string;
   max_channels?: number;
+  batch?: number;
   role: "read" | "write";
   user: { id: string; name: string; color: string };
 }
