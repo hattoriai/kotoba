@@ -43,7 +43,6 @@ class Client implements Collaboration {
   // so undo takes back the person's last change wherever on the page they made it.
   private undoStack: Change[] = [];
   private redoStack: Change[] = [];
-  // The epoch the steps were made on: undo history does not cross into another.
   private epoch: string | null = null;
   private readonly undo: "page" | "editor" | false;
   private readonly steps: HistoryOwner = {
@@ -187,6 +186,7 @@ class Client implements Collaboration {
         if (event.type === "change" && event.origin === "reset" && this.doc!.epoch !== this.epoch) this.newEpoch();
         if (event.type === "change" && !(this.changing && event.origin === "local")) this.render();
         else if (event.type === "refused") this.refused(event.reason);
+        if (event.type === "change" && !this.failure && this.doc!.pending.length === 0) this.recoveryDraft = undefined;
         if (event.type === "change") this.updateStatus();
       }));
     } catch {
@@ -299,9 +299,8 @@ class Client implements Collaboration {
     return true;
   }
 
-  // The document came back on another epoch (compacted while this tab was away): a step recorded before
-  // can name a deleted character that is gone, and undoing it would stop the editor.
   private newEpoch(): void {
+    if (this.doc!.pending.length > 0) this.recoveryDraft = this.host.readDocument();
     this.epoch = this.doc!.epoch;
     this.undoStack = [];
     this.redoStack = [];
@@ -413,7 +412,7 @@ class Client implements Collaboration {
 
   private fail(message: string): void {
     if (this.failure) return;
-    this.recoveryDraft = this.host.readDocument();
+    this.recoveryDraft ??= this.host.readDocument();
     this.failure = message;
     this.host.setReadonly(true);
     this.recover.hidden = this.view === null;

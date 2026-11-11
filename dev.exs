@@ -1849,7 +1849,6 @@ defmodule KotobaDev.SmallCollabSocket do
   def id(_socket), do: nil
 end
 
-# The socket of KotobaDev.QuickIssho, for the e2e tests of compaction.
 defmodule KotobaDev.QuickIsshoChannel do
   use Issho.Channel, instance: KotobaDev.QuickIssho
 end
@@ -2065,9 +2064,6 @@ end
 
 defmodule KotobaDev.QuickCollabLive do
   @moduledoc false
-  # A shared editor on KotobaDev.QuickIssho, whose documents close half a
-  # second after the last person leaves, and compact as they close:
-  # /collab/quick?document=ID&name=Ada. For the e2e tests of compaction.
   use Phoenix.LiveView
   on_mount(Issho.Live)
   import Kotoba.Components
@@ -2405,6 +2401,11 @@ Task.async(fn ->
   if watch?, do: {:ok, _apps} = Application.ensure_all_started(:esbuild)
   File.mkdir_p!(uploads)
 
+  compact_opts =
+    if Code.ensure_loaded?(Issho.Engine) and function_exported?(Issho.Engine, :compacts?, 1),
+      do: [compact: true],
+      else: []
+
   {:ok, _pid} =
     Supervisor.start_link(
       [
@@ -2424,14 +2425,15 @@ Task.async(fn ->
         # and compact as they close (KotobaDev.QuickCollabLive). Presence is
         # the first instance's: one runs on a node.
         {Issho,
-         name: KotobaDev.QuickIssho,
-         pubsub: KotobaDev.PubSub,
-         endpoint: KotobaDev.Endpoint,
-         policy: KotobaDev.Collaboration,
-         store: {Issho.Store.Memory, KotobaDev.IsshoStore},
-         presence: false,
-         compact: true,
-         ttl: 500},
+         [
+           name: KotobaDev.QuickIssho,
+           pubsub: KotobaDev.PubSub,
+           endpoint: KotobaDev.Endpoint,
+           policy: KotobaDev.Collaboration,
+           store: {Issho.Store.Memory, KotobaDev.IsshoStore},
+           presence: false,
+           ttl: 500
+         ] ++ compact_opts},
         KotobaDev.Endpoint
       ],
       strategy: :one_for_one

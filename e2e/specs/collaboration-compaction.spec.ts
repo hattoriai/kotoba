@@ -1,4 +1,5 @@
 import { expect, test, type Page, type WebSocketRoute } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import { MOD, focusEnd, openEditor, settle } from "./support";
 
 test.skip(process.env.KOTOBA_COMPACTION !== "1", "Set KOTOBA_COMPACTION=1 with an Issho build that supports idle compaction");
@@ -187,6 +188,19 @@ test("an edit away that names characters compacted meanwhile freezes the editor,
   await expect(status(grace)).toHaveText("The server could not save your edits. Your local draft is preserved.", { timeout: 15_000 });
   await expect(grace.locator("#quick_editor").getByRole("button", { name: "Download local draft" })).toBeVisible();
   await expect(editor(grace)).toHaveAttribute("contenteditable", "false");
+  const downloadPromise = grace.waitForEvent("download");
+  await grace.getByRole("button", { name: "Download local draft" }).click();
+  const download = await downloadPromise;
+  const path = await download.path();
+  expect(path).not.toBeNull();
+  const recovered: unknown = JSON.parse(await readFile(path!, "utf8"));
+  expect(recovered).toMatchObject({
+    root: { children: [{ children: [
+      { type: "text", text: "keep ", format: 0 },
+      { type: "text", text: "these", format: 1 },
+      { type: "text", text: " words", format: 0 },
+    ] }] },
+  });
 
   const later = await browser.newContext();
   const visit = await later.newPage();

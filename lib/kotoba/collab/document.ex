@@ -126,7 +126,6 @@ defmodule Kotoba.Collab.Document do
     {:ok, %{state | "nodes" => nodes, "orders" => orders, "texts" => texts}}
   end
 
-  # A node and the nodes export_node/2 reaches from it.
   defp live_nodes(state, id) do
     children =
       Enum.filter(state["orders"][id] || [], fn child ->
