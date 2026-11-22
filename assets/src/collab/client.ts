@@ -156,6 +156,14 @@ class Client implements Collaboration {
       this.host.editable.removeEventListener("compositionstart", compositionStart);
       this.host.editable.removeEventListener("compositionend", compositionEnd);
     });
+    // A tab that closes or navigates away sends its waiting batch while its socket is still open.
+    // Firefox closes the socket before pagehide, so the batch goes on beforeunload. Where no
+    // beforeunload comes, it goes on pagehide, in the capture phase, which WebKit runs before
+    // Phoenix's own pagehide listener disconnects the socket.
+    const leaving = (): void => this.doc?.flush();
+    const unloads = ["beforeunload", "pagehide"];
+    unloads.forEach(event => window.addEventListener(event, leaving, true));
+    this.cleanups.push(() => unloads.forEach(event => window.removeEventListener(event, leaving, true)));
     this.watchForm();
     (this.host.element as HTMLElement & { kotobaCollab?: Collaboration }).kotobaCollab = this;
 
@@ -178,7 +186,7 @@ class Client implements Collaboration {
       this.cleanups.push(this.room.onStatus((status, reason) => this.roomStatus(status, reason)));
       this.cleanups.push(this.room.presence.on(() => this.people()));
       this.cleanups.push(this.room.awareness.on(() => this.people()));
-      this.doc = await this.room.open(id, { batch: { delay: 80, maxOps: 900 } });
+      this.doc = await this.room.open(id, { batch: { delay: this.credentials.batch ?? 80, maxOps: 900 } });
       if (this.disposed) return;
       this.cleanups.push(this.doc.on(event => {
         if (event.type === "change" && !(this.changing && event.origin === "local")) this.render();
@@ -460,7 +468,10 @@ class Client implements Collaboration {
     if (this.room) {
       const place = this.room.awareness.state?.place as { doc?: string } | null | undefined;
       if (place?.doc === this.credentials.document_id) this.room.aware({ place: null });
-      void this.room.flushDrafts().finally(() => this.release());
+      const room = this.room;
+      this.doc?.flush();
+      const sent = Promise.race([this.doc?.settled(), new Promise(resolve => setTimeout(resolve, 10_000))]);
+      void sent.then(() => room.flushDrafts()).finally(() => this.release());
     }
     this.presence.dispose();
     this.bar.remove();
