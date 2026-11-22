@@ -133,7 +133,7 @@ defmodule Kotoba.Components do
   attr :issho, :any,
     default: nil,
     doc:
-      "a shared editor, on [Issho](https://hex.pm/packages/issho): `[instance: MyApp.Issho, document: \"page:1/body\"]`, with `Issho.Join`'s keys as every component of the page (`can`, `people`, `follow`, `on_behalf_of`, `claims`) and Kotoba's own: `undo` (`:editor`, `:page` or `false`), `socket` and `max_channels`; needs `user` and a LiveView with `on_mount Issho.Live`; see the Collaboration guide"
+      "a shared editor, on [Issho](https://hex.pm/packages/issho): `[instance: MyApp.Issho, document: \"page:1/body\"]`, with `Issho.Join`'s keys as every component of the page (`can`, `people`, `follow`, `on_behalf_of`, `claims`) and Kotoba's own: `undo` (`:editor`, `:page` or `false`), `socket`, `max_channels` and `batch` (the milliseconds it gathers changes before it sends them, 80 by default); needs `user` and a LiveView with `on_mount Issho.Live`; see the Collaboration guide"
 
   attr :user, :any,
     default: nil,

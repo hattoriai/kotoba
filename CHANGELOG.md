@@ -7,6 +7,12 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `:batch` in a shared editor's `issho` option sets how many milliseconds
+  the editor gathers its changes before sending them, 80 by default.
+  Longer delays send fewer transactions and delay what other people see.
+
 ### Changed
 
 - The browser indexes a shared document's characters once per captured
@@ -16,6 +22,9 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- A shared editor sends its waiting batch when it is removed or its page
+  unloads. When the editor is removed, the page keeps its room until the
+  server accepts the batch, for ten seconds at most.
 - A deletion in a shared document sends no moves of what follows it. A
   Backspace in the middle of a paragraph sent a `move_text` for each
   character after the caret. Joining two blocks sent a `move_node` for
