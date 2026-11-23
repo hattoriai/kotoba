@@ -13,6 +13,13 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   the editor gathers its changes before sending them, 80 by default.
   Longer delays send fewer transactions and delay what other people see.
 
+### Changed
+
+- The browser indexes a shared document's characters once per captured
+  state, and the text nodes that held them once per render. Capturing an
+  edit and matching rendered spans no longer scan all text for each
+  character or span.
+
 ### Fixed
 
 - A shared editor sends its waiting batch when it is removed or its page
