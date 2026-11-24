@@ -15,6 +15,11 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Changed
 
+- The browser indexes a shared document's characters once per captured
+  state, and the text nodes that held them once per render. Capturing an
+  edit and matching rendered spans no longer scan all text for each
+  character or span.
+
 - Applying shared-document operations in the browser copies only the
   containers an operation changes. Untouched containers stay shared
   between states, without changing the state or operations given.
