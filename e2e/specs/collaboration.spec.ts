@@ -526,3 +526,29 @@ test("a tab that navigates away or closes during the batch delay sends the batch
   await open(third, id, "Linus");
   await expect(editor(third)).toHaveText("abcdef");
 });
+
+test("typing in joined paragraphs sends only the typed character", async ({ page, context }) => {
+  const other = await context.newPage();
+  const id = crypto.randomUUID();
+  const sent = sentTransactions(page);
+  await open(page, id, "Ada");
+  await open(other, id, "Grace");
+  await editor(page).click();
+  await page.keyboard.type("one");
+  await page.keyboard.press("Enter");
+  await page.keyboard.type("two");
+  await expect(editor(other).locator("p")).toHaveText(["one", "two"]);
+  await expect(status(page)).toHaveText("Saved");
+
+  await page.keyboard.press("Home");
+  await settle(page);
+  await page.keyboard.press("Backspace");
+  await expect(editor(other).locator("p")).toHaveText(["onetwo"]);
+  await expect(status(page)).toHaveText("Saved");
+
+  sent.length = 0;
+  await page.keyboard.type("!");
+  await expect(editor(other).locator("p")).toHaveText(["one!two"]);
+  await expect(status(page)).toHaveText("Saved");
+  expect(sent.flat().map(op => op.op)).toEqual(["insert_text"]);
+});
