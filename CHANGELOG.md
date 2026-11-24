@@ -9,11 +9,20 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- `Kotoba.Collab.Document.compact/1` removes deleted characters, moved
+  copies, and deleted blocks while preserving the content and the ids of
+  everything that remains. `Kotoba.Issho.Engine.compact/2` exposes it to
+  Issho versions that support idle compaction.
+
 - `:batch` in a shared editor's `issho` option sets how many milliseconds
   the editor gathers its changes before sending them, 80 by default.
   Longer delays send fewer transactions and delay what other people see.
 
 ### Changed
+
+- A shared editor clears undo and redo when it opens a new epoch. Undo
+  operations from before compaction can name characters that no longer
+  exist. Pending edits still follow Issho's recovery protocol.
 
 - The browser indexes a shared document's characters once per captured
   state, and the text nodes that held them once per render. Capturing an

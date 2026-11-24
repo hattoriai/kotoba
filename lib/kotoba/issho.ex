@@ -25,6 +25,10 @@ if Code.ensure_loaded?(Issho.Binding) do
     @impl true
     def upgrade(stored), do: Document.upgrade(stored)
 
+    # An Issho before compaction has no such callback, and never calls it.
+    if {:compact, 2} in Issho.Engine.behaviour_info(:callbacks), do: @impl(true)
+    def compact(state, _opts), do: Document.compact(state)
+
     defp policy(opts), do: Keyword.drop(opts, [:author])
   end
 
