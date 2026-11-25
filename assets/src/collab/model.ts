@@ -145,20 +145,34 @@ function patch(data: Attrs, versions: Record<string, string | null>, values: Att
   }
 }
 
+function copyOnWrite(): <P extends object, K extends keyof P>(parent: P, key: K) => P[K] {
+  const copies = new WeakSet<object>();
+  return <P extends object, K extends keyof P>(parent: P, key: K): P[K] => {
+    const value = parent[key];
+    if (value === null || typeof value !== "object" || copies.has(value)) return value;
+    const copy = (Array.isArray(value) ? [...value] : { ...value }) as P[K] & object;
+    copies.add(copy);
+    parent[key] = copy;
+    return copy;
+  };
+}
+
 /** Replay accepted operations, or overlay provisional operations on a snapshot. */
 export function apply(state: State, operations: Operation[]): State {
-  const result = clone(state);
+  const own = copyOnWrite();
+  const result = { ...state };
   for (const op of operations) {
     switch (op.op) {
       case "insert_node": {
         live(result, op.parent);
         if (result.nodes[op.id]) throw new Error("id_reused");
-        const order = result.orders[op.parent] ?? [];
+        const orders = own(result, "orders");
+        const order = own(orders, op.parent) ?? [];
         order.splice(anchorIndex(order, op.after, value => value), 0, op.id);
-        result.orders[op.parent] = order;
-        result.nodes[op.id] = { data: clone(op.data), parent: op.parent, element: op.element ?? new Set(["paragraph", "heading", "quote", "list", "listitem", "link", "autolink", "code", "table", "tablerow", "tablecell", "gallery"]).has(String(op.data.type)), deleted: false, deletions: [], versions: {} };
-        result.orders[op.id] = [];
-        if (op.data.type === "text") result.texts[op.id] = [];
+        orders[op.parent] = order;
+        own(result, "nodes")[op.id] = { data: clone(op.data), parent: op.parent, element: op.element ?? new Set(["paragraph", "heading", "quote", "list", "listitem", "link", "autolink", "code", "table", "tablerow", "tablecell", "gallery"]).has(String(op.data.type)), deleted: false, deletions: [], versions: {} };
+        orders[op.id] = [];
+        if (op.data.type === "text") own(result, "texts")[op.id] = [];
         break;
       }
       case "move_node": {
@@ -168,17 +182,19 @@ export function apply(state: State, operations: Operation[]): State {
         if (Object.hasOwn(op, "expected_move") && (node.move_version ?? null) !== op.expected_move) break;
         const order = (result.orders[op.parent] ?? []).filter(id => id !== op.id);
         order.splice(anchorIndex(order, op.after, value => value), 0, op.id);
-        result.orders[op.parent] = order;
-        node.parent = op.parent;
-        node.move_version = op.stamp ?? null;
+        own(result, "orders")[op.parent] = order;
+        const moved = own(own(result, "nodes"), op.id);
+        moved.parent = op.parent;
+        moved.move_version = op.stamp ?? null;
         break;
       }
       case "node_visibility":
-        if (!op.deleted || !op.if_empty || empty(result, op.id)) visibility(result.nodes[op.id], op.tag, op.deleted);
+        if (!op.deleted || !op.if_empty || empty(result, op.id)) visibility(own(own(result, "nodes"), op.id), op.tag, op.deleted);
         break;
       case "set_attrs": {
-        const node = live(result, op.id);
-        patch(node.data, node.versions, op.values, op);
+        live(result, op.id);
+        const node = own(own(result, "nodes"), op.id);
+        patch(own(node, "data"), own(node, "versions"), op.values, op);
         break;
       }
       case "insert_text": {
@@ -195,17 +211,20 @@ export function apply(state: State, operations: Operation[]): State {
           return { id: atom.id, text: atom.text, attrs, deleted: false, deletions: [], versions: {} };
         });
         const index = target !== op.id && op.after === null && op.inherit ? anchorIndex(atoms, op.inherit, atom => atom.id) - 1 : anchorIndex(atoms, op.after, atom => atom.id);
-        atoms.splice(index, 0, ...inserted);
+        own(own(result, "texts"), target).splice(index, 0, ...inserted);
         break;
       }
       case "move_text": {
         live(result, op.id);
         const eligible = op.atoms.filter(id => !op.expected_moves || !Object.hasOwn(op.expected_moves, id) || findAtom(result, id)?.move_version === op.expected_moves[id]);
         const moving = eligible.map(id => { const atom = clone(findAtom(result, id)!); delete atom.moved_to; atom.move_version = op.stamp; return atom; });
-        for (const [buffer, atoms] of Object.entries(result.texts)) {
-          result.texts[buffer] = buffer === op.id ? atoms.filter(atom => !eligible.includes(atom.id)) : atoms.map(atom => eligible.includes(atom.id) && !atom.moved_to ? { ...atom, moved_to: op.id } : atom);
+        const leaving = new Set(eligible);
+        const texts = own(result, "texts");
+        for (const [buffer, atoms] of Object.entries(texts)) {
+          if (buffer === op.id) texts[buffer] = atoms.filter(atom => !leaving.has(atom.id));
+          else if (atoms.some(atom => leaving.has(atom.id) && !atom.moved_to)) texts[buffer] = atoms.map(atom => leaving.has(atom.id) && !atom.moved_to ? { ...atom, moved_to: op.id } : atom);
         }
-        const target = result.texts[op.id];
+        const target = texts[op.id];
         target.splice(anchorIndex(target, op.after, atom => atom.id), 0, ...moving);
         break;
       }
@@ -215,10 +234,13 @@ export function apply(state: State, operations: Operation[]): State {
         if (locations.some(value => value === null)) throw new Error("unknown_atom");
         locations.forEach(buffer => live(result, buffer!));
         const targets = new Set(op.atoms);
-        for (const atom of Object.values(result.texts).flat()) {
-          if (!targets.has(atom.id) || atom.moved_to) continue;
-          if (op.op === "text_visibility") visibility(atom, op.tag, op.deleted);
-          else patch(atom.attrs, atom.versions, op.values, op);
+        for (const [buffer, atoms] of Object.entries(result.texts)) {
+          for (let index = 0; index < atoms.length; index++) {
+            if (!targets.has(atoms[index].id) || atoms[index].moved_to) continue;
+            const atom = own(own(own(result, "texts"), buffer), index);
+            if (op.op === "text_visibility") visibility(atom, op.tag, op.deleted);
+            else patch(own(atom, "attrs"), own(atom, "versions"), op.values, op);
+          }
         }
         break;
       }

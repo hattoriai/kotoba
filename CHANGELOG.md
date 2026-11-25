@@ -29,6 +29,10 @@ and Kotoba follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   edit and matching rendered spans no longer scan all text for each
   character or span.
 
+- Applying shared-document operations in the browser copies only the
+  containers an operation changes. Untouched containers stay shared
+  between states, without changing the state or operations given.
+
 ### Fixed
 
 - A shared editor sends its waiting batch when it is removed or its page
